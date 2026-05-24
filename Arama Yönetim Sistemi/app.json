@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Arama Yönetim Sistemi",
+    "slug": "arama-yonetim-sistemi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F1117"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "softwareKeyboardLayoutMode": "pan",
+      "package": "com.ardagnl.aramayonetim"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "name": "Arama Yönetim Sistemi",
+      "shortName": "Arama Sistemi",
+      "description": "Anket ve arama yönetim uygulaması",
+      "backgroundColor": "#0F1117",
+      "themeColor": "#6C5CE7"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "380df80f-d25c-49ed-bdd2-7f577371ea4e"
+      }
+    }
+  }
+}
