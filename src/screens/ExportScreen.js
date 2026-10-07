@@ -68,6 +68,9 @@ export default function ExportScreen({ route, navigation }) {
   return (
     <View style={s.container}>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 20) }]} showsVerticalScrollIndicator={false}>
+        {project.role === 'volunteer' && <Text style={{ color: Colors.warning, fontSize: 13, lineHeight: 20, marginBottom: 14 }}>
+          Bu Excel/CSV dosyası koordinatörün ana listesiyle otomatik birleştirilmez. Sonuç paketi sonraki sürümde eklenecek.
+        </Text>}
         <View style={s.header}>
           <Text style={{fontSize:48,marginBottom:12}}>📊</Text>
           <Text style={s.headerTitle}>{projectName}</Text>

@@ -1,13 +1,13 @@
-# `.ays` dosya sözleşmesi — sürüm 2
+# `.ays` dosya sözleşmesi — yedek sürüm 3 ve görev sürüm 1
 
-Bu sürüm **tam etkinlik yedeği** içindir. Dosya UTF-8 JSON'dur. Gönüllüye görev dağıtma veya sonuç birleştirme dosyası olarak kullanılmaz. İleride görev ve sonuç dosyaları ayrı `kind` ve sürümle tanımlanacaktır.
+Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignment"` tek gönüllünün görev paketidir. Sonuç birleştirme dosyası henüz yoktur.
 
 ## Zarf
 
 ```json
 {
   "format": "arama-yonetim-sistemi",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "kind": "backup",
   "createdAt": "2026-10-07T08:00:00.000Z",
   "eventId": "kalici-etkinlik-kimligi",
@@ -16,11 +16,19 @@ Bu sürüm **tam etkinlik yedeği** içindir. Dosya UTF-8 JSON'dur. Gönüllüye
 }
 ```
 
-`payload.project` içinde `id`, `eventId`, `name`, `createdAt`, `currentIndex`, `fields` ve `contacts` bulunur. Bu sürümde proje `id` ile `eventId` aynıdır. Her kişide `id`, `recordId`, `phone`, `data`, `completed`, `completedAt` bulunur; kişi `id` ile `recordId` aynıdır. Eski projelerde `eventId` ve `recordId` yoksa yedek hazırlanırken mevcut `id` değerleri kullanılır. İsim veya telefon, kayıt kimliği yerine kullanılmaz.
+`payload.project` içinde `id`, `eventId`, `name`, `createdAt`, `currentIndex`, `fields` ve `contacts` bulunur. Koordinatör projesinde `id` ile `eventId` aynıdır; gönüllü projesinde `id` görev kimliğidir ve `eventId` ana etkinliği gösterir. Her kişide `id`, `recordId`, `phone`, `data`, `completed`, `completedAt` bulunur; kişi `id` ile `recordId` aynıdır. Eski projelerde `eventId` ve `recordId` yoksa yedek hazırlanırken mevcut `id` değerleri kullanılır. İsim veya telefon, kayıt kimliği yerine kullanılmaz.
 
 `fields` dizisinde alan `id`, `label`, `type` (`text` veya `select`), `options`, `order` ve varsa `isSystemField: "name"` vardır. `data`, alan kimliğinden metin cevabına eşlemedir. Telefon doğrudan kişi kaydındadır. Kişi sırası, `currentIndex` ve tamamlanma bilgisi yedeğe girer.
 
-Sürüm 2'de `payload.project` ayrıca `formVersion`, `formLocked`, `templateId` ve `sourceReview` taşır. Kişide `sourceRow` bulunabilir. `sourceReview` içinde kaynak dosya adı, başlık durumu, veri satırı sayısı, sütun görevleri ile seçilmeyen tekrar ve okunamayan satırların `sourceRow`, `cells`, `reason` kayıtları vardır. İlk kaynak Excel'in biçimi ve ek sayfaları yine yedeğe alınmaz. Sürüm 1 yedekleri okunur; eksik yeni alanlar varsayılan değerlere dönüştürülür.
+Sürüm 2'de `payload.project` ayrıca `formVersion`, `formLocked`, `templateId` ve `sourceReview` taşır. Kişide `sourceRow` bulunabilir. `sourceReview` içinde kaynak dosya adı, başlık durumu, veri satırı sayısı, sütun görevleri ile seçilmeyen tekrar ve okunamayan satırların `sourceRow`, `cells`, `reason` kayıtları vardır. Sürüm 3'te `role`, `assignmentId`, `importDigest` ve `assignments` eklenir. Koordinatör yedeği görevlerin durumlarını ve oluşturuldukları andaki form/kişi görüntülerini içerir. Gönüllü yedeğinde `role: "volunteer"`, ana etkinlik `eventId` değeri, `assignmentId` ve içe alınan görev dosyasının özeti vardır. Sürüm 1 ve 2 yedekleri okunur; eksik alanlar varsayılan değerlere dönüştürülür.
+
+## `.ays` görev paketi
+
+Zarf `format: "arama-yonetim-sistemi"`, `schemaVersion: 1`, `kind: "assignment"`, `eventId`, `assignmentId`, `createdAt`, `payload.assignment` ve SHA-256 `integrity` içerir. İçerik etkinlik adı, gönüllü adı, `formVersion`, `round: 1`, formun tamamı ve **yalnızca atanmış kişilerin** `recordId`, telefon ve başlangıç verileridir. Aynı görev yeniden paylaşıldığında kimliği ve içeriği değişmez.
+
+Koordinatör `prepared`, `sent`, `partial`, `completed`, `cancelled` durumlarını saklar. İlk iki durum ve iptal bu sürümde arayüzden yönetilir; kısmi/tam sonuç durumları sonuç akışında kullanılacaktır. Hazırlanmış görev iptal edilince kişiler havuza döner. Gönderilmiş görev iptal edilirse eski dosyanın gönüllüde kalabileceği uyarılır. Görev dosyasının kendisi durum taşımaz.
+
+Gönüllü aynı dosyayı tekrar açarsa ikinci proje oluşmaz ve cevapları silinmez. Aynı `assignmentId` ile farklı içerik reddedilir. Gönüllünün kişi listesi değiştirilemez. Görev dosyasının SHA-256 özeti bozulmayı saptar; kimlik doğrulama veya şifreleme sağlamaz.
 
 ## `.ayst` form şablonu
 

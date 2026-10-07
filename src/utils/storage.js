@@ -4,6 +4,8 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { normalizeBackupProject, sameBackupProject } from './backupFormat';
+import { normalizeAssignment } from './assignmentFormat';
+import { cleanPhoneNumber } from './phoneUtils';
 
 const PROJECTS_KEY = '@ays_projects';
 const PROJECT_DATA_PREFIX = '@ays_project_data_';
@@ -164,7 +166,8 @@ export async function restoreProjectBackup(input) {
   const project = normalizeBackupProject(input);
   return enqueueWrite(async () => {
     const projects = await getAllProjects();
-    const existing = projects.find((item) => item.id === project.id || item.eventId === project.eventId);
+    const existing = projects.find((item) => item.id === project.id ||
+      (project.role !== 'volunteer' && item.role !== 'volunteer' && item.eventId === project.eventId));
     if (existing) {
       if (existing.id !== project.id) throw new Error('Etkinlik kimliği başka bir projede kullanılıyor.');
       const stored = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + project.id);
@@ -217,6 +220,15 @@ export async function updateProject(projectId, updates) {
       
       // Eğer contacts güncellenmişse, ayrı olarak kaydet
       if (updates.contacts) {
+        if (pMeta.role === 'volunteer') {
+          const saved = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
+          const previous = saved ? JSON.parse(saved) : [];
+          if (updates.contacts.length !== previous.length || updates.contacts.some((contact, i) =>
+            (contact.recordId || contact.id) !== (previous[i].recordId || previous[i].id) ||
+            contact.phone !== previous[i].phone)) {
+            throw new Error('Görevdeki kişi listesi değiştirilemez.');
+          }
+        }
         pMeta.totalContacts = updates.contacts.length;
         pMeta.completedContacts = updates.contacts.filter((contact) => contact.completed).length;
         if (pMeta.completedContacts > 0) pMeta.formLocked = true;
@@ -228,6 +240,106 @@ export async function updateProject(projectId, updates) {
       return { ...pMeta, contacts: updates.contacts }; // Yeni objeyi döndür
     }
     return null;
+  });
+}
+
+const ACTIVE_ASSIGNMENT_STATUSES = new Set(['prepared', 'sent', 'partial', 'completed']);
+
+/** İlk turda kimliği veya telefonu etkin göreve ayrılmış kişileri havuzdan çıkarır. */
+export function getAvailableContacts(project) {
+  const reservedIds = new Set();
+  const reservedPhones = new Set();
+  for (const assignment of project.assignments || []) {
+    if (!ACTIVE_ASSIGNMENT_STATUSES.has(assignment.status)) continue;
+    for (const contact of assignment.contacts || []) {
+      reservedIds.add(contact.recordId);
+      reservedPhones.add(cleanPhoneNumber(contact.phone));
+    }
+  }
+  const seenPhones = new Set();
+  return (project.contacts || []).filter((contact) => {
+    const phone = cleanPhoneNumber(contact.phone);
+    const recordId = contact.recordId || contact.id;
+    if (!phone || contact.completed || reservedIds.has(recordId) || reservedPhones.has(phone) || seenPhones.has(phone)) return false;
+    seenPhones.add(phone);
+    return true;
+  });
+}
+
+/** Görevi ve rezervasyonu tek metadata yazımında oluşturur. */
+export async function createAssignment(projectId, input) {
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project || project.role === 'volunteer') throw new Error('Koordinatör etkinliği bulunamadı.');
+    const count = Number(input.count);
+    if (!Number.isInteger(count) || count < 1) throw new Error('Kişi sayısı en az 1 olmalı.');
+    if ((project.assignments || []).some((item) => item.assignmentId === input.assignmentId)) {
+      throw new Error('Görev kimliği zaten kullanılıyor.');
+    }
+    const saved = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
+    if (!saved) throw new Error('Etkinliğin kişi listesi bulunamadı.');
+    const available = getAvailableContacts({ ...project, contacts: JSON.parse(saved) });
+    if (count > available.length) throw new Error(`Yalnızca ${available.length} kişi atanabilir.`);
+    const assignment = normalizeAssignment({
+      eventId: project.eventId || project.id, assignmentId: input.assignmentId,
+      eventName: project.name, volunteerName: input.volunteerName,
+      formVersion: project.formVersion || 1, round: 1, createdAt: input.createdAt,
+      fields: project.fields, contacts: available.slice(0, count).map((contact) => ({
+        recordId: contact.recordId || contact.id, phone: contact.phone, data: { ...contact.data },
+      })),
+    });
+    const record = { ...assignment, status: 'prepared', sentAt: null, cancelledAt: null };
+    project.assignments = [...(project.assignments || []), record];
+    project.formLocked = true;
+    await saveAllProjects(projects);
+    return record;
+  });
+}
+
+export async function setAssignmentStatus(projectId, assignmentId, nextStatus, allowSentCancellation = false) {
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const project = projects.find((item) => item.id === projectId && item.role !== 'volunteer');
+    const assignment = project?.assignments?.find((item) => item.assignmentId === assignmentId);
+    if (!assignment) throw new Error('Görev bulunamadı.');
+    if (nextStatus === 'sent' && assignment.status === 'prepared') {
+      assignment.status = 'sent'; assignment.sentAt = new Date().toISOString();
+    } else if (nextStatus === 'cancelled' &&
+        (assignment.status === 'prepared' || (assignment.status === 'sent' && allowSentCancellation))) {
+      assignment.status = 'cancelled'; assignment.cancelledAt = new Date().toISOString();
+    } else throw new Error('Bu görev durumu değiştirilemez.');
+    await saveAllProjects(projects);
+    return assignment;
+  });
+}
+
+/** Aynı dosya ikinci kez açıldığında gönüllünün mevcut cevaplarını korur. */
+export async function importVolunteerAssignment(assignment, digest) {
+  const packet = normalizeAssignment(assignment);
+  if (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)) throw new Error('Görev özeti geçersiz.');
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const existing = projects.find((item) => item.id === packet.assignmentId);
+    if (existing) {
+      if (existing.role === 'volunteer' && existing.eventId === packet.eventId && existing.importDigest === digest) return 'already-present';
+      throw new Error('Bu görev kimliği cihazda farklı içerikle var. Mevcut veriler korunuyor.');
+    }
+    const contacts = packet.contacts.map((contact) => ({ id: contact.recordId, recordId: contact.recordId,
+      phone: contact.phone, data: { ...contact.data }, completed: false, completedAt: null, sourceRow: null }));
+    const project = {
+      id: packet.assignmentId, eventId: packet.eventId, assignmentId: packet.assignmentId,
+      role: 'volunteer', importDigest: digest, name: `${packet.eventName} · ${packet.volunteerName}`,
+      createdAt: packet.createdAt, currentIndex: 0, formVersion: packet.formVersion, formLocked: true,
+      templateId: null, sourceReview: null, fields: packet.fields,
+      totalContacts: contacts.length, completedContacts: 0, assignments: [],
+    };
+    const key = PROJECT_DATA_PREFIX + project.id;
+    if (await AsyncStorage.getItem(key)) throw new Error('Bu kimlikte eksik bir yerel kayıt var.');
+    await AsyncStorage.setItem(key, JSON.stringify(contacts));
+    try { await saveAllProjects([project, ...projects]); }
+    catch (error) { await AsyncStorage.removeItem(key).catch(() => {}); throw error; }
+    return 'imported';
   });
 }
 

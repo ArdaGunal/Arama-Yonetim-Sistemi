@@ -7,6 +7,7 @@
 | `App.js`, `index.js` | Uygulama girişi, gezinme ve hata sınırı |
 | `src/screens/HomeScreen.js` | Proje listesi ve geliştirici paneline giriş |
 | `src/screens/NewProjectScreen.js`, `src/features/new-project/` | Liste içe aktarma ve form oluşturma |
+| `src/screens/AssignmentsScreen.js`, `src/screens/AssignmentImportScreen.js` | Koordinatörün görev ayırması ve gönüllünün dosya açması |
 | `src/screens/SurveyScreen.js`, `src/features/active-survey/` | Anket, arama ve istatistik ekranları |
 | `src/context/SurveyContext.js` | Aktif anketin durumu ve otomatik kayıt |
 | `src/utils/storage.js` | AsyncStorage okuma/yazma ve taslaklar |
@@ -14,6 +15,7 @@
 | `src/utils/exportUtils.js`, `src/screens/ExportScreen.js` | Excel/CSV çıktısı |
 | `src/utils/diagnostics.js`, `src/screens/DeveloperPanel.js` | Hata kaydı ve rapor paylaşımı |
 | `src/utils/backupFormat.js`, `src/screens/BackupScreen.js` | Sürümlü `.ays` yedeği, doğrulama, dışa aktarma ve geri yükleme |
+| `src/utils/assignmentFormat.js`, `src/utils/canonicalJson.js` | `.ays` görev paketi ve ortak bütünlük hesabı |
 | `plugins/withCrashInfo.js`, `native-crash/` | Android yerel çökme kaydını Expo prebuild sırasında ekleme |
 | `src/theme/colors.js` | Ortak renkler |
 | `tests/regression.test.cjs` | Depolama ve içe aktarma regresyonları |
@@ -22,11 +24,13 @@
 
 `storage.js`, proje özetlerini `@ays_projects`, kişi dizisini `@ays_project_data_<id>`, o anda yazılan form taslağını `@ays_draft_<id>` anahtarlarında tutar. Tanılama kaydı ayrıca saklanır. Projede `fields` (sorular/şıklar), `contacts`, `currentIndex` vardır. Kişide `id`, normalleştirilmiş `phone`, alan kimliklerine göre `data`, `completed` ve `completedAt` bulunur.
 
-Yazmalar kuyruklanır; ekran yüklenirken bekleyen yazmaların bitmesi beklenir. Yeni depolama işlemlerinde `storage.js` üzerinden geçin. Bu yapı cihaz içi kullanım içindir: koordinatör ile 100 gönüllü arasında görevleri veya sonuçları eşitlemez. Telefon numarası mevcut içe aktarmada kişi listesi için önemli bir anahtardır; gelecekteki dağıtım/birleştirme için plandaki kalıcı `recordId` ve `assignmentId` gerekir.
+Yazmalar kuyruklanır; ekran yüklenirken bekleyen yazmaların bitmesi beklenir. Yeni depolama işlemlerinde `storage.js` üzerinden geçin. Bu yapı cihaz içi kullanım içindir; görevler dosyayla aktarılır, sonuçlar henüz eşitlenmez. Telefon aynı etkin görevler arasında tekrar dağıtımı önler; sonuç birleştirmede kalıcı `recordId` kullanılmalıdır.
+
+Koordinatör projesinde `eventId`, `formVersion`, `formLocked` ve `assignments` vardır. Her görev `assignmentId`, gönüllü adı, durum ve ayrılmış kişilerin değişmez başlangıç görüntüsünü tutar. Görev oluşturma ve kişi rezervasyonu aynı kuyruklanmış metadata yazımında yapılır. Gönüllü projesinin `id` değeri görev kimliğidir; `eventId` ana etkinliği gösterir. `importDigest`, aynı dosyayı tekrar açınca cevapları korur. Gönüllü kişi listesi değiştirilemez. Sonuç birleştirmede telefon veya isim yerine `recordId`, görev için `assignmentId` kullanılmalıdır.
 
 ## İçe ve dışa aktarma sınırları
 
-Metin ayrıştırma ve ilk Excel sayfasından veri okuma `phoneUtils.js` içindedir. Telefon biçimini ve sütun eşleştirmesini değiştirirken başlıksız tablo, isimlerin aynı olması ve baştaki sıfırları içeren numaralar için test ekleyin. Mevcut dışa aktarma tek proje için bir çalışma tablosu üretir. İlk yüklenen Excel'in bütün sütunlarını koruyan nihai birleştirme henüz yoktur.
+Metin ayrıştırma ve ilk Excel sayfasından veri okuma `sourcePreview.js`, `phoneUtils.js` ve `NewProjectScreen.js` içindedir. Telefon biçimini ve sütun eşleştirmesini değiştirirken başlıksız tablo, isimlerin aynı olması ve baştaki sıfırları içeren numaralar için test ekleyin. Mevcut Excel/CSV dışa aktarma tek proje içindir. İlk yüklenen Excel'in bütün sütunlarını koruyan nihai birleştirme henüz yoktur.
 
 ## Tanılama
 
@@ -34,4 +38,4 @@ JS hatası raporu hata metni, yığın izi, platform, sürüm ve son işlem izle
 
 ## Tasarlanan gelecek yapı
 
-Koordinatörün ana dosyayı saklaması, form sürümünü belirlemesi, çakışmasız görev paketleri oluşturması; gönüllülerin yalnızca kendi kişilerini açıp sürümlü sonuç dosyası göndermesi; koordinatörün önizleme ve yedek sonrası birleştirmesi [ürün planında](../hafiza/plan.md) anlatılır. Dosya biçimi kesinleşmeden gerçek etkinlik verileri üzerinde otomatik birleştirme yapılmamalıdır.
+Gönüllülerin sürümlü sonuç dosyası göndermesi ve koordinatörün önizleme ile yedek sonrası birleştirmesi [ürün planında](../hafiza/plan.md) anlatılır. Sonuç dosyası sözleşmesi kesinleşmeden gerçek etkinlik verileri üzerinde otomatik birleştirme yapılmamalıdır.

@@ -16,6 +16,8 @@ import EditFormScreen from './src/screens/EditFormScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import ExportScreen from './src/screens/ExportScreen';
 import BackupScreen from './src/screens/BackupScreen';
+import AssignmentsScreen from './src/screens/AssignmentsScreen';
+import AssignmentImportScreen from './src/screens/AssignmentImportScreen';
 import DeveloperPanel from './src/screens/DeveloperPanel';
 import { Colors } from './src/theme/colors';
 import { addBreadcrumb, installGlobalErrorHandler, loadLastDiagnostic, reportError, subscribeToDiagnostics } from './src/utils/diagnostics';
@@ -120,6 +122,8 @@ export default function App() {
           options={{ title: 'Yeni Proje Oluştur' }}
         />
         <Stack.Screen name="EditForm" component={EditFormScreen} options={{ title: 'Sorular ve Şablon' }} />
+        <Stack.Screen name="Assignments" component={AssignmentsScreen} options={{ title: 'Görevleri Dağıt' }} />
+        <Stack.Screen name="AssignmentImport" component={AssignmentImportScreen} options={{ title: 'Görev Dosyası Aç' }} />
         <Stack.Screen
           name="Survey"
           component={SurveyScreen}

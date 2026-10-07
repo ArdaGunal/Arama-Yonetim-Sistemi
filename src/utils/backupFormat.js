@@ -1,7 +1,11 @@
 import * as Crypto from 'expo-crypto';
+import { canonicalJson } from './canonicalJson';
+import { normalizeAssignment } from './assignmentFormat';
+
+export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 2;
+export const BACKUP_SCHEMA_VERSION = 3;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -24,18 +28,6 @@ function isoDate(value, label) {
     throw new Error(`${label} geçersiz.`);
   }
   return value;
-}
-
-export function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) =>
-      `${JSON.stringify(key)}:${canonicalJson(value[key])}`
-    ).join(',')}}`;
-  }
-  if (value === null || typeof value === 'string' || typeof value === 'boolean' ||
-      (typeof value === 'number' && Number.isFinite(value))) return JSON.stringify(value);
-  throw new Error('Yedek desteklenmeyen bir veri türü içeriyor.');
 }
 
 function sourceReview(value, fieldIds) {
@@ -65,11 +57,47 @@ function sourceReview(value, fieldIds) {
   };
 }
 
+function normalizeAssignments(value, eventId, recordIds, formVersion) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 10000) throw new Error('Görev listesi geçersiz.');
+  const seen = new Set();
+  const activeRecords = new Set();
+  const activePhones = new Set();
+  return value.map((raw) => {
+    const assignment = normalizeAssignment(raw);
+    if (assignment.eventId !== eventId || seen.has(assignment.assignmentId) ||
+        assignment.formVersion > formVersion || assignment.round !== 1 ||
+        !['prepared', 'sent', 'partial', 'completed', 'cancelled'].includes(raw.status)) {
+      throw new Error('Yedekte görev kimliği veya durumu geçersiz.');
+    }
+    seen.add(assignment.assignmentId);
+    if (raw.sentAt != null) isoDate(raw.sentAt, 'Gönderim tarihi');
+    if (raw.cancelledAt != null) isoDate(raw.cancelledAt, 'İptal tarihi');
+    for (const contact of assignment.contacts) {
+      if (!recordIds.has(contact.recordId)) throw new Error('Görevde ana listede olmayan kayıt var.');
+      if (raw.status !== 'cancelled') {
+        if (activeRecords.has(contact.recordId) || activePhones.has(contact.phone)) {
+          throw new Error('Yedekte çakışan etkin görev var.');
+        }
+        activeRecords.add(contact.recordId);
+        activePhones.add(contact.phone);
+      }
+    }
+    return { ...assignment, status: raw.status, sentAt: raw.sentAt || null,
+      cancelledAt: raw.cancelledAt || null };
+  });
+}
+
 export function normalizeBackupProject(input) {
   const project = object(input, 'Proje');
   const id = identifier(project.id, 'Proje kimliği');
   const eventId = identifier(project.eventId || id, 'Etkinlik kimliği');
-  if (eventId !== id) throw new Error('Etkinlik ve proje kimliği uyuşmuyor.');
+  const role = project.role || 'coordinator';
+  if (!['coordinator', 'volunteer'].includes(role) ||
+      (role === 'coordinator' && eventId !== id) ||
+      (role === 'volunteer' && project.assignmentId !== id)) {
+    throw new Error('Etkinlik ve proje kimliği uyuşmuyor.');
+  }
   if (typeof project.name !== 'string' || !project.name.trim()) throw new Error('Proje adı boş.');
   if (!Array.isArray(project.fields) || !Array.isArray(project.contacts)) {
     throw new Error('Yedekte alanlar veya kişiler eksik.');
@@ -144,11 +172,20 @@ export function normalizeBackupProject(input) {
     throw new Error('Form kilidi geçersiz.');
   }
   if (project.templateId != null) identifier(project.templateId, 'Şablon kimliği');
+  if (role === 'volunteer' && !/^[a-f0-9]{64}$/.test(project.importDigest || '')) {
+    throw new Error('Gönüllü görevi özeti geçersiz.');
+  }
+  const formVersion = project.formVersion || 1;
+  const assignments = role === 'coordinator'
+    ? normalizeAssignments(project.assignments, eventId, recordIds, formVersion) : [];
+  if (role === 'volunteer' && project.assignments?.length) throw new Error('Gönüllü projesinde görev listesi olamaz.');
   return {
     id, eventId, name: project.name, createdAt: isoDate(project.createdAt, 'Proje tarihi'),
-    currentIndex, fields, contacts, formVersion: project.formVersion || 1,
+    currentIndex, fields, contacts, formVersion,
     formLocked: project.formLocked || false, templateId: project.templateId || null,
     sourceReview: sourceReview(project.sourceReview, fieldIds),
+    role, assignmentId: role === 'volunteer' ? id : null,
+    importDigest: role === 'volunteer' ? project.importDigest : null, assignments,
   };
 }
 
@@ -175,7 +212,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,

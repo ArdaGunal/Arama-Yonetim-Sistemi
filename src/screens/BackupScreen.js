@@ -100,7 +100,8 @@ export default function BackupScreen() {
       }
       const parsed = await readBackupFile(content);
       const existingSummary = projects.find((item) =>
-        item.id === parsed.project.id || item.eventId === parsed.project.eventId);
+        item.id === parsed.project.id || (parsed.project.role !== 'volunteer' &&
+          item.role !== 'volunteer' && item.eventId === parsed.project.eventId));
       const existing = existingSummary?.id === parsed.project.id
         ? await getProjectForBackup(parsed.project.id) : null;
       const state = existingSummary

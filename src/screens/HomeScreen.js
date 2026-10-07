@@ -118,7 +118,9 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
         </View>
 
         <TouchableOpacity style={styles.cardContent} activeOpacity={0.7}
-          onPress={() => navigation.navigate('Survey', { projectId: item.id, projectName: item.name })}>
+          onPress={() => item.role !== 'volunteer' && item.assignments?.length
+            ? navigation.navigate('Assignments', { projectId: item.id })
+            : navigation.navigate('Survey', { projectId: item.id, projectName: item.name })}>
           <View style={styles.cardLeft}>
             <Text style={styles.projectName} numberOfLines={1}>
               {item.name}
@@ -140,10 +142,16 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity accessibilityRole="button" style={styles.formLink}
-          onPress={() => navigation.navigate('EditForm', { projectId: item.id })}>
-          <Text style={styles.formLinkText}>{item.formLocked || calledCount > 0 ? 'Sorular / Şablonu paylaş' : 'Soruları düzenle / Şablon'}</Text>
-        </TouchableOpacity>
+        {item.role === 'volunteer' ? <Text style={styles.assignmentLabel}>Bana gelen görev · {totalCount} kişi</Text> : <>
+          <TouchableOpacity accessibilityRole="button" style={styles.formLink}
+            onPress={() => navigation.navigate('Assignments', { projectId: item.id })}>
+            <Text style={styles.formLinkText}>Görevleri dağıt →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" style={styles.formLink}
+            onPress={() => navigation.navigate('EditForm', { projectId: item.id })}>
+            <Text style={styles.formLinkText}>{item.formLocked || calledCount > 0 ? 'Sorular / Şablonu paylaş' : 'Soruları düzenle / Şablon'}</Text>
+          </TouchableOpacity>
+        </>}
 
         {/* Sil butonu */}
         <TouchableOpacity
@@ -201,6 +209,10 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
 
       <TouchableOpacity accessibilityRole="button" style={styles.backupLink} onPress={() => navigation.navigate('Backup')}>
         <Text style={styles.backupText}>Yedek al veya geri yükle  ↗</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity accessibilityRole="button" style={styles.importLink} onPress={() => navigation.navigate('AssignmentImport')}>
+        <Text style={styles.importText}>Bana gelen görev dosyasını aç →</Text>
       </TouchableOpacity>
 
       {/* Proje Listesi */}
@@ -324,6 +336,7 @@ const styles = StyleSheet.create({
   },
   formLink: { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 11, paddingHorizontal: 16 },
   formLinkText: { color: Colors.accentLight, fontSize: 13, fontWeight: '700' },
+  assignmentLabel: { color: Colors.success, borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 11, paddingHorizontal: 16, fontSize: 13, fontWeight: '700' },
   cardLeft: {
     flex: 1,
     marginRight: 12,
@@ -437,4 +450,6 @@ const styles = StyleSheet.create({
   diagnosticText: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
   backupLink: { alignSelf: 'flex-end', paddingHorizontal: 22, paddingVertical: 10 },
   backupText: { color: Colors.accentLight, fontSize: 13, fontWeight: '800' },
+  importLink: { marginHorizontal: 16, marginVertical: 10, backgroundColor: Colors.bgCard, borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 12, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
+  importText: { color: Colors.accentLight, fontSize: 14, fontWeight: '800' },
 });

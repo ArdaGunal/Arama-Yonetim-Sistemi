@@ -2,7 +2,7 @@
 
 Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. Android uygulaması React Native ve Expo ile geliştirilir; web sürümü geliştirme ortamında çalışır. Veriler şu anda cihazın yerel depolamasında tutulur.
 
-> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. Plandaki görev dağıtımı, sonuç birleştirme, yedek ve iPhone PWA özellikleri henüz tamamlanmış özellikler olarak görülmemelidir.
+> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. Sonuç birleştirme ve iPhone PWA henüz tamamlanmadı.
 
 ## Bugün neler yapılabiliyor?
 
@@ -10,6 +10,7 @@ Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. And
 - Projeye özel metin ve seçim alanları oluşturma, kişileri arayıp cevapları kaydetme.
 - Sonuçları Excel veya CSV olarak dışa aktarma.
 - Projeyi `.ays` dosyası olarak yedekleme ve önizleyerek geri yükleme.
+- Ana listeden çakışmasız görev ayırma, `.ays` görev paketini paylaşma ve gönüllü cihazında otomatik içe alma. [Kısa kılavuz](docs/kullanim/gorev-dagitimi.md).
 - Android'de hata raporunu geliştirici panelinden paylaşma; önceki açılışta kaydedilen yerel çökme bilgisini görüntüleme.
 
 ## Hızlı başlangıç
@@ -26,4 +27,4 @@ Windows'ta Android Studio ve Android SDK kuruluysa `localapk.bat` yerel APK üre
 
 ## Önemli sınır
 
-Şu anki `.ays` biçimi yalnızca tam etkinlik yedeğidir. Excel/CSV çıktısı çalışılan projenin sonuç dosyasıdır; birden fazla gönüllünün sonucunu güvenle birleştiren görev paketi sistemi henüz yoktur. Kişi verisi içeren gerçek dosyaları ve hata raporlarını herkese açık GitHub deposuna eklemeyin.
+`.ays` dosyası tam yedek veya tek gönüllünün görev paketi olabilir; içindeki `kind` bunu belirtir. Excel/CSV çıktısı henüz güvenle birleştirilebilen sonuç paketi değildir. Kişi verisi içeren gerçek dosyaları ve hata raporlarını herkese açık GitHub deposuna eklemeyin.

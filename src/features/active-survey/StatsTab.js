@@ -165,7 +165,7 @@ export default function StatsTab() {
       )}
 
       {/* ── Yeni Kişi Ekle ── */}
-      <View style={st.addSection}>
+      {project?.role !== 'volunteer' && <View style={st.addSection}>
         <TouchableOpacity
           style={st.addToggleBtn}
           onPress={() => setShowAddContacts(!showAddContacts)}
@@ -197,7 +197,7 @@ export default function StatsTab() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </View>}
     </ScrollView>
   );
 }

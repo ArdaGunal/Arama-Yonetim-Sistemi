@@ -310,6 +310,11 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   // ── Yeni kişi ekle (istatistik sekmesinden) ──
   const handleAddContacts = async () => {
     if (!projectRef.current || savingRef.current) return;
+    if (projectRef.current.role === 'volunteer') {
+      const message = 'Görev dosyasındaki kişi listesi değiştirilemez.';
+      Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     try {
