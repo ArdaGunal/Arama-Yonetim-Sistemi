@@ -68,7 +68,22 @@ export function normalizeAssignment(input) {
       if (!fieldIds.has(key) || typeof value !== 'string') throw new Error('Görevde form dışı cevap var.');
       data[key] = value;
     }
-    return { recordId, phone, data };
+    if (raw.previousCallbackNote != null &&
+        (typeof raw.previousCallbackNote !== 'string' || raw.previousCallbackNote.length > 2000)) {
+      throw new Error('Önceki geri arama notu geçersiz.');
+    }
+    if (raw.baseline != null && (!raw.baseline || typeof raw.baseline !== 'object' ||
+        Array.isArray(raw.baseline) || typeof raw.baseline.completed !== 'boolean' ||
+        (raw.baseline.callStatus != null && typeof raw.baseline.callStatus !== 'string') ||
+        (raw.baseline.callbackNote != null && typeof raw.baseline.callbackNote !== 'string') ||
+        (raw.baseline.callbackAt != null && !Number.isFinite(Date.parse(raw.baseline.callbackAt))))) {
+      throw new Error('Görev başlangıç görüntüsü geçersiz.');
+    }
+    return { recordId, phone, data,
+      ...(raw.previousCallbackNote != null ? { previousCallbackNote: raw.previousCallbackNote } : {}),
+      ...(raw.baseline != null ? { baseline: { data: { ...data }, completed: raw.baseline.completed,
+        callStatus: raw.baseline.callStatus || null, callbackNote: raw.baseline.callbackNote || '',
+        callbackAt: raw.baseline.callbackAt || null } } : {}) };
   });
   return { eventId, assignmentId, eventName: input.eventName, volunteerName: input.volunteerName,
     formVersion: input.formVersion, round: input.round, createdAt: date(input.createdAt, 'Görev tarihi'),

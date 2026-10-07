@@ -41,7 +41,9 @@ function makeFileName(name, ext) {
   return `${(name || 'anket').replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ ]/g, '').replace(/ /g, '_')}_${date}.${ext}`;
 }
 
-function buildWorkbook(project) {
+const statusLabel = { contacted: 'Görüşüldü', unreached: 'Ulaşılamadı', later: 'Sonra ara', wrong_number: 'Yanlış numara' };
+
+export function buildWorkbook(project) {
   const fields = project.fields || [];
   // isSystemField:'name' alanını bul — label'a bağlı değil, kimlik bazlı
   const nameField = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
@@ -52,31 +54,78 @@ function buildWorkbook(project) {
   if (nameField) headers.push(nameField.label);
   headers.push('Tel No');
   otherFields.forEach(f => headers.push(f.label));
+  headers.push('Arama Durumu', 'Geri Arama Tarihi', 'Geri Arama Notu', 'Kayıt Kimliği', 'Kaynak Satırı');
 
   const rows = project.contacts.map((c) => {
     const row = {};
     if (nameField) row[nameField.label] = (c.data && c.data[nameField.id]) || '';
     row['Tel No'] = c.phone;
     otherFields.forEach((f) => { row[f.label] = (c.data && c.data[f.id]) || ''; });
+    row['Arama Durumu'] = statusLabel[c.callStatus] || (c.completed ? 'Tamamlandı' : 'Aranmadı');
+    row['Geri Arama Tarihi'] = c.callbackAt?.slice(0, 10) || '';
+    row['Geri Arama Notu'] = c.callbackNote || '';
+    row['Kayıt Kimliği'] = c.recordId || c.id;
+    row['Kaynak Satırı'] = c.sourceRow || '';
     return row;
   });
 
-  const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-  ws['!cols'] = headers.map(() => ({ wch: 18 }));
+  const sourceColumns = project.role !== 'volunteer' && project.sourceReview?.columns;
+  const hasSourceCells = sourceColumns?.length && project.contacts.some((contact) => contact.sourceCells);
+  const sourceHeaders = hasSourceCells ? sourceColumns.map((column) => column.label) : [];
+  const currentHeaders = hasSourceCells ? [
+    ...fields.map((field) => `Güncel: ${field.label}`), 'Güncel: Tel No',
+    'Arama Durumu', 'Geri Arama Tarihi', 'Geri Arama Notu', 'Kayıt Kimliği', 'Kaynak Satırı',
+  ] : headers;
+  const ws = hasSourceCells
+    ? XLSX.utils.aoa_to_sheet([
+      [...sourceHeaders, ...currentHeaders],
+      ...project.contacts.map((contact) => [
+        ...sourceColumns.map((column) => String(contact.sourceCells?.[column.index] ?? '')),
+        ...fields.map((field) => contact.data?.[field.id] || ''), contact.phone,
+        statusLabel[contact.callStatus] || (contact.completed ? 'Tamamlandı' : 'Aranmadı'),
+        contact.callbackAt?.slice(0, 10) || '', contact.callbackNote || '',
+        contact.recordId || contact.id, contact.sourceRow || '',
+      ]),
+    ])
+    : XLSX.utils.json_to_sheet(rows, { header: headers });
+  ws['!cols'] = (hasSourceCells ? [...sourceHeaders, ...currentHeaders] : headers).map(() => ({ wch: 18 }));
 
-  // Tel No sütununu metin formatına zorla
-  const phoneColIdx = nameField ? 1 : 0;
+  // Telefon ve kaynak kimlik sütunları metin olarak kalır.
+  const phoneColIdx = hasSourceCells ? sourceHeaders.length + fields.length : nameField ? 1 : 0;
   const ref = ws['!ref'];
   if (ref) {
     const range = XLSX.utils.decode_range(ref);
     for (let R = range.s.r + 1; R <= range.e.r; ++R) {
       const cell = ws[XLSX.utils.encode_cell({ r: R, c: phoneColIdx })];
       if (cell) { cell.t = 's'; cell.z = '@'; }
+      if (hasSourceCells) for (const column of sourceColumns) {
+        const original = ws[XLSX.utils.encode_cell({ r: R, c: column.index })];
+        if (original) { original.t = 's'; original.z = '@'; }
+      }
     }
   }
   const wb = XLSX.utils.book_new();
-  const safeName = (project.name || 'Anket').replace(/[:\\\/?*\[\]]/g, '').substring(0, 31) || 'Anket';
-  XLSX.utils.book_append_sheet(wb, ws, safeName);
+  XLSX.utils.book_append_sheet(wb, ws, project.role === 'volunteer' ? 'Görev Sonucu' : 'Güncel Durum');
+  if (project.role !== 'volunteer') {
+    const history = project.contacts.flatMap((contact) => (contact.attempts || []).map((attempt) => ({
+      'Kayıt Kimliği': contact.recordId || contact.id,
+      'İsim Soyisim': nameField ? contact.data?.[nameField.id] || '' : '',
+      'Tel No': contact.phone, 'Arama Tarihi': attempt.at,
+      'Arama Durumu': statusLabel[attempt.status] || attempt.status,
+      'Not': attempt.note || '',
+      ...Object.fromEntries(otherFields.map((field) => [field.label, attempt.data?.[field.id] || ''])),
+    })));
+    const hw = XLSX.utils.json_to_sheet(history, { header: ['Kayıt Kimliği', 'İsim Soyisim', 'Tel No', 'Arama Tarihi', 'Arama Durumu', 'Not', ...otherFields.map((field) => field.label)] });
+    XLSX.utils.book_append_sheet(wb, hw, 'Arama Geçmişi');
+    if (project.mergeConflicts?.length) {
+      const conflicts = project.mergeConflicts.map((item) => ({
+        'Kayıt Kimliği': item.recordId, 'Görev Kimliği': item.assignmentId,
+        'Karar': item.decision === 'incoming' ? 'Gelen alındı' : 'Mevcut korundu',
+        'Karar Tarihi': item.at, 'Önceki': item.oldAnswer, 'Gelen': item.incomingAnswer,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conflicts), 'İncelenecek Çakışmalar');
+    }
+  }
   return wb;
 }
 
@@ -91,6 +140,7 @@ function buildCSV(project) {
   if (nameField) headerParts.push(nameField.label);
   headerParts.push('Tel No');
   otherFields.forEach(f => headerParts.push(f.label));
+  headerParts.push('Arama Durumu', 'Geri Arama Tarihi', 'Geri Arama Notu', 'Kayıt Kimliği');
   const header = headerParts.map(esc).join(';');
 
   const rows = project.contacts.map((c) => {
@@ -98,6 +148,8 @@ function buildCSV(project) {
     if (nameField) parts.push((c.data && c.data[nameField.id]) || '');
     parts.push(c.phone);
     otherFields.forEach((f) => parts.push((c.data && c.data[f.id]) || ''));
+    parts.push(statusLabel[c.callStatus] || (c.completed ? 'Tamamlandı' : 'Aranmadı'));
+    parts.push(c.callbackAt?.slice(0, 10) || '', c.callbackNote || '', c.recordId || c.id);
     return parts.map(esc).join(';');
   });
   return '\uFEFF' + header + '\n' + rows.join('\n');

@@ -8,15 +8,17 @@ Son gözden geçirme: 8 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Y
 - Yeni projede metin veya Excel/CSV/TSV ilk sayfası üç adımda içe alınır: kaynak sütunları önizlenip eşleştirilir, aynı telefonlu satırlardan biri açıkça seçilir, sorular/şıklar düzenlenir. Geçersiz ve seçilmeyen satırlar inceleme kaydında kalır.
 - Form, ilk tamamlanan arama veya ilk görev oluşturulana kadar düzenlenebilir; ardından kilitlenir. `.ayst` şablon dosyası kaynak sütun görevleriyle birlikte paylaşılır ve içe alındığında kaydedilir.
 - Projeler ve kişi cevapları AsyncStorage'da cihaz üzerinde saklanır. Anket ekranı değişiklikleri taslağa ve proje kaydına yazar.
-- Sonuçlar Excel/CSV olarak paylaşılabilir veya kaydedilebilir. Bu dışa aktarma, ileride tasarlanan görev/sonuç paket biçimi değildir.
-- Her proje `.ays` sürüm 3 tam yedeği olarak dışa aktarılabilir; sürüm 1 ve 2 de okunur. Görev kayıtları yedeğe girer. Dosya SHA-256 ile doğrulanır; aynı içerik ikinci kez içe alınmaz ve farklı içerikli etkinlik otomatik ezilmez.
+- Sonuçlar `.ays` paketleriyle kısmi veya tam paylaşılır. Daha yeni gönderim sürümü öncekinin yerine işlenir; çakışmalar koordinatöre gösterilir. Excel/CSV ayrıca insan tarafından okunabilen çıktı olarak alınabilir.
+- Her proje `.ays` sürüm 4 tam yedeği olarak dışa aktarılabilir; sürüm 1, 2 ve 3 de okunur. Görevler, arama geçmişi ve birleştirme kararları yedeğe girer. Dosya SHA-256 ile doğrulanır; aynı içerik ikinci kez içe alınmaz ve farklı içerikli etkinlik otomatik ezilmez.
 - Koordinatör kişi sayısıyla ilk tur görevi ayırır; paket yalnızca ayrılmış kişileri ve formu taşır. Hazırlandı/gönderildi/iptal durumları izlenir. Gönüllü Android veya web uygulamasında dosyayı seçince sorular ve kendi kişileri açılır. Aynı dosyanın yeniden açılması cevapları sıfırlamaz.
+- `Sonra ara` cevaplarından yeni tur görevi oluşturulur. Önceki arama denemeleri ve anlamlı cevaplar saklanır. Nihai Excel'de Güncel Durum, Arama Geçmişi ve varsa İncelenecek Çakışmalar sayfaları vardır.
+- Android uygulaması `ACTION_VIEW` ile gelen dosyaları açmayı dener; WhatsApp dosyasına dokunulduğunda uygulama seçeneği görünmesi amaçlanır. Gerçek WhatsApp sürümlerinde test hâlâ gereklidir; Dosyalar'dan seçme yolu korunur.
 - Geliştirici paneli JavaScript hata bilgilerini ve uygulama içindeki son işlem izlerini gösterip paylaşır. Android yerel çökme kaydı sonraki açılışta okunur; yerel bir çökme anında uygulamanın kapanmasını tamamen önlemek teknik olarak mümkün değildir.
 - Android için `localapk.bat` ile yerel APK üretilebilir. Bu çıktı mevcut Android debug anahtarıyla imzalanır; mağaza yayını için ayrı imzalama gerekir.
 
 ## Henüz yapılmadı
 
-- Gönüllü sonuç paketleri, bunları güvenle birleştirme, geri arama turları ve durum geçmişi. Şimdiki Excel/CSV dışa aktarımı bu birleştirme dosyası değildir.
+- Yeni etkinliklerde ilk sayfanın kaynak sütunları ve hücreleri nihai Excel'in başında korunur; özgün Excel'in ek sayfaları ve görsel biçimi korunmaz. Eski etkinliklerde önceden saklanmamış kaynak hücreleri geri getirilemez. İlk kaynak dosya ayrıca saklanmalıdır.
 - Gönderilmiş dosyanın karşı tarafta gerçekten açıldığını doğrulayan merkezi sistem yoktur; durum koordinatör tarafından işaretlenir.
 - Kalıcı, çevrimdışı çalışan ve gerçek iPhone'da doğrulanmış PWA dağıtımı.
 - Büyük veri setleri ve 100 gönüllü senaryosu için performans doğrulaması.

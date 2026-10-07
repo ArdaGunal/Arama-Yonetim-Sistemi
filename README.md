@@ -2,7 +2,7 @@
 
 Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. Android uygulaması React Native ve Expo ile geliştirilir; web sürümü geliştirme ortamında çalışır. Veriler şu anda cihazın yerel depolamasında tutulur.
 
-> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. Sonuç birleştirme ve iPhone PWA henüz tamamlanmadı.
+> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. iPhone PWA henüz tamamlanmadı.
 
 ## Bugün neler yapılabiliyor?
 
@@ -11,6 +11,7 @@ Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. And
 - Sonuçları Excel veya CSV olarak dışa aktarma.
 - Projeyi `.ays` dosyası olarak yedekleme ve önizleyerek geri yükleme.
 - Ana listeden çakışmasız görev ayırma, `.ays` görev paketini paylaşma ve gönüllü cihazında otomatik içe alma. [Kısa kılavuz](docs/kullanim/gorev-dagitimi.md).
+- Gönüllü sonuçlarını `.ays` olarak kısmi veya tam paylaşma; koordinatörde toplu önizleme, çakışma kararı ve geri arama görevi oluşturma.
 - Android'de hata raporunu geliştirici panelinden paylaşma; önceki açılışta kaydedilen yerel çökme bilgisini görüntüleme.
 
 ## Hızlı başlangıç
@@ -27,4 +28,4 @@ Windows'ta Android Studio ve Android SDK kuruluysa `localapk.bat` yerel APK üre
 
 ## Önemli sınır
 
-`.ays` dosyası tam yedek veya tek gönüllünün görev paketi olabilir; içindeki `kind` bunu belirtir. Excel/CSV çıktısı henüz güvenle birleştirilebilen sonuç paketi değildir. Kişi verisi içeren gerçek dosyaları ve hata raporlarını herkese açık GitHub deposuna eklemeyin.
+`.ays` dosyası yedek, görev veya sonuç paketi olabilir; içindeki `kind` bunu belirtir. Excel/CSV insan tarafından okunacak çıktıdır; otomatik birleştirme için `.ays` sonuç paketi kullanılır. Kişi verisi içeren gerçek dosyaları ve hata raporlarını herkese açık GitHub deposuna eklemeyin.

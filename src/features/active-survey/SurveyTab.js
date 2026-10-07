@@ -27,6 +27,7 @@ export default function SurveyTab() {
     formData, saving,
     setField, handleSaveAndNext, handleNav, forceFlush,
     navigation, projectId, projectName,
+    callStatus, setCallStatus, callbackNote, setCallbackNote, callbackDate, setCallbackDate,
   } = useSurvey();
   const insets = useSafeAreaInsets();
 
@@ -109,6 +110,25 @@ export default function SurveyTab() {
           </TouchableOpacity>
         </View>
 
+        <View style={st.statusCard}>
+          <Text style={st.dynLabel}>Arama sonucu{!callStatus && ' · seçim gerekli'}</Text>
+          <View style={st.statusOptions}>
+            {[
+              ['contacted', 'Görüşüldü'], ['unreached', 'Ulaşılamadı'],
+              ['later', 'Sonra ara'], ['wrong_number', 'Yanlış numara'],
+            ].map(([value, label]) => <TouchableOpacity key={value} accessibilityRole="button"
+              style={[st.statusChoice, callStatus === value && st.statusSelected]}
+              onPress={() => setCallStatus(value)}><Text style={st.statusText}>{label}</Text></TouchableOpacity>)}
+          </View>
+          {cc?.previousCallbackNote && <Text style={st.priorNote}>Önceki not: {cc.previousCallbackNote}</Text>}
+          {callStatus === 'later' && <>
+            <TextInput style={st.dynInput} value={callbackNote} onChangeText={setCallbackNote}
+              placeholder="Kısa not (isteğe bağlı)" placeholderTextColor={Colors.textPlaceholder} />
+            <TextInput style={[st.dynInput, { marginTop: 8 }]} value={callbackDate} onChangeText={setCallbackDate}
+              placeholder="Tekrar arama tarihi: YYYY-AA-GG" placeholderTextColor={Colors.textPlaceholder} />
+          </>}
+        </View>
+
         {/* Dinamik Form Alanları */}
         {fields.map((field) => (
           <View key={field.id} style={st.dynField}>
@@ -167,6 +187,12 @@ export default function SurveyTab() {
 }
 
 const st = StyleSheet.create({
+  statusCard: { backgroundColor: Colors.bgCard, borderColor: Colors.border, borderWidth: 1, borderRadius: 14, padding: 15, marginBottom: 20 },
+  statusOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statusChoice: { borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12 },
+  statusSelected: { backgroundColor: Colors.accentDark },
+  statusText: { color: Colors.textPrimary, fontSize: 13, fontWeight: '700' },
+  priorNote: { color: Colors.warning, fontSize: 13, lineHeight: 19, marginTop: 12 },
   sv: { flex: 1 },
   svc: { padding: 20 },
   progRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },

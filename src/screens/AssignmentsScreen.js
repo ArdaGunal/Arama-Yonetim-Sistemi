@@ -6,7 +6,7 @@ import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { createAssignmentFile } from '../utils/assignmentFormat';
-import { createAssignment, getAvailableContacts, getProject, setAssignmentStatus } from '../utils/storage';
+import { createAssignment, createCallbackAssignment, getAvailableContacts, getCallbackCandidates, getProject, setAssignmentStatus } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 
@@ -26,6 +26,7 @@ export default function AssignmentsScreen({ navigation, route }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [backupHint, setBackupHint] = useState(false);
+  const [mode, setMode] = useState('first');
   const refresh = useCallback(async () => {
     try {
       const loaded = await getProject(route.params.projectId);
@@ -43,7 +44,7 @@ export default function AssignmentsScreen({ navigation, route }) {
     finally { setBusy(''); }
   };
   const make = () => run('create', async () => {
-    await createAssignment(project.id, { assignmentId: Crypto.randomUUID(),
+    await (mode === 'callback' ? createCallbackAssignment : createAssignment)(project.id, { assignmentId: Crypto.randomUUID(),
       volunteerName: volunteerName.trim(), count: Number(count), createdAt: new Date().toISOString() });
     setVolunteerName(''); setCount(''); setBackupHint(true);
     inform('Görev ayrıldı. Şimdi görev paketini paylaşın ve etkinlik yedeğini kaydedin.');
@@ -79,17 +80,29 @@ export default function AssignmentsScreen({ navigation, route }) {
   if (error) return <View style={s.center}><Text style={s.warning}>{error}</Text><TouchableOpacity onPress={refresh}><Text style={s.link}>Tekrar dene</Text></TouchableOpacity></View>;
   if (!project) return <View style={s.center}><ActivityIndicator color={Colors.accentLight} /></View>;
   const available = getAvailableContacts(project).length;
+  const callbacks = getCallbackCandidates(project).length;
   const active = (project.assignments || []).filter((item) => item.status !== 'cancelled');
   return <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 20) }]} keyboardShouldPersistTaps="handled">
     <Text style={s.title}>Görevleri dağıt</Text>
     <Text style={s.intro}>Her kişi tek bir etkin göreve ayrılır. Görev sayısını yazın; kişiler sırayla atanır.</Text>
     <View style={s.summary}>
       <View style={s.stat}><Text style={s.statNumber}>{available}</Text><Text style={s.statLabel}>Atanabilir</Text></View>
-      <View style={s.stat}><Text style={s.statNumber}>{active.reduce((sum, item) => sum + item.contacts.length, 0)}</Text><Text style={s.statLabel}>Ayrılmış</Text></View>
+      <View style={s.stat}><Text style={s.statNumber}>{active.filter((item) => item.round === 1).reduce((sum, item) => sum + item.contacts.length, 0)}</Text><Text style={s.statLabel}>Ayrılmış</Text></View>
       <View style={s.stat}><Text style={s.statNumber}>{project.contacts.length}</Text><Text style={s.statLabel}>Toplam</Text></View>
     </View>
+    <TouchableOpacity accessibilityRole="button" style={s.collect} onPress={() => navigation.navigate('ResultsImport', { projectId: project.id })}>
+      <Text style={s.collectText}>Gelen sonuçları topla →</Text>
+    </TouchableOpacity>
+    <View style={s.modeRow}>
+      <TouchableOpacity accessibilityRole="button" style={[s.modeButton, mode === 'first' && s.modeActive]} onPress={() => setMode('first')}>
+        <Text style={s.modeText}>İlk dağıtım</Text>
+      </TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" style={[s.modeButton, mode === 'callback' && s.modeActive]} onPress={() => setMode('callback')}>
+        <Text style={s.modeText}>Sonra ara ({callbacks})</Text>
+      </TouchableOpacity>
+    </View>
     <View style={s.card}>
-      <Text style={s.cardTitle}>Yeni görev</Text>
+      <Text style={s.cardTitle}>{mode === 'callback' ? 'Yeni geri arama görevi' : 'Yeni görev'}</Text>
       <Text style={s.label}>Kime gönderilecek?</Text>
       <TextInput style={s.input} value={volunteerName} onChangeText={setVolunteerName}
         placeholder="Gönüllünün adı" placeholderTextColor={Colors.textPlaceholder} />
@@ -126,6 +139,12 @@ export default function AssignmentsScreen({ navigation, route }) {
 }
 
 const s = StyleSheet.create({
+  modeRow: { flexDirection: 'row', gap: 8, marginBottom: 13 },
+  modeButton: { flex: 1, borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 10, padding: 12 },
+  modeActive: { backgroundColor: Colors.accentDark },
+  modeText: { color: Colors.textPrimary, fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  collect: { backgroundColor: Colors.success, borderRadius: 12, minHeight: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  collectText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   root: { flex: 1, backgroundColor: Colors.bg }, content: { padding: 18, paddingTop: 26 }, center: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: Colors.bg },
   title: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: 8 }, intro: { color: Colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: 18 },
   summary: { flexDirection: 'row', gap: 8, marginBottom: 16 }, stat: { flex: 1, backgroundColor: Colors.bgCard, borderRadius: 13, padding: 12, alignItems: 'center' },

@@ -1,11 +1,12 @@
 import * as Crypto from 'expo-crypto';
 import { canonicalJson } from './canonicalJson';
 import { normalizeAssignment } from './assignmentFormat';
+import { CALL_STATUSES, normalizeAttempts } from './resultFormat';
 
 export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 3;
+export const BACKUP_SCHEMA_VERSION = 4;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -66,7 +67,7 @@ function normalizeAssignments(value, eventId, recordIds, formVersion) {
   return value.map((raw) => {
     const assignment = normalizeAssignment(raw);
     if (assignment.eventId !== eventId || seen.has(assignment.assignmentId) ||
-        assignment.formVersion > formVersion || assignment.round !== 1 ||
+        assignment.formVersion > formVersion || assignment.round > 100 ||
         !['prepared', 'sent', 'partial', 'completed', 'cancelled'].includes(raw.status)) {
       throw new Error('Yedekte görev kimliği veya durumu geçersiz.');
     }
@@ -76,16 +77,48 @@ function normalizeAssignments(value, eventId, recordIds, formVersion) {
     for (const contact of assignment.contacts) {
       if (!recordIds.has(contact.recordId)) throw new Error('Görevde ana listede olmayan kayıt var.');
       if (raw.status !== 'cancelled') {
-        if (activeRecords.has(contact.recordId) || activePhones.has(contact.phone)) {
+        const roundRecord = `${assignment.round}:${contact.recordId}`;
+        const roundPhone = `${assignment.round}:${contact.phone}`;
+        if (activeRecords.has(roundRecord) || activePhones.has(roundPhone)) {
           throw new Error('Yedekte çakışan etkin görev var.');
         }
-        activeRecords.add(contact.recordId);
-        activePhones.add(contact.phone);
+        activeRecords.add(roundRecord);
+        activePhones.add(roundPhone);
       }
     }
+    if (raw.packetDigest != null && !/^[a-f0-9]{64}$/.test(raw.packetDigest)) throw new Error('Görev özeti geçersiz.');
+    if (raw.resultRevision != null && (!Number.isInteger(raw.resultRevision) || raw.resultRevision < 0)) {
+      throw new Error('Sonuç sürümü geçersiz.');
+    }
+    if (raw.resultDigest != null && !/^[a-f0-9]{64}$/.test(raw.resultDigest)) throw new Error('Sonuç özeti geçersiz.');
+    const lastApplied = {};
+    for (const [recordId, snapshot] of Object.entries(raw.lastApplied || {})) {
+      if (!assignment.contacts.some((contact) => contact.recordId === recordId) ||
+          !snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+        throw new Error('Son uygulanan sonuç geçersiz.');
+      }
+      lastApplied[recordId] = normalizeAnswerSnapshot(snapshot, new Set(assignment.fields.map((field) => field.id)));
+    }
     return { ...assignment, status: raw.status, sentAt: raw.sentAt || null,
-      cancelledAt: raw.cancelledAt || null };
+      cancelledAt: raw.cancelledAt || null, packetDigest: raw.packetDigest || null,
+      resultRevision: raw.resultRevision || 0, resultDigest: raw.resultDigest || null, lastApplied };
   });
+}
+
+function normalizeAnswerSnapshot(raw, fieldIds) {
+  const data = {};
+  for (const [key, value] of Object.entries(raw.data || {})) {
+    if (!fieldIds.has(key) || typeof value !== 'string') throw new Error('Sonuç anlık görüntüsü geçersiz.');
+    data[key] = value;
+  }
+  if (typeof raw.completed !== 'boolean' ||
+      (raw.callStatus != null && !CALL_STATUSES.includes(raw.callStatus)) ||
+      (raw.callbackNote != null && typeof raw.callbackNote !== 'string') ||
+      (raw.callbackAt != null && !Number.isFinite(Date.parse(raw.callbackAt)))) {
+    throw new Error('Sonuç anlık görüntüsü geçersiz.');
+  }
+  return { data, completed: raw.completed, callStatus: raw.callStatus || null,
+    callbackNote: raw.callbackNote || '', callbackAt: raw.callbackAt || null };
 }
 
 export function normalizeBackupProject(input) {
@@ -153,10 +186,26 @@ export function normalizeBackupProject(input) {
         (!Number.isInteger(contact.sourceRow) || contact.sourceRow < 1)) {
       throw new Error('Kaynak satır numarası geçersiz.');
     }
+    if (contact.sourceCells != null &&
+        (!Array.isArray(contact.sourceCells) || contact.sourceCells.length > 1000 ||
+          contact.sourceCells.some((cell) => typeof cell !== 'string' || cell.length > 10000))) {
+      throw new Error('Kaynak satır hücreleri geçersiz.');
+    }
+    if ((contact.callStatus != null && !CALL_STATUSES.includes(contact.callStatus)) ||
+        (contact.callbackNote != null && (typeof contact.callbackNote !== 'string' || contact.callbackNote.length > 2000)) ||
+        (contact.callbackAt != null && !Number.isFinite(Date.parse(contact.callbackAt))) ||
+        (contact.previousCallbackNote != null && typeof contact.previousCallbackNote !== 'string')) {
+      throw new Error('Kişinin arama sonucu geçersiz.');
+    }
     return {
       id: contactId, recordId, phone: contact.phone, data,
       completed: contact.completed, completedAt: contact.completedAt || null,
       sourceRow: contact.sourceRow || null,
+      sourceCells: contact.sourceCells ? [...contact.sourceCells] : null,
+      callStatus: contact.callStatus || null,
+      callbackNote: contact.callbackNote || '', callbackAt: contact.callbackAt || null,
+      attempts: normalizeAttempts(contact.attempts, fieldIds),
+      previousCallbackNote: contact.previousCallbackNote || '',
     };
   });
   const currentIndex = project.currentIndex ?? 0;
@@ -176,9 +225,26 @@ export function normalizeBackupProject(input) {
     throw new Error('Gönüllü görevi özeti geçersiz.');
   }
   const formVersion = project.formVersion || 1;
+  if (project.resultRevision != null && (!Number.isInteger(project.resultRevision) || project.resultRevision < 0)) {
+    throw new Error('Sonuç sürümü geçersiz.');
+  }
+  if (project.round != null && (!Number.isInteger(project.round) || project.round < 1 || project.round > 100)) {
+    throw new Error('Görev turu geçersiz.');
+  }
   const assignments = role === 'coordinator'
     ? normalizeAssignments(project.assignments, eventId, recordIds, formVersion) : [];
   if (role === 'volunteer' && project.assignments?.length) throw new Error('Gönüllü projesinde görev listesi olamaz.');
+  if (project.mergeConflicts != null && !Array.isArray(project.mergeConflicts)) throw new Error('Çakışma geçmişi geçersiz.');
+  const mergeConflicts = (project.mergeConflicts || []).map((raw) => {
+    if (!raw || typeof raw !== 'object' || !recordIds.has(raw.recordId) ||
+        !['keep', 'incoming'].includes(raw.decision) ||
+        typeof raw.oldAnswer !== 'string' || typeof raw.incomingAnswer !== 'string') {
+      throw new Error('Çakışma geçmişi geçersiz.');
+    }
+    return { assignmentId: identifier(raw.assignmentId, 'Görev kimliği'), recordId: raw.recordId,
+      decision: raw.decision, at: isoDate(raw.at, 'Çakışma tarihi'),
+      oldAnswer: raw.oldAnswer, incomingAnswer: raw.incomingAnswer };
+  });
   return {
     id, eventId, name: project.name, createdAt: isoDate(project.createdAt, 'Proje tarihi'),
     currentIndex, fields, contacts, formVersion,
@@ -186,6 +252,9 @@ export function normalizeBackupProject(input) {
     sourceReview: sourceReview(project.sourceReview, fieldIds),
     role, assignmentId: role === 'volunteer' ? id : null,
     importDigest: role === 'volunteer' ? project.importDigest : null, assignments,
+    round: role === 'volunteer' ? project.round || 1 : null,
+    resultRevision: role === 'volunteer' ? project.resultRevision || 0 : 0,
+    mergeConflicts,
   };
 }
 
@@ -212,7 +281,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, 2, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, 3, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,

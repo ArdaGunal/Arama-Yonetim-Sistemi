@@ -5,6 +5,9 @@ import { Colors } from '../theme/colors';
 import { getProject } from '../utils/storage';
 import { shareExcel, saveExcel, shareCSV, saveCSV } from '../utils/exportUtils';
 import { reportError } from '../utils/diagnostics';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { createVolunteerResultFile } from '../utils/storage';
 
 const msg = (title, m) => Platform.OS === 'web' ? window.alert(m) : Alert.alert(title, m);
 
@@ -45,6 +48,30 @@ export default function ExportScreen({ route, navigation }) {
     setBusy(null);
   };
 
+  const shareResult = async () => {
+    if (busy) return;
+    setBusy('result');
+    try {
+      const file = await createVolunteerResultFile(projectId);
+      const name = `Sonuc-${project.assignmentId.slice(0, 8)}-v${file.revision}.ays`;
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(new Blob([file.content], { type: 'application/json' }));
+        const link = document.createElement('a'); link.href = url; link.download = name;
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } else {
+        if (!await Sharing.isAvailableAsync()) throw new Error('Bu cihazda dosya paylaşımı kullanılamıyor.');
+        const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${name}`;
+        await FileSystem.writeAsStringAsync(uri, file.content, { encoding: FileSystem.EncodingType.UTF8 });
+        await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Sonucu koordinatöre gönder' });
+      }
+      msg('Sonuç hazır', `${file.completed}/${file.total} kişi · Gönderim sürümü ${file.revision}. Bu .ays dosyasını koordinatöre gönderin.`);
+    } catch (error) {
+      reportError(error, 'Sonuç paketi oluşturulurken');
+      msg('Sonuç gönderilemedi', error.message || 'Yeniden deneyin.');
+    } finally { setBusy(null); }
+  };
+
   if (loading) return <View style={s.loadC}><ActivityIndicator size="large" color={Colors.accent}/></View>;
   if (!project) return (
     <View style={s.loadC}>
@@ -68,9 +95,13 @@ export default function ExportScreen({ route, navigation }) {
   return (
     <View style={s.container}>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 20) }]} showsVerticalScrollIndicator={false}>
-        {project.role === 'volunteer' && <Text style={{ color: Colors.warning, fontSize: 13, lineHeight: 20, marginBottom: 14 }}>
-          Bu Excel/CSV dosyası koordinatörün ana listesiyle otomatik birleştirilmez. Sonuç paketi sonraki sürümde eklenecek.
-        </Text>}
+        {project.role === 'volunteer' && <View style={s.resultCard}>
+          <Text style={s.resultTitle}>Sonucu koordinatöre gönder</Text>
+          <Text style={s.resultHelp}>Ara verirken de gönderebilirsiniz. Sonraki gönderim daha yeni sürüm olarak işlenir.</Text>
+          <TouchableOpacity accessibilityRole="button" style={s.resultButton} disabled={!!busy} onPress={shareResult}>
+            <Text style={s.resultButtonText}>{busy === 'result' ? 'Hazırlanıyor…' : 'Sonuç dosyasını paylaş'}</Text>
+          </TouchableOpacity>
+        </View>}
         <View style={s.header}>
           <Text style={{fontSize:48,marginBottom:12}}>📊</Text>
           <Text style={s.headerTitle}>{projectName}</Text>
@@ -141,6 +172,11 @@ export default function ExportScreen({ route, navigation }) {
 }
 
 const s = StyleSheet.create({
+  resultCard:{backgroundColor:Colors.bgCard,borderColor:Colors.borderAccent,borderWidth:1,borderRadius:16,padding:18,marginBottom:22},
+  resultTitle:{color:Colors.textPrimary,fontSize:19,fontWeight:'800'},
+  resultHelp:{color:Colors.textSecondary,fontSize:13,lineHeight:19,marginTop:7,marginBottom:14},
+  resultButton:{backgroundColor:Colors.success,minHeight:52,borderRadius:12,alignItems:'center',justifyContent:'center'},
+  resultButtonText:{color:'#fff',fontSize:15,fontWeight:'800'},
   container:{flex:1,backgroundColor:Colors.bg},
   loadC:{flex:1,backgroundColor:Colors.bg,alignItems:'center',justifyContent:'center'},
   loadError:{color:Colors.textSecondary,fontSize:14,textAlign:'center',marginHorizontal:24,marginBottom:16},

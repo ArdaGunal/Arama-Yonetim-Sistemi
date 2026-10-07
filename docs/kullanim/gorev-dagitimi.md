@@ -7,11 +7,15 @@
 3. Görev kartında **Paketi paylaş** ile `.ays` dosyasını WhatsApp, Dosyalar veya başka bir yolla gönderin. Gerçekten gönderince **Gönderildi işaretle** düğmesine basın. Kaybolan dosyayı aynı karttan yeniden paylaşın; yeni görev açmayın.
 4. Görev oluşturma veya iptalden sonra **Yedek al veya geri yükle** ekranından etkinliğin güncel `.ays` tam yedeğini cihaz dışında saklayın. İlk Excel'i de ayrıca saklayın.
 5. Gönderilmemiş görevi iptal ederseniz kişiler yeniden atanabilir. Gönderilmiş görevi iptal ederken eski dosyanın gönüllüde kalabileceği uyarısını okuyun.
+6. Gönüllüden gelen `.ays` sonuçlarını **Gelen sonuçları topla** ekranında seçin. Önizlemedeki çakışmalar için karar verin, önce yedeği cihaz dışına saklayın, sonra **Sonuçları birleştir** düğmesine basın.
+7. **Sonra ara** sekmesinde geri aranacak kişi sayısını görün. Yeni gönüllü ve kişi sayısını seçerek ikinci tur görevi hazırlayın. İlk görev tamamlanmadan kişi yeni tura verilmez.
 
 ## Gönüllü
 
-1. Ana ekranda **Bana gelen görev dosyasını aç** seçin ve size gönderilen `.ays` dosyasını seçin. Sorular ve yalnızca size atanmış kişiler otomatik eklenir.
+1. Android'de WhatsApp'tan gelen `.ays` dosyasına dokunun ve **Arama Yönetim Sistemi** ile açın. Android ilk seferde uygulama seçmenizi isteyebilir. Bu yol çalışmazsa ana ekrandaki **Bana gelen görev dosyasını aç** düğmesiyle dosyayı seçin. Sorular ve yalnızca size atanmış kişiler otomatik eklenir.
 2. Kendi görev kartınıza dokunup aramaya başlayın. Aynı dosyayı tekrar seçmek cevapları sıfırlamaz.
-3. Uygulamayı silmeden veya cihaz değiştirmeden önce **Yedek al veya geri yükle** ekranından kendi görevinizin yedeğini alın.
+3. Her kişi için **Arama sonucu** seçin. **Sonra ara** seçtiyseniz kısa not ve isterseniz tarih yazın. **Kaydet ve ilerle** ile arama kaydını tamamlayın.
+4. **Dışa Aktar** ekranındaki **Sonuç dosyasını paylaş** düğmesiyle `.ays` dosyasını koordinatöre gönderin. Ara verirken de sonuç gönderebilirsiniz; sonraki gönderim daha yeni sürüm olur.
+5. Uygulamayı silmeden veya cihaz değiştirmeden önce **Yedek al veya geri yükle** ekranından kendi görevinizin yedeğini alın.
 
-Bu sürüm sonuçları koordinatörün ana listesine otomatik birleştirmez. Gönüllü Excel/CSV dışa aktarımı yapabilir; güvenli sonuç paketi ve otomatik birleştirme planın sonraki adımıdır. Gerçek telefon listelerini GitHub'a koymayın.
+Excel/CSV gönüllüde kişisel okuma çıktısıdır; koordinatörün ana listesine birleştirmek için `.ays` **sonuç dosyası** gönderin. Gerçek telefon listelerini GitHub'a koymayın.

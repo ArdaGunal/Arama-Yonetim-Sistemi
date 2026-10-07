@@ -14,7 +14,9 @@ function loadSource(relativePath, mocks = {}) {
   const module = { exports: {} };
   const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat :
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
-      name === './assignmentFormat' ? assignmentFormat : require(name));
+      name === './assignmentFormat' ? assignmentFormat :
+        name === './resultFormat' ? resultFormat :
+          name === './resultMerge' ? resultMerge : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -27,6 +29,8 @@ const cryptoMock = {
 const canonicalModule = loadSource('src/utils/canonicalJson.js');
 const phoneUtils = loadSource('src/utils/phoneUtils.js');
 const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-crypto': cryptoMock });
+const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
+const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 
 function memoryStorage() {
@@ -119,7 +123,7 @@ test('versioned backup restores legacy IDs and detects changed content', async (
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
 
   const unsupported = JSON.parse(file);
-  unsupported.schemaVersion = 4;
+  unsupported.schemaVersion = 5;
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
   const duplicate = sampleProject();
   duplicate.contacts.push({ ...duplicate.contacts[0] });
@@ -315,4 +319,141 @@ test('version 3 backup retains task reservations and volunteer identity', async 
   assert.equal(volunteerBackup.project.eventId, 'large-event');
   assert.equal(volunteerBackup.project.assignmentId, 'task-backup');
   assert.equal(await fresh.restoreProjectBackup(volunteerBackup.project), 'restored');
+});
+
+test('partial result, newer revision and callback round merge without losing the first answer', async () => {
+  const coordinator = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  const volunteer = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await coordinator.createProject(distributionProject(3));
+  const assignment = await coordinator.createAssignment('large-event', {
+    assignmentId: 'task-results', volunteerName: 'A', count: 2, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const parsed = await assignmentFormat.readAssignmentFile(await assignmentFormat.createAssignmentFile(assignment));
+  await volunteer.importVolunteerAssignment(parsed.assignment, parsed.sha256);
+  const project = await volunteer.getProject('task-results');
+  const contacts = project.contacts.map((contact, index) => index === 0 ? {
+    ...contact, completed: true, callStatus: 'later', callbackNote: 'Öğleden sonra',
+    data: { ...contact.data, answer: 'Evet' },
+    attempts: [{ id: 'attempt-1', at: '2026-10-08T09:00:00.000Z', status: 'later',
+      note: 'Öğleden sonra', data: { ...contact.data, answer: 'Evet' } }],
+  } : contact);
+  await volunteer.updateProject('task-results', { contacts });
+  const file1 = await resultFormat.readResultFile((await volunteer.createVolunteerResultFile('task-results')).content);
+  const preview1 = await coordinator.previewImportedResults('large-event', [file1]);
+  assert.equal(preview1.changes.length, 1);
+  assert.equal(preview1.conflicts.length, 0);
+  await coordinator.applyImportedResults('large-event', [file1], {}, preview1.snapshot);
+  assert.equal((await coordinator.getProject('large-event')).contacts[0].data.answer, 'Evet');
+  assert.equal(coordinator.getCallbackCandidates(await coordinator.getProject('large-event')).length, 0);
+  const duplicate = await coordinator.previewImportedResults('large-event', [file1]);
+  assert.equal(duplicate.skipped.length, 1);
+  const changed = contacts.map((contact, index) => index === 1 ? {
+    ...contact, completed: true, callStatus: 'unreached',
+    attempts: [{ id: 'attempt-2', at: '2026-10-08T10:00:00.000Z', status: 'unreached', note: '', data: contact.data }],
+  } : contact);
+  await volunteer.updateProject('task-results', { contacts: changed });
+  const file2 = await resultFormat.readResultFile((await volunteer.createVolunteerResultFile('task-results')).content);
+  const preview2 = await coordinator.previewImportedResults('large-event', [file2, file1]);
+  assert.equal(preview2.changes.length, 2);
+  await coordinator.applyImportedResults('large-event', [file2, file1], {}, preview2.snapshot);
+  const master = await coordinator.getProject('large-event');
+  assert.equal(master.contacts[0].attempts.length, 1);
+  assert.equal(master.contacts[1].callStatus, 'unreached');
+  assert.equal(coordinator.getCallbackCandidates(master).length, 1);
+  const callback = await coordinator.createCallbackAssignment('large-event', {
+    assignmentId: 'task-callback', volunteerName: 'B', count: 1, createdAt: '2026-10-08T11:00:00.000Z',
+  });
+  assert.equal(callback.round, 2);
+  assert.equal(callback.contacts[0].previousCallbackNote, 'Öğleden sonra');
+  assert.equal(coordinator.getCallbackCandidates(await coordinator.getProject('large-event')).length, 0);
+  const callbackVolunteer = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  const callbackPacket = await assignmentFormat.readAssignmentFile(await assignmentFormat.createAssignmentFile(callback));
+  await callbackVolunteer.importVolunteerAssignment(callbackPacket.assignment, callbackPacket.sha256);
+  const callbackTask = await callbackVolunteer.getProject('task-callback');
+  await callbackVolunteer.updateProject(callbackTask.id, { contacts: [{ ...callbackTask.contacts[0],
+    completed: true, callStatus: 'unreached', data: { ...callbackTask.contacts[0].data },
+    attempts: [{ id: 'attempt-3', at: '2026-10-09T09:00:00.000Z', status: 'unreached', note: '',
+      data: { ...callbackTask.contacts[0].data } }],
+  }] });
+  const callbackResult = await resultFormat.readResultFile((await callbackVolunteer.createVolunteerResultFile('task-callback')).content);
+  const callbackPreview = await coordinator.previewImportedResults('large-event', [callbackResult]);
+  assert.equal(callbackPreview.conflicts.length, 0);
+  await coordinator.applyImportedResults('large-event', [callbackResult], {}, callbackPreview.snapshot);
+  assert.equal((await coordinator.getProject('large-event')).contacts[0].data.answer, 'Evet');
+  assert.equal((await coordinator.getProject('large-event')).contacts[0].attempts.length, 2);
+  const backup = await backupFormat.readBackupFile(await backupFormat.createBackupFile(await coordinator.getProject('large-event')));
+  assert.equal(backup.project.assignments[1].round, 2);
+  assert.equal(backup.project.contacts[0].attempts.length, 2);
+});
+
+test('conflicting coordinator answer requires a choice and stale preview cannot overwrite changes', async () => {
+  const coordinator = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  const volunteer = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await coordinator.createProject(distributionProject(1));
+  const assignment = await coordinator.createAssignment('large-event', {
+    assignmentId: 'task-conflict', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const parsed = await assignmentFormat.readAssignmentFile(await assignmentFormat.createAssignmentFile(assignment));
+  await volunteer.importVolunteerAssignment(parsed.assignment, parsed.sha256);
+  const v = await volunteer.getProject('task-conflict');
+  await volunteer.updateProject(v.id, { contacts: [{ ...v.contacts[0], completed: true, callStatus: 'contacted',
+    data: { ...v.contacts[0].data, answer: 'Evet' } }] });
+  const packet = await resultFormat.readResultFile((await volunteer.createVolunteerResultFile(v.id)).content);
+  const master = await coordinator.getProject('large-event');
+  await coordinator.updateProject(master.id, { contacts: [{ ...master.contacts[0], data: { ...master.contacts[0].data, answer: 'Hayır' } }] });
+  const preview = await coordinator.previewImportedResults(master.id, [packet]);
+  assert.equal(preview.conflicts.length, 1);
+  await assert.rejects(coordinator.applyImportedResults(master.id, [packet], {}, preview.snapshot), /karar/);
+  await coordinator.updateProject(master.id, { contacts: [{ ...(await coordinator.getProject(master.id)).contacts[0], callbackNote: 'Değişti' }] });
+  await assert.rejects(coordinator.applyImportedResults(master.id, [packet],
+    { 'task-conflict:record-0': 'incoming' }, preview.snapshot), /önizlemeden sonra değişti/);
+  const fresh = await coordinator.previewImportedResults(master.id, [packet]);
+  await coordinator.applyImportedResults(master.id, [packet], { 'task-conflict:record-0': 'incoming' }, fresh.snapshot);
+  assert.equal((await coordinator.getProject(master.id)).contacts[0].data.answer, 'Evet');
+});
+
+test('final workbook separates current status, call history and reviewed conflicts', () => {
+  const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
+  const project = sampleProject();
+  project.contacts[0].callStatus = 'later';
+  project.contacts[0].callbackNote = 'Yarın ara';
+  project.contacts[0].attempts = [{ id: 'attempt-1', at: '2026-10-08T09:00:00.000Z',
+    status: 'later', note: 'Yarın ara', data: { name: 'Ayşe Yılmaz' } }];
+  project.mergeConflicts = [{ recordId: 'record-1', assignmentId: 'task-1', decision: 'incoming',
+    at: '2026-10-08T10:00:00.000Z', oldAnswer: '{}', incomingAnswer: '{}' }];
+  const wb = exports.buildWorkbook(project);
+  assert.deepEqual(wb.SheetNames, ['Güncel Durum', 'Arama Geçmişi', 'İncelenecek Çakışmalar']);
+  assert.equal(wb.Sheets['Güncel Durum'].B2.t, 's');
+  assert.equal(wb.Sheets['Güncel Durum'].B2.v, '+905321234567');
+});
+
+test('source columns survive backup and appear before current answers in final Excel', async () => {
+  const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
+  const project = sampleProject();
+  project.sourceReview = { sourceName: 'Liste.xlsx', hasHeader: true, totalRows: 1,
+    columns: [{ index: 0, label: 'Okul Numarası', role: 'field', fieldId: null },
+      { index: 1, label: 'Telefon', role: 'phone', fieldId: null }], excludedRows: [] };
+  project.contacts[0].sourceCells = ['001234', '0532 123 45 67'];
+  const restored = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(project))).project;
+  assert.deepEqual(restored.contacts[0].sourceCells, ['001234', '0532 123 45 67']);
+  const sheet = exports.buildWorkbook(restored).Sheets['Güncel Durum'];
+  assert.equal(sheet.A1.v, 'Okul Numarası');
+  assert.equal(sheet.A2.v, '001234');
+  assert.equal(sheet.B2.v, '0532 123 45 67');
+  assert.equal(sheet.A2.t, 's');
+  assert.equal(sheet.B2.t, 's');
+  assert.equal(sheet.D1.v, 'Güncel: Tel No');
+});
+
+test('interrupted merge journal restores the previous project before reading', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject(sampleProject());
+  const projectsRaw = memory.values.get('@ays_projects');
+  const contactsRaw = memory.values.get('@ays_project_data_event-1');
+  memory.values.set('@ays_merge_journal', JSON.stringify({ projectId: 'event-1', projectsRaw, contactsRaw }));
+  memory.values.set('@ays_project_data_event-1', JSON.stringify([{ id: 'record-1', phone: 'wrong', data: {}, completed: true }]));
+  const recovered = await storage.getProject('event-1');
+  assert.equal(recovered.contacts[0].phone, '+905321234567');
+  assert.equal(memory.values.has('@ays_merge_journal'), false);
 });

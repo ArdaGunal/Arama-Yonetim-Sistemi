@@ -2,12 +2,12 @@
  * Arama Yönetim Sistemi - Entry Point
  * Ana giriş dosyası. React Navigation ile sayfa yönetimi.
  */
-import React, { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Linking, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from './src/screens/HomeScreen';
@@ -18,6 +18,8 @@ import ExportScreen from './src/screens/ExportScreen';
 import BackupScreen from './src/screens/BackupScreen';
 import AssignmentsScreen from './src/screens/AssignmentsScreen';
 import AssignmentImportScreen from './src/screens/AssignmentImportScreen';
+import ResultsImportScreen from './src/screens/ResultsImportScreen';
+import IncomingFileScreen from './src/screens/IncomingFileScreen';
 import DeveloperPanel from './src/screens/DeveloperPanel';
 import { Colors } from './src/theme/colors';
 import { addBreadcrumb, installGlobalErrorHandler, loadLastDiagnostic, reportError, subscribeToDiagnostics } from './src/utils/diagnostics';
@@ -67,6 +69,9 @@ const screenOptions = {
 };
 
 export default function App() {
+  const navigationRef = useRef(createNavigationContainerRef()).current;
+  const pendingUri = useRef(null);
+  const lastOpen = useRef({ uri: '', at: 0 });
   const [report, setReport] = useState(null);
   const [showPanel, setShowPanel] = useState(false);
   const [treeKey, setTreeKey] = useState(0);
@@ -88,8 +93,17 @@ export default function App() {
     if (Platform.OS === 'android') {
       NavigationBar.setButtonStyleAsync('light').catch(() => {});
     }
-    return unsubscribe;
+    const incoming = Linking.addEventListener('url', ({ url }) => openIncoming(url));
+    return () => { unsubscribe(); incoming.remove(); };
   }, []);
+
+  const openIncoming = (uri) => {
+    if (Platform.OS !== 'android' || !/^(content|file):\/\//.test(uri || '')) return;
+    if (lastOpen.current.uri === uri && Date.now() - lastOpen.current.at < 1500) return;
+    lastOpen.current = { uri, at: Date.now() };
+    if (!navigationRef.isReady()) { pendingUri.current = uri; return; }
+    navigationRef.navigate('IncomingFile', { uri, requestId: Date.now() });
+  };
 
   const recover = () => {
     setShowPanel(false);
@@ -102,7 +116,12 @@ export default function App() {
         <DeveloperPanel report={report} onBack={recover} />
       ) : (
       <AppErrorBoundary key={treeKey} onRecover={recover}>
-      <NavigationContainer onReady={() => addBreadcrumb('Ana ekran açıldı')} onStateChange={(state) => {
+      <NavigationContainer ref={navigationRef} onReady={() => {
+        addBreadcrumb('Ana ekran açıldı');
+        if (pendingUri.current) { const uri = pendingUri.current; pendingUri.current = null;
+          navigationRef.navigate('IncomingFile', { uri, requestId: Date.now() }); }
+        Linking.getInitialURL().then(openIncoming).catch(() => {});
+      }} onStateChange={(state) => {
         const route = state?.routes?.[state.index];
         if (route?.name) addBreadcrumb(`Ekran: ${route.name}`);
       }}>
@@ -124,6 +143,8 @@ export default function App() {
         <Stack.Screen name="EditForm" component={EditFormScreen} options={{ title: 'Sorular ve Şablon' }} />
         <Stack.Screen name="Assignments" component={AssignmentsScreen} options={{ title: 'Görevleri Dağıt' }} />
         <Stack.Screen name="AssignmentImport" component={AssignmentImportScreen} options={{ title: 'Görev Dosyası Aç' }} />
+        <Stack.Screen name="ResultsImport" component={ResultsImportScreen} options={{ title: 'Sonuçları Topla' }} />
+        <Stack.Screen name="IncomingFile" component={IncomingFileScreen} options={{ title: 'Gelen Dosya' }} />
         <Stack.Screen
           name="Survey"
           component={SurveyScreen}

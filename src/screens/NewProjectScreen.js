@@ -251,7 +251,8 @@ export default function NewProjectScreen({ navigation }) {
           if (fieldId && usableIds.has(fieldId) && value) data[fieldId] = value;
         });
         const recordId = Crypto.randomUUID();
-        return { id: recordId, recordId, phone: row.phone, data, completed: false, completedAt: null, sourceRow: row.sourceRow };
+        return { id: recordId, recordId, phone: row.phone, data, completed: false, completedAt: null,
+          sourceRow: row.sourceRow, sourceCells: [...row.cells] };
       });
       const project = {
         id: eventId, eventId, name: projectName.trim(), createdAt: new Date().toISOString(),

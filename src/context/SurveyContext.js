@@ -23,6 +23,9 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [formData, setFormData] = useState({});
+  const [callStatus, setCallStatus] = useState(null);
+  const [callbackNote, setCallbackNote] = useState('');
+  const [callbackDate, setCallbackDate] = useState('');
 
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState('survey');
@@ -91,6 +94,9 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
       const data = draft && draft.contactIndex === idx ? draft.formData || {} : proj.contacts[idx]?.data || {};
       setFormData(data);
       formDataRef.current = data;
+      setCallStatus(proj.contacts[idx]?.callStatus || null);
+      setCallbackNote(proj.contacts[idx]?.callbackNote || '');
+      setCallbackDate(proj.contacts[idx]?.callbackAt?.slice(0, 10) || '');
     } catch (error) {
       reportError(error, 'Anket projesi yüklenirken');
       setProject(null);
@@ -144,6 +150,18 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   // ── Kaydet ve Sonraki ──
   const handleSaveAndNext = async () => {
     if (!projectRef.current?.contacts[currentIndex] || savingRef.current) return;
+    if (projectRef.current.role === 'volunteer' && !callStatus) {
+      const message = 'Önce arama sonucunu seçin.';
+      Platform.OS === 'web' ? window.alert(message) : Alert.alert('Arama sonucu eksik', message);
+      return;
+    }
+    if (callStatus === 'later' && callbackDate && (!/^\d{4}-\d{2}-\d{2}$/.test(callbackDate) ||
+        !Number.isFinite(Date.parse(`${callbackDate}T12:00:00.000Z`)) ||
+        new Date(`${callbackDate}T12:00:00.000Z`).toISOString().slice(0, 10) !== callbackDate)) {
+      const message = 'Geri arama tarihi YYYY-AA-GG biçiminde olmalı.';
+      Platform.OS === 'web' ? window.alert(message) : Alert.alert('Tarih geçersiz', message);
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     try {
@@ -151,11 +169,20 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     saveTimerRef.current = null;
 
     const contacts = [...projectRef.current.contacts];
+    const now = new Date().toISOString();
+    const status = callStatus || 'contacted';
     contacts[currentIndex] = {
       ...contacts[currentIndex],
       data: { ...formDataRef.current },
       completed: true,
-      completedAt: new Date().toISOString(),
+      completedAt: now,
+      callStatus: status,
+      callbackNote: status === 'later' ? callbackNote.trim() : '',
+      callbackAt: status === 'later' && callbackDate ? `${callbackDate}T12:00:00.000Z` : null,
+      attempts: [...(contacts[currentIndex].attempts || []), {
+        id: uid(), at: now, status, note: status === 'later' ? callbackNote.trim() : '',
+        data: { ...formDataRef.current },
+      }],
     };
     
     const next = currentIndex + 1;
@@ -191,6 +218,9 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     const nd = contacts[next]?.data || {};
     setFormData(nd);
     formDataRef.current = nd;
+    setCallStatus(contacts[next]?.callStatus || null);
+    setCallbackNote(contacts[next]?.callbackNote || '');
+    setCallbackDate(contacts[next]?.callbackAt?.slice(0, 10) || '');
     } catch (error) {
       reportError(error, 'Kişi kaydedilirken');
       const message = 'Kişi kaydedilemedi: ' + error.message;
@@ -272,6 +302,9 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     const nd = contacts[ni]?.data || {};
     setFormData(nd);
     formDataRef.current = nd;
+    setCallStatus(contacts[ni]?.callStatus || null);
+    setCallbackNote(contacts[ni]?.callbackNote || '');
+    setCallbackDate(contacts[ni]?.callbackAt?.slice(0, 10) || '');
   };
 
   // ── Belirli bir kişiye zıpla ──
@@ -296,6 +329,9 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     const nd = contacts[contactIdx]?.data || {};
     setFormData(nd);
     formDataRef.current = nd;
+    setCallStatus(contacts[contactIdx]?.callStatus || null);
+    setCallbackNote(contacts[contactIdx]?.callbackNote || '');
+    setCallbackDate(contacts[contactIdx]?.callbackAt?.slice(0, 10) || '');
     setActiveTab('survey');
   };
 
@@ -369,6 +405,7 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   const value = {
     // State
     project, currentIndex, loading, loadError, reloadProject: loadProjectData, saving, formData,
+    callStatus, setCallStatus, callbackNote, setCallbackNote, callbackDate, setCallbackDate,
     activeTab, setActiveTab,
     expandedFilter, setExpandedFilter,
     filterField, setFilterField,

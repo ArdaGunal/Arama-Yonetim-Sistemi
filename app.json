@@ -2,7 +2,7 @@
   "expo": {
     "name": "Arama Yönetim Sistemi",
     "slug": "arama-yonetim-sistemi",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/app-icon-2026.png",
     "userInterfaceStyle": "dark",
@@ -17,13 +17,25 @@
       "supportsTablet": true
     },
     "android": {
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-icon-2026.png",
         "backgroundColor": "#171920"
       },
       "softwareKeyboardLayoutMode": "pan",
-      "package": "com.ardagnl.aramayonetim"
+      "package": "com.ardagnl.aramayonetim",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT"],
+          "data": [
+            { "mimeType": "application/json" },
+            { "mimeType": "application/octet-stream" },
+            { "mimeType": "text/plain" },
+            { "mimeType": "application/x-arama-yonetim" }
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/app-icon-2026.png",

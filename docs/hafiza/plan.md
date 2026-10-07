@@ -72,7 +72,7 @@ Proje topluluktan bir başkasına devredilebilmeli: kaynak kodu, statik site hes
 
 ## Geliştirme sırası
 
-**Durum (8 Ekim 2026):** Tam etkinlik yedeği `.ays` sürüm 3'e çıktı; sürüm 1 ve 2 okunur. Kaynak/form akışı, tekrar incelemesi ve `.ayst` şablonu çalışıyor. 3. adımda ilk turda çakışmasız görev oluşturma, hazırlama/gönderme/iptal durumları, yalnızca atanmış kişileri taşıyan `.ays` görev dosyası ve Android/web gönüllü içe aktarımı eklendi. İlk görev oluşturulduğunda form kilitlenir. Sonuç paketleri, geri arama turları, mevcut etkinliğin farklı yedeğiyle güvenli değiştirilmesi ve toplu birleştirme henüz yapılmadı. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
+**Durum (8 Ekim 2026):** Yedek `.ays` sürüm 4'e çıktı; sürüm 1–3 okunur. Kaynak/form akışı, tekrar incelemesi, `.ayst` şablonu ve çakışmasız görev dağıtımı çalışıyor. 4. adımda kısmi/tam sonuç paketi, toplu dosya seçimi, çakışma kararı, sürümlü birleştirme, arama geçmişi, geri arama turu ve çok sayfalı Excel eklendi. Android'de dosyaya dokunarak açma akışı bulunur. Gerçek WhatsApp cihazları ve iPhone PWA henüz doğrulanmadı. Mevcut etkinliğin farklı yedeğiyle güvenli değiştirilmesi de ayrı bir iş olarak duruyor. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
 
 1. **Dosya sözleşmesi ve güvenlik temeli:** Sürümlü paket/yedek biçimi, kimlikler, bütünlük kontrolü, tekrar içe aktarmaya dayanıklılık, geri yükleme.
 2. **Koordinatör akışı:** Kaynak önizleme ve eşleştirme, telefon tekrar incelemesi, form/şık düzenleme, şablon paylaşımı ve sürüm kilidi.

@@ -1,13 +1,13 @@
-# `.ays` dosya sözleşmesi — yedek sürüm 3 ve görev sürüm 1
+# `.ays` dosya sözleşmesi — yedek sürüm 4, görev ve sonuç sürüm 1
 
-Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignment"` tek gönüllünün görev paketidir. Sonuç birleştirme dosyası henüz yoktur.
+Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignment"` tek gönüllünün görev paketi, `kind: "result"` gönüllünün sonuç paketidir.
 
 ## Zarf
 
 ```json
 {
   "format": "arama-yonetim-sistemi",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "kind": "backup",
   "createdAt": "2026-10-07T08:00:00.000Z",
   "eventId": "kalici-etkinlik-kimligi",
@@ -20,13 +20,19 @@ Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignme
 
 `fields` dizisinde alan `id`, `label`, `type` (`text` veya `select`), `options`, `order` ve varsa `isSystemField: "name"` vardır. `data`, alan kimliğinden metin cevabına eşlemedir. Telefon doğrudan kişi kaydındadır. Kişi sırası, `currentIndex` ve tamamlanma bilgisi yedeğe girer.
 
-Sürüm 2'de `payload.project` ayrıca `formVersion`, `formLocked`, `templateId` ve `sourceReview` taşır. Kişide `sourceRow` bulunabilir. `sourceReview` içinde kaynak dosya adı, başlık durumu, veri satırı sayısı, sütun görevleri ile seçilmeyen tekrar ve okunamayan satırların `sourceRow`, `cells`, `reason` kayıtları vardır. Sürüm 3'te `role`, `assignmentId`, `importDigest` ve `assignments` eklenir. Koordinatör yedeği görevlerin durumlarını ve oluşturuldukları andaki form/kişi görüntülerini içerir. Gönüllü yedeğinde `role: "volunteer"`, ana etkinlik `eventId` değeri, `assignmentId` ve içe alınan görev dosyasının özeti vardır. Sürüm 1 ve 2 yedekleri okunur; eksik alanlar varsayılan değerlere dönüştürülür.
+Sürüm 2'de `payload.project` ayrıca `formVersion`, `formLocked`, `templateId` ve `sourceReview` taşır. Kişide `sourceRow` bulunabilir. `sourceReview` içinde kaynak dosya adı, başlık durumu, veri satırı sayısı, sütun görevleri ile seçilmeyen tekrar ve okunamayan satırların `sourceRow`, `cells`, `reason` kayıtları vardır. Sürüm 3'te `role`, `assignmentId`, `importDigest` ve `assignments` eklenir. Sürüm 4 kişi başına `callStatus`, `callbackNote`, `callbackAt`, `attempts`; görev başına `packetDigest`, `resultRevision`, `resultDigest`, `lastApplied`; koordinatöre `mergeConflicts`, gönüllüye `round` ve `resultRevision` ekler. Sürüm 1, 2 ve 3 yedekleri okunur.
 
 ## `.ays` görev paketi
 
-Zarf `format: "arama-yonetim-sistemi"`, `schemaVersion: 1`, `kind: "assignment"`, `eventId`, `assignmentId`, `createdAt`, `payload.assignment` ve SHA-256 `integrity` içerir. İçerik etkinlik adı, gönüllü adı, `formVersion`, `round: 1`, formun tamamı ve **yalnızca atanmış kişilerin** `recordId`, telefon ve başlangıç verileridir. Aynı görev yeniden paylaşıldığında kimliği ve içeriği değişmez.
+Zarf `format: "arama-yonetim-sistemi"`, `schemaVersion: 1`, `kind: "assignment"`, `eventId`, `assignmentId`, `createdAt`, `payload.assignment` ve SHA-256 `integrity` içerir. İçerik etkinlik adı, gönüllü adı, `formVersion`, `round`, formun tamamı ve **yalnızca atanmış kişilerin** `recordId`, telefon ve başlangıç verileridir. Geri aramada `round` 2 veya daha büyük olur; önceki kısa not ve karşılaştırma için başlangıç görüntüsü de taşınır. Aynı görev yeniden paylaşıldığında kimliği ve içeriği değişmez.
 
-Koordinatör `prepared`, `sent`, `partial`, `completed`, `cancelled` durumlarını saklar. İlk iki durum ve iptal bu sürümde arayüzden yönetilir; kısmi/tam sonuç durumları sonuç akışında kullanılacaktır. Hazırlanmış görev iptal edilince kişiler havuza döner. Gönderilmiş görev iptal edilirse eski dosyanın gönüllüde kalabileceği uyarılır. Görev dosyasının kendisi durum taşımaz.
+Koordinatör `prepared`, `sent`, `partial`, `completed`, `cancelled` durumlarını saklar. Kısmi veya tam sonuç birleştirilince görev durumu güncellenir. Hazırlanmış görev iptal edilince kişiler havuza döner. Gönderilmiş görev iptal edilirse eski dosyanın gönüllüde kalabileceği uyarılır. Görev dosyasının kendisi durum taşımaz.
+
+## `.ays` sonuç paketi
+
+Zarf `schemaVersion: 1`, `kind: "result"`, `eventId`, `assignmentId`, `exportedAt`, `payload.result` ve SHA-256 özeti içerir. `payload.result` içinde `formVersion`, `round`, artan `revision`, kaynak görev dosyasının `assignmentDigest` özeti, form alanları ve görevdeki bütün kişilerin son durumu bulunur. Her kişide `recordId`, telefon, cevaplar, `completed`, `callStatus`, geri arama notu/tarihi ve kimlikli `attempts` listesi vardır. Boş kalan kişiler de pakette bulunur; koordinatör bunları değişiklik olarak uygulamaz.
+
+Aynı dosya ikinci kez alınırsa atlanır. Aynı görevde daha yüksek `revision` eski sürümü geçer; aynı sürümde farklı içerik reddedilir. Sonuç yalnızca doğru etkinlik, görev, tur, form ve telefonlarla eşleşirse önizlenir. Koordinatörün ana cevabı görev başlangıcından beri değiştiyse karar ister. Birleştirme öncesi yedek alınır; yazma sırasında kesinti olursa kurtarma günlüğü eski metadata ve kişileri geri yükler.
 
 Gönüllü aynı dosyayı tekrar açarsa ikinci proje oluşmaz ve cevapları silinmez. Aynı `assignmentId` ile farklı içerik reddedilir. Gönüllünün kişi listesi değiştirilemez. Görev dosyasının SHA-256 özeti bozulmayı saptar; kimlik doğrulama veya şifreleme sağlamaz.
 
@@ -52,4 +58,4 @@ Web uygulamasında SHA-256 için güvenli bağlam gerekir: geliştirmede `localh
 4. Aynı etkinlik farklı içerikle varsa işlem durur; mevcut veri silinmez veya sessizce birleştirilmez.
 5. Bilinmeyen sürüm, yinelenen `recordId`, bozuk özet veya yanlış kimlikler reddedilir.
 
-Mevcut proje üzerine geri alma, gönüllü görevleri ve sonuçların birleştirilmesi bu sürümde yoktur. Bunlar eklenirken sözleşme sürümü artırılmalı, eski yedekler için açık dönüştürme ve test eklenmelidir.
+Mevcut projeyi farklı içerikli yedekten otomatik olarak ezme hâlâ yoktur. Sonuç paketleri yedek geri yükleme ekranından değil, etkinliğin **Gelen sonuçları topla** ekranından işlenir.
