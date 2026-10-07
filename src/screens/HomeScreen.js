@@ -4,7 +4,7 @@
  * Her projede tarih ve ilerleme (aranan/toplam) gösterilir.
  * "Yeni Proje Oluştur" butonu ile proje oluşturma ekranına geçiş yapılır.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,8 +29,24 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [offline, setOffline] = useState(Platform.OS === 'web' && !navigator.onLine);
+  const [updateReady, setUpdateReady] = useState(Platform.OS === 'web' && !!window.__aysUpdateReady);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return undefined;
+    const syncConnection = () => setOffline(!navigator.onLine);
+    const showUpdate = () => setUpdateReady(true);
+    window.addEventListener('online', syncConnection);
+    window.addEventListener('offline', syncConnection);
+    window.addEventListener('ays-update-ready', showUpdate);
+    return () => {
+      window.removeEventListener('online', syncConnection);
+      window.removeEventListener('offline', syncConnection);
+      window.removeEventListener('ays-update-ready', showUpdate);
+    };
+  }, []);
 
   // Ekrana her dönüldüğünde projeleri yeniden yükle
   useFocusEffect(
@@ -179,7 +195,7 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
         <>
           <Text style={styles.emptyIcon}>📋</Text>
           <Text style={styles.emptyTitle}>Henüz proje yok</Text>
-          <Text style={styles.emptySubtitle}>İlk projenizi oluşturarak başlayın</Text>
+          <Text style={styles.emptySubtitle}>Görev dosyanız varsa yukarıdaki açma düğmesine basın.</Text>
         </>
       )}
     </View>
@@ -193,7 +209,7 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
       <View style={[styles.header, width < 380 && { paddingHorizontal: 16 }]}>
         <View style={styles.headerMain}>
           <View>
-            <Text style={[styles.headerTitle, width < 380 && styles.headerTitleSmall]} numberOfLines={1}>ARAMA YÖNETİMİ</Text>
+            <Text style={[styles.headerTitle, width < 420 && styles.headerTitleSmall]} numberOfLines={1}>{width < 420 ? 'ARAMA SİSTEMİ' : 'ARAMA YÖNETİMİ'}</Text>
             <Text style={styles.headerSubtitle}>SİSTEM PANELİ</Text>
           </View>
         </View>
@@ -214,6 +230,12 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
       <TouchableOpacity accessibilityRole="button" style={styles.importLink} onPress={() => navigation.navigate('AssignmentImport')}>
         <Text style={styles.importText}>Bana gelen görev dosyasını aç →</Text>
       </TouchableOpacity>
+
+      {Platform.OS === 'web' && <View style={styles.webNotice}>
+        {offline && <Text style={styles.webNoticeText}>Çevrimdışısınız. Kayıtlı görevle devam edebilirsiniz.</Text>}
+        {updateReady && <Text style={styles.webNoticeText}>Yeni sürüm hazır. Sonuç dosyanızı ve yedeğinizi kaydedip uygulamayı kapatın; yeniden açınca güncellenir.</Text>}
+        <Text style={styles.webNoticeText}>iPhone: Safari'de Paylaş → Ana Ekrana Ekle. Cevaplar bu cihazda tutulur; çalışmayı bitirince sonuç dosyasını paylaşın ve yedek alın.</Text>
+      </View>}
 
       {/* Proje Listesi */}
       <FlatList
@@ -244,6 +266,9 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
 }
 
 const styles = StyleSheet.create({
+  webNotice: { marginHorizontal: 20, marginBottom: 8, padding: 11, borderRadius: 10,
+    borderWidth: 1, borderColor: Colors.borderAccent, backgroundColor: Colors.bgCard },
+  webNoticeText: { color: Colors.textSecondary, fontSize: 12, lineHeight: 18 },
   container: {
     flex: 1,
     backgroundColor: Colors.bg,

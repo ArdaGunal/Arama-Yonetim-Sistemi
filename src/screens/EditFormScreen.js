@@ -8,6 +8,7 @@ import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../uti
 import { reportError } from '../utils/diagnostics';
 import Step2Builder from '../features/new-project/Step2Builder';
 import { Colors } from '../theme/colors';
+import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
 
 const notify = (message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
 
@@ -63,10 +64,7 @@ export default function EditFormScreen({ navigation, route }) {
       if (!share) { notify('Şablon bu cihazda kaydedildi.'); return; }
       const name = `Etkinlik-Sablonu${TEMPLATE_EXTENSION}`;
       if (Platform.OS === 'web') {
-        const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
-        const link = document.createElement('a'); link.href = url; link.download = name;
-        document.body.appendChild(link); link.click(); link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        await shareOrDownloadWebFile(content, name);
       } else {
         const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${name}`;
         await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });

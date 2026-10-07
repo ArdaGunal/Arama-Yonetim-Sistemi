@@ -10,6 +10,8 @@ Bu klasör, projeyi devralacak kişinin kodu çalıştırması ve önceki kararl
 4. [Mimari ve veri](gelistirme/mimari-ve-veri.md): ana dosyalar, kayıt yapısı ve değişiklik yaparken dikkat edilecekler.
 5. [Dosya sözleşmesi](gelistirme/dosya-sozlesmesi.md): yedek, görev, sonuç ve geri yükleme kuralları.
 6. [Görev dağıtımı kısa kılavuzu](kullanim/gorev-dagitimi.md): koordinatör ve gönüllü için dosya akışı.
+7. [iPhone'da görev yapma](kullanim/iphone.md): gönüllü için kısa kullanım adımları.
+8. [PWA yayını ve iPhone testi](gelistirme/pwa-yayin.md): çevrimdışı derleme, yayın ve cihaz kabul testi.
 
 ## Hafıza dosyaları için kural
 

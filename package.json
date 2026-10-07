@@ -1,12 +1,14 @@
 {
   "name": "arama-yonetim-sistemi",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web && node scripts/build-pwa.mjs",
+    "preview:web": "node scripts/preview-pwa.mjs",
     "test": "node --test"
   },
   "dependencies": {

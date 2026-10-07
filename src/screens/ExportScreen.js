@@ -8,6 +8,7 @@ import { reportError } from '../utils/diagnostics';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { createVolunteerResultFile } from '../utils/storage';
+import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
 
 const msg = (title, m) => Platform.OS === 'web' ? window.alert(m) : Alert.alert(title, m);
 
@@ -54,18 +55,16 @@ export default function ExportScreen({ route, navigation }) {
     try {
       const file = await createVolunteerResultFile(projectId);
       const name = `Sonuc-${project.assignmentId.slice(0, 8)}-v${file.revision}.ays`;
+      let method = 'shared';
       if (Platform.OS === 'web') {
-        const url = URL.createObjectURL(new Blob([file.content], { type: 'application/json' }));
-        const link = document.createElement('a'); link.href = url; link.download = name;
-        document.body.appendChild(link); link.click(); link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        method = await shareOrDownloadWebFile(file.content, name);
       } else {
         if (!await Sharing.isAvailableAsync()) throw new Error('Bu cihazda dosya paylaşımı kullanılamıyor.');
         const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${name}`;
         await FileSystem.writeAsStringAsync(uri, file.content, { encoding: FileSystem.EncodingType.UTF8 });
         await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Sonucu koordinatöre gönder' });
       }
-      msg('Sonuç hazır', `${file.completed}/${file.total} kişi · Gönderim sürümü ${file.revision}. Bu .ays dosyasını koordinatöre gönderin.`);
+      if (method !== 'cancelled') msg('Sonuç hazır', `${file.completed}/${file.total} kişi · Gönderim sürümü ${file.revision}. ${method === 'downloaded' ? 'İndirilen .ays dosyasını koordinatöre gönderin.' : 'Paylaşım menüsünden .ays dosyasını koordinatöre gönderin.'}`);
     } catch (error) {
       reportError(error, 'Sonuç paketi oluşturulurken');
       msg('Sonuç gönderilemedi', error.message || 'Yeniden deneyin.');

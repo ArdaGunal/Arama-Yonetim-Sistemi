@@ -9,6 +9,7 @@ import { createAssignmentFile } from '../utils/assignmentFormat';
 import { createAssignment, createCallbackAssignment, getAvailableContacts, getCallbackCandidates, getProject, setAssignmentStatus } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
+import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
 
 const inform = (message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
 const statuses = { prepared: 'Hazırlandı', sent: 'Gönderildi', partial: 'Kısmi sonuç', completed: 'Sonuçlandı', cancelled: 'İptal edildi' };
@@ -54,10 +55,7 @@ export default function AssignmentsScreen({ navigation, route }) {
     const safeName = assignment.volunteerName.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ _-]/g, '').trim().replace(/\s+/g, '_').slice(0, 35) || 'Gonullu';
     const fileName = `${safeName}-${assignment.assignmentId.slice(0, 8)}.ays`;
     if (Platform.OS === 'web') {
-      const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
-      const link = document.createElement('a'); link.href = url; link.download = fileName;
-      document.body.appendChild(link); link.click(); link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await shareOrDownloadWebFile(content, fileName);
     } else {
       if (!await Sharing.isAvailableAsync()) throw new Error('Dosya paylaşımı bu cihazda kullanılamıyor.');
       const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;

@@ -9,6 +9,7 @@ import { BACKUP_EXTENSION, createBackupFile, readBackupFile, sameBackupProject }
 import { getProjectForBackup, getProjectSummaries, restoreProjectBackup } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
+import { downloadWebFile, shareOrDownloadWebFile } from '../utils/webFileTransfer';
 
 const MIME = 'application/json';
 const SAVE_MIME = 'application/x-arama-yonetim-backup';
@@ -18,17 +19,6 @@ function fileName(project) {
   const safeName = project.name.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ _-]/g, '').trim().replace(/\s+/g, '_').slice(0, 45) || 'Etkinlik';
   const date = new Date().toISOString().slice(0, 10);
   return `${safeName}-${date}${BACKUP_EXTENSION}`;
-}
-
-function downloadWeb(text, name) {
-  const url = URL.createObjectURL(new Blob([text], { type: MIME }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export default function BackupScreen() {
@@ -58,7 +48,8 @@ export default function BackupScreen() {
       const content = await createBackupFile(project);
       const name = fileName(project);
       if (Platform.OS === 'web') {
-        downloadWeb(content, name);
+        if (mode === 'share') await shareOrDownloadWebFile(content, name);
+        else downloadWebFile(content, name);
       } else if (mode === 'save' && Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
         const saf = FileSystem.StorageAccessFramework;
         const permission = await saf.requestDirectoryPermissionsAsync();

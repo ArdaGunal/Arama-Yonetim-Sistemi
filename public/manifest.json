@@ -1,0 +1,14 @@
+{
+  "name": "Arama Yönetim Sistemi",
+  "short_name": "Arama Sistemi",
+  "description": "Topluluk etkinlikleri için çevrimdışı arama ve görev yönetimi",
+  "lang": "tr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#171920",
+  "theme_color": "#266798",
+  "icons": [
+    { "src": "./pwa-icon.png", "sizes": "1254x1254", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -1,8 +1,8 @@
 # Arama Yönetim Sistemi
 
-Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. Android uygulaması React Native ve Expo ile geliştirilir; web sürümü geliştirme ortamında çalışır. Veriler şu anda cihazın yerel depolamasında tutulur.
+Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. Android uygulaması React Native ve Expo ile geliştirilir; iPhone için ana ekrana eklenebilen web sürümünün yayın paketi hazırlanmıştır. Veriler cihazın yerel depolamasında tutulur.
 
-> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. iPhone PWA henüz tamamlanmadı.
+> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. iPhone PWA derlemesi hazır; GitHub Pages yayını ve gerçek cihaz doğrulaması bekliyor.
 
 ## Bugün neler yapılabiliyor?
 
@@ -25,6 +25,8 @@ npx expo start
 ```
 
 Windows'ta Android Studio ve Android SDK kuruluysa `localapk.bat` yerel APK üretir. Çıktıyı sürüm, derleme kodu ve tarih içeren adla `APK/` klasörüne kopyalar. Bu klasördeki APK'lar Git'e yüklenmez. Ayrıntılar: [kurulum ve yayın](docs/gelistirme/kurulum-ve-yayin.md).
+
+iPhone web derlemesi için `npm run build:web`, yerel üretim önizlemesi için `npm run preview:web` kullanılır. [iPhone gönüllü yönergesi](docs/kullanim/iphone.md) ve [PWA yayın/test notları](docs/gelistirme/pwa-yayin.md) hazırdır.
 
 ## Önemli sınır
 
