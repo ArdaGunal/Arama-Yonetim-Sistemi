@@ -12,7 +12,8 @@ function loadSource(relativePath, mocks = {}) {
     plugins: ['@babel/plugin-transform-modules-commonjs'],
   });
   const module = { exports: {} };
-  const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat : require(name));
+  const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat :
+    name === './phoneUtils' ? phoneUtils : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -23,6 +24,12 @@ const backupFormat = loadSource('src/utils/backupFormat.js', {
     digestStringAsync: async (_algorithm, value) => nodeCrypto.createHash('sha256').update(value, 'utf8').digest('hex'),
   },
 });
+const phoneUtils = loadSource('src/utils/phoneUtils.js');
+const cryptoMock = {
+  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  digestStringAsync: async (_algorithm, value) => nodeCrypto.createHash('sha256').update(value, 'utf8').digest('hex'),
+  randomUUID: () => nodeCrypto.randomUUID(),
+};
 
 function memoryStorage() {
   const values = new Map();
@@ -114,11 +121,97 @@ test('versioned backup restores legacy IDs and detects changed content', async (
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
 
   const unsupported = JSON.parse(file);
-  unsupported.schemaVersion = 2;
+  unsupported.schemaVersion = 3;
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
   const duplicate = sampleProject();
   duplicate.contacts.push({ ...duplicate.contacts[0] });
   await assert.rejects(backupFormat.createBackupFile(duplicate), /yinelenen/);
+});
+
+test('source preview maps a different column order and requires duplicate review', () => {
+  const sourcePreview = loadSource('src/utils/sourcePreview.js');
+  const rows = [['Okul No', 'Telefon', 'İsim Soyisim', 'Geliyor musun'],
+    ['00127', '05321234567', 'Ayşe', 'Evet'],
+    ['00128', '05321234567', 'Ayşe', 'Hayır'],
+    ['00129', '05421234567', 'Ayşe', 'Belki'],
+    ['00130', 'hatalı', 'Can', 'Hayır']];
+  const source = sourcePreview.prepareSource(rows, 'liste.xlsx');
+  assert.equal(source.hasHeader, true);
+  assert.equal(source.columns.find((column) => column.role === 'phone').index, 1);
+  assert.equal(source.columns.find((column) => column.role === 'name').index, 2);
+  const analysis = sourcePreview.analyzeSource(source);
+  assert.equal(analysis.duplicates.length, 1);
+  assert.equal(analysis.invalid.length, 1);
+  assert.throws(() => sourcePreview.selectSourceRows(analysis, {}), /tekrar eden telefon/);
+  const result = sourcePreview.selectSourceRows(analysis, { '+905321234567': 3 });
+  assert.equal(result.selected.length, 2);
+  assert.equal(result.selected[0].cells[3], 'Hayır');
+  assert.equal(result.excluded.length, 2);
+  assert.equal(result.selected[1].cells[0], '00129');
+});
+
+test('default pasted name and phone format keeps distinct rows', () => {
+  const sourcePreview = loadSource('src/utils/sourcePreview.js');
+  const rows = sourcePreview.textToRows('Umut Aydın Tosun\t5355519177\nBurakhan Seferoğlu 0542 731 6116');
+  const source = sourcePreview.prepareSource(rows);
+  const analysis = sourcePreview.analyzeSource(source);
+  assert.deepEqual(analysis.valid.map((row) => row.name), ['Umut Aydın Tosun', 'Burakhan Seferoğlu']);
+  assert.equal(analysis.duplicates.length, 0);
+});
+
+test('shared template keeps fields and source mapping but no contacts', async () => {
+  const templates = loadSource('src/utils/templateFormat.js', { 'expo-crypto': cryptoMock });
+  const fields = [
+    { id: 'name', label: 'İsim Soyisim', type: 'text', options: [], isSystemField: 'name' },
+    { id: 'phone', label: 'Telefon', type: 'phone', options: [], isSystemField: 'phone' },
+    { id: 'answer', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'] },
+  ];
+  const content = await templates.createTemplateFile('Bahar etkinliği', fields,
+    [{ label: 'İsim Soyisim', role: 'name' }, { label: 'Telefon', role: 'phone' },
+      { label: 'Katılım', role: 'field', fieldId: 'answer' }]);
+  const parsed = await templates.readTemplateFile(content);
+  assert.equal(parsed.fields[2].options[0], 'Evet');
+  assert.equal(parsed.sourceColumns[1].role, 'phone');
+  assert.equal(parsed.sourceColumns[2].fieldId, 'answer');
+  assert.equal(content.includes('contacts'), false);
+  const changed = JSON.parse(content);
+  changed.fields[2].options[0] = 'Belki';
+  await assert.rejects(templates.readTemplateFile(JSON.stringify(changed)), /değişmiş veya bozulmuş/);
+});
+
+test('version 2 backup preserves source review and reads version 1', async () => {
+  const project = { ...sampleProject(), formVersion: 1, formLocked: false, templateId: 'template-1',
+    sourceReview: { sourceName: 'liste.xlsx', hasHeader: true, totalRows: 2,
+      columns: [{ index: 0, label: 'Telefon', role: 'phone', fieldId: null }],
+      excludedRows: [{ sourceRow: 2, cells: ['05321234567'], reason: 'Tekrar' }] },
+    contacts: [{ ...sampleProject().contacts[0], sourceRow: 1 }] };
+  const parsed = await backupFormat.readBackupFile(await backupFormat.createBackupFile(project));
+  assert.equal(parsed.project.sourceReview.excludedRows[0].reason, 'Tekrar');
+  assert.equal(parsed.project.contacts[0].sourceRow, 1);
+  const old = { format: 'arama-yonetim-sistemi', schemaVersion: 1, kind: 'backup',
+    createdAt: project.createdAt, eventId: project.id, payload: { project: sampleProject() } };
+  const sha256 = await cryptoMock.digestStringAsync('SHA-256', backupFormat.canonicalJson(old));
+  const restored = await backupFormat.readBackupFile(JSON.stringify({ ...old, integrity: { algorithm: 'SHA-256', sha256 } }));
+  assert.equal(restored.project.formVersion, 1);
+  assert.equal(restored.project.sourceReview, null);
+});
+
+test('form version increases before calls and locks after the first completed call', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  const project = sampleProject();
+  await storage.createProject(project);
+  const updated = await storage.updateProjectForm(project.id, [
+    ...project.fields,
+    { id: 'answer', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'], order: 1 },
+  ]);
+  assert.equal(updated.formVersion, 2);
+  assert.equal((await storage.getProject(project.id)).fields.length, 2);
+  await storage.updateProject(project.id, { contacts: [{ ...project.contacts[0], completed: true }] });
+  assert.equal((await storage.getProject(project.id)).formLocked, true);
+  await assert.rejects(storage.updateProjectForm(project.id, project.fields), /Arama başladıktan sonra/);
 });
 
 test('backup restore is idempotent and never silently overwrites a changed event', async () => {

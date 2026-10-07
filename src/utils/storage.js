@@ -9,6 +9,7 @@ const PROJECTS_KEY = '@ays_projects';
 const PROJECT_DATA_PREFIX = '@ays_project_data_';
 const DRAFT_KEY = '@ays_draft_';
 const DIAGNOSTIC_KEY = '@ays_last_diagnostic';
+const TEMPLATES_KEY = '@ays_templates';
 
 export async function getLastDiagnostic() {
   const value = await AsyncStorage.getItem(DIAGNOSTIC_KEY);
@@ -21,6 +22,24 @@ export async function saveLastDiagnostic(report) {
 
 export async function deleteLastDiagnostic() {
   await AsyncStorage.removeItem(DIAGNOSTIC_KEY);
+}
+
+export async function getTemplates() {
+  const value = await AsyncStorage.getItem(TEMPLATES_KEY);
+  return value ? JSON.parse(value) : [];
+}
+
+export async function saveTemplate(template) {
+  return enqueueWrite(async () => {
+    const templates = await getTemplates();
+    const existing = templates.find((item) => item.id === template.id ||
+      (item.name === template.name && JSON.stringify(item.fields) === JSON.stringify(template.fields) &&
+        JSON.stringify(item.sourceColumns || []) === JSON.stringify(template.sourceColumns || [])));
+    if (existing) return existing;
+    const next = [template, ...templates];
+    await AsyncStorage.setItem(TEMPLATES_KEY, JSON.stringify(next));
+    return template;
+  });
 }
 
 // Eşzamanlı okuma-yazma yarışlarını önlemek için basit bir Mutex (kuyruk)
@@ -200,6 +219,7 @@ export async function updateProject(projectId, updates) {
       if (updates.contacts) {
         pMeta.totalContacts = updates.contacts.length;
         pMeta.completedContacts = updates.contacts.filter((contact) => contact.completed).length;
+        if (pMeta.completedContacts > 0) pMeta.formLocked = true;
         await AsyncStorage.setItem(PROJECT_DATA_PREFIX + projectId, JSON.stringify(updates.contacts));
       }
 
@@ -208,6 +228,68 @@ export async function updateProject(projectId, updates) {
       return { ...pMeta, contacts: updates.contacts }; // Yeni objeyi döndür
     }
     return null;
+  });
+}
+
+/** Tamamlanan arama veya görev dağıtımından sonra form değişmez. */
+export async function lockProjectForm(projectId) {
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error('Etkinlik bulunamadı.');
+    if (project.formLocked) return project;
+    project.formLocked = true;
+    await saveAllProjects(projects);
+    return project;
+  });
+}
+
+/** İlk aramadan önce formu atomik olarak günceller ve sürümünü artırır. */
+export async function updateProjectForm(projectId, fields) {
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error('Etkinlik bulunamadı.');
+    const stored = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
+    const contacts = stored ? JSON.parse(stored) : project.contacts || [];
+    if (project.formLocked || contacts.some((contact) => contact.completed) ||
+        await AsyncStorage.getItem(DRAFT_KEY + projectId)) {
+      throw new Error('Arama başladıktan sonra sorular değiştirilemez.');
+    }
+    if (!Array.isArray(fields) || fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1 ||
+        fields.some((field) => field.isSystemField && field.isSystemField !== 'name')) {
+      throw new Error('İsim alanı gerekli.');
+    }
+    const ids = new Set();
+    for (const field of fields) {
+      if (!field.id || ids.has(field.id) || !field.label?.trim() ||
+          !['text', 'select'].includes(field.type) || !Array.isArray(field.options)) {
+        throw new Error('Formda geçersiz veya tekrar eden alan var.');
+      }
+      ids.add(field.id);
+      if (field.type === 'select' && (field.options.length < 2 ||
+          field.options.some((option) => !option.trim()) ||
+          new Set(field.options).size !== field.options.length)) {
+        throw new Error(`"${field.label}" şıkları geçersiz.`);
+      }
+    }
+    for (const contact of contacts) {
+      for (const [fieldId, answer] of Object.entries(contact.data || {})) {
+        const field = fields.find((item) => item.id === fieldId);
+        if (!field) throw new Error('Kaynak kişide dolu olan bir alan silinemez.');
+        if (field.type === 'select' && answer && !field.options.includes(answer)) {
+          throw new Error(`"${field.label}" için mevcut cevap şıklarda yok.`);
+        }
+      }
+    }
+    if (JSON.stringify(project.fields) === JSON.stringify(fields)) return project;
+    project.fields = fields;
+    project.formVersion = (project.formVersion || 1) + 1;
+    if (project.sourceReview) project.sourceReview.columns = project.sourceReview.columns.map((column) => ({
+      ...column, fieldId: ids.has(column.fieldId) ? column.fieldId : null,
+    }));
+    await saveAllProjects(projects);
+    return project;
   });
 }
 

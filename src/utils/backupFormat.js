@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 1;
+export const BACKUP_SCHEMA_VERSION = 2;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -26,7 +26,7 @@ function isoDate(value, label) {
   return value;
 }
 
-function canonicalJson(value) {
+export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.keys(value).sort().map((key) =>
@@ -36,6 +36,33 @@ function canonicalJson(value) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean' ||
       (typeof value === 'number' && Number.isFinite(value))) return JSON.stringify(value);
   throw new Error('Yedek desteklenmeyen bir veri türü içeriyor.');
+}
+
+function sourceReview(value, fieldIds) {
+  if (value === null || value === undefined) return null;
+  const review = object(value, 'Kaynak incelemesi');
+  if (typeof review.sourceName !== 'string' || typeof review.hasHeader !== 'boolean' ||
+      !Number.isInteger(review.totalRows) || review.totalRows < 0 ||
+      !Array.isArray(review.columns) || !Array.isArray(review.excludedRows)) {
+    throw new Error('Kaynak incelemesi geçersiz.');
+  }
+  return {
+    sourceName: review.sourceName, hasHeader: review.hasHeader, totalRows: review.totalRows,
+    columns: review.columns.map((raw) => {
+      const col = object(raw, 'Kaynak sütunu');
+      if (!Number.isInteger(col.index) || col.index < 0 || typeof col.label !== 'string' ||
+          !['phone', 'name', 'field', 'ignore'].includes(col.role) ||
+          (col.fieldId != null && !fieldIds.has(col.fieldId))) throw new Error('Kaynak sütunu geçersiz.');
+      return { index: col.index, label: col.label, role: col.role, fieldId: col.fieldId || null };
+    }),
+    excludedRows: review.excludedRows.map((raw) => {
+      const row = object(raw, 'İnceleme satırı');
+      if (!Number.isInteger(row.sourceRow) || row.sourceRow < 1 ||
+          !Array.isArray(row.cells) || row.cells.some((cell) => typeof cell !== 'string') ||
+          typeof row.reason !== 'string') throw new Error('İnceleme satırı geçersiz.');
+      return { sourceRow: row.sourceRow, cells: [...row.cells], reason: row.reason };
+    }),
+  };
 }
 
 export function normalizeBackupProject(input) {
@@ -94,9 +121,14 @@ export function normalizeBackupProject(input) {
     if (contact.completedAt !== null && contact.completedAt !== undefined) {
       isoDate(contact.completedAt, 'Tamamlanma tarihi');
     }
+    if (contact.sourceRow !== undefined && contact.sourceRow !== null &&
+        (!Number.isInteger(contact.sourceRow) || contact.sourceRow < 1)) {
+      throw new Error('Kaynak satır numarası geçersiz.');
+    }
     return {
       id: contactId, recordId, phone: contact.phone, data,
       completed: contact.completed, completedAt: contact.completedAt || null,
+      sourceRow: contact.sourceRow || null,
     };
   });
   const currentIndex = project.currentIndex ?? 0;
@@ -105,9 +137,18 @@ export function normalizeBackupProject(input) {
       (contacts.length === 0 && currentIndex !== 0)) {
     throw new Error('Projenin son kişi konumu geçersiz.');
   }
+  if (project.formVersion !== undefined && (!Number.isInteger(project.formVersion) || project.formVersion < 1)) {
+    throw new Error('Form sürümü geçersiz.');
+  }
+  if (project.formLocked !== undefined && typeof project.formLocked !== 'boolean') {
+    throw new Error('Form kilidi geçersiz.');
+  }
+  if (project.templateId != null) identifier(project.templateId, 'Şablon kimliği');
   return {
     id, eventId, name: project.name, createdAt: isoDate(project.createdAt, 'Proje tarihi'),
-    currentIndex, fields, contacts,
+    currentIndex, fields, contacts, formVersion: project.formVersion || 1,
+    formLocked: project.formLocked || false, templateId: project.templateId || null,
+    sourceReview: sourceReview(project.sourceReview, fieldIds),
   };
 }
 
@@ -134,7 +175,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (file.schemaVersion !== BACKUP_SCHEMA_VERSION) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,

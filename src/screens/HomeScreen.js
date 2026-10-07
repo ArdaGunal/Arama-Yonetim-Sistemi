@@ -103,17 +103,7 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
     const progressColor = getProgressColor(calledCount, totalCount);
 
     return (
-      <TouchableOpacity
-        style={styles.projectCard}
-        activeOpacity={0.7}
-        onPress={() =>
-          navigation.navigate('Survey', {
-            projectId: item.id,
-            projectName: item.name,
-          })
-        }
-        onLongPress={() => handleDeleteProject(item.id, item.name)}
-      >
+      <View style={styles.projectCard}>
         {/* İlerleme çubuğu - Kartın üstünde */}
         <View style={styles.progressBarBg}>
           <Animated.View
@@ -127,7 +117,8 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
           />
         </View>
 
-        <View style={styles.cardContent}>
+        <TouchableOpacity style={styles.cardContent} activeOpacity={0.7}
+          onPress={() => navigation.navigate('Survey', { projectId: item.id, projectName: item.name })}>
           <View style={styles.cardLeft}>
             <Text style={styles.projectName} numberOfLines={1}>
               {item.name}
@@ -147,7 +138,12 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
             </View>
             <Text style={styles.statLabel}>kişi arandı</Text>
           </View>
-        </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity accessibilityRole="button" style={styles.formLink}
+          onPress={() => navigation.navigate('EditForm', { projectId: item.id })}>
+          <Text style={styles.formLinkText}>{item.formLocked || calledCount > 0 ? 'Sorular / Şablonu paylaş' : 'Soruları düzenle / Şablon'}</Text>
+        </TouchableOpacity>
 
         {/* Sil butonu */}
         <TouchableOpacity
@@ -157,7 +153,7 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
         >
           <Text style={styles.deleteBtnText}>✕</Text>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -326,6 +322,8 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingRight: 44,
   },
+  formLink: { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 11, paddingHorizontal: 16 },
+  formLinkText: { color: Colors.accentLight, fontSize: 13, fontWeight: '700' },
   cardLeft: {
     flex: 1,
     marginRight: 12,

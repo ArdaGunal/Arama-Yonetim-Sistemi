@@ -12,6 +12,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from './src/screens/HomeScreen';
 import NewProjectScreen from './src/screens/NewProjectScreen';
+import EditFormScreen from './src/screens/EditFormScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import ExportScreen from './src/screens/ExportScreen';
 import BackupScreen from './src/screens/BackupScreen';
@@ -118,6 +119,7 @@ export default function App() {
           component={NewProjectScreen}
           options={{ title: 'Yeni Proje Oluştur' }}
         />
+        <Stack.Screen name="EditForm" component={EditFormScreen} options={{ title: 'Sorular ve Şablon' }} />
         <Stack.Screen
           name="Survey"
           component={SurveyScreen}

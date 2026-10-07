@@ -72,7 +72,7 @@ Proje topluluktan bir başkasına devredilebilmeli: kaynak kodu, statik site hes
 
 ## Geliştirme sırası
 
-**Durum (7 Ekim 2026):** 1. adımın tam etkinlik yedeği dilimi başladı. `.ays` sürüm 1, kalıcı etkinlik/kayıt kimlikleri, SHA-256 bütünlük kontrolü, önizlemeli geri yükleme ve aynı yedeği tekrar açma koruması eklendi. Görev/sonuç paketleri, mevcut etkinliğin farklı yedeğiyle güvenli değiştirilmesi ve toplu birleştirme henüz yapılmadı. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
+**Durum (7 Ekim 2026):** 1. adımın tam etkinlik yedeği dilimi tamamlandı; `.ays` sürüm 2, eski sürüm 1 yedeklerini de okur. 2. adımda üç ekranlı kaynak/form akışı, sütun eşleştirme, tekrar eden telefon incelemesi, `.ayst` şablon paylaşımı ve ilk tamamlanan arama sonrası form kilidi eklendi. İlk görev dağıtıldığında aynı kilit uygulanması 3. adımın parçasıdır. Görev/sonuç paketleri, mevcut etkinliğin farklı yedeğiyle güvenli değiştirilmesi ve toplu birleştirme henüz yapılmadı. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
 
 1. **Dosya sözleşmesi ve güvenlik temeli:** Sürümlü paket/yedek biçimi, kimlikler, bütünlük kontrolü, tekrar içe aktarmaya dayanıklılık, geri yükleme.
 2. **Koordinatör akışı:** Kaynak önizleme ve eşleştirme, telefon tekrar incelemesi, form/şık düzenleme, şablon paylaşımı ve sürüm kilidi.

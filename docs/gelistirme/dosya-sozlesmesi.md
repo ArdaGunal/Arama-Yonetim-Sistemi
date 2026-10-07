@@ -1,4 +1,4 @@
-# `.ays` dosya sözleşmesi — sürüm 1
+# `.ays` dosya sözleşmesi — sürüm 2
 
 Bu sürüm **tam etkinlik yedeği** içindir. Dosya UTF-8 JSON'dur. Gönüllüye görev dağıtma veya sonuç birleştirme dosyası olarak kullanılmaz. İleride görev ve sonuç dosyaları ayrı `kind` ve sürümle tanımlanacaktır.
 
@@ -7,7 +7,7 @@ Bu sürüm **tam etkinlik yedeği** içindir. Dosya UTF-8 JSON'dur. Gönüllüye
 ```json
 {
   "format": "arama-yonetim-sistemi",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "backup",
   "createdAt": "2026-10-07T08:00:00.000Z",
   "eventId": "kalici-etkinlik-kimligi",
@@ -19,6 +19,12 @@ Bu sürüm **tam etkinlik yedeği** içindir. Dosya UTF-8 JSON'dur. Gönüllüye
 `payload.project` içinde `id`, `eventId`, `name`, `createdAt`, `currentIndex`, `fields` ve `contacts` bulunur. Bu sürümde proje `id` ile `eventId` aynıdır. Her kişide `id`, `recordId`, `phone`, `data`, `completed`, `completedAt` bulunur; kişi `id` ile `recordId` aynıdır. Eski projelerde `eventId` ve `recordId` yoksa yedek hazırlanırken mevcut `id` değerleri kullanılır. İsim veya telefon, kayıt kimliği yerine kullanılmaz.
 
 `fields` dizisinde alan `id`, `label`, `type` (`text` veya `select`), `options`, `order` ve varsa `isSystemField: "name"` vardır. `data`, alan kimliğinden metin cevabına eşlemedir. Telefon doğrudan kişi kaydındadır. Kişi sırası, `currentIndex` ve tamamlanma bilgisi yedeğe girer.
+
+Sürüm 2'de `payload.project` ayrıca `formVersion`, `formLocked`, `templateId` ve `sourceReview` taşır. Kişide `sourceRow` bulunabilir. `sourceReview` içinde kaynak dosya adı, başlık durumu, veri satırı sayısı, sütun görevleri ile seçilmeyen tekrar ve okunamayan satırların `sourceRow`, `cells`, `reason` kayıtları vardır. İlk kaynak Excel'in biçimi ve ek sayfaları yine yedeğe alınmaz. Sürüm 1 yedekleri okunur; eksik yeni alanlar varsayılan değerlere dönüştürülür.
+
+## `.ayst` form şablonu
+
+Şablon UTF-8 JSON'dur; `format: "arama-yonetim-template"`, `schemaVersion: 1`, `kind: "template"`, `templateId`, `createdAt`, `name`, `fields`, `sourceColumns` ve aynı SHA-256 `integrity` zarfını kullanır. Alanlar isim ve telefon sistem alanlarını, soru türlerini, şıkları ve sıralamayı taşır. `sourceColumns` etiket/görev (`phone`, `name`, `field`, `ignore`) ve varsa alan kimliği eşleştirmesidir. Şablonda kişi, telefon listesi veya cevap bulunmaz. İçe aktarılan şablon cihazda saklanır ve yeni etkinlikte seçilebilir.
 
 Yedek, uygulamaya aktarılmış bilgileri saklar; başlangıçtaki Excel dosyasının özgün biçimini veya bütün ek sayfalarını içermez. Koordinatör orijinal Excel'i ayrıca korumalıdır.
 

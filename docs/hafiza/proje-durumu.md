@@ -5,17 +5,18 @@ Son gözden geçirme: 7 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Y
 ## Mevcut uygulama
 
 - Expo SDK 54, React Native 0.81, React 19. Android ve web hedefleri vardır. iOS için Expo yapılandırması bulunur; gerçek iPhone dağıtım akışı henüz hazırlanmadı.
-- Yeni projede metinden telefon/isim ayrıştırılır veya Excel/CSV/TSV ilk sayfası içe aktarılır. Form alanları ve seçim seçenekleri proje oluşturulurken düzenlenir.
+- Yeni projede metin veya Excel/CSV/TSV ilk sayfası üç adımda içe alınır: kaynak sütunları önizlenip eşleştirilir, aynı telefonlu satırlardan biri açıkça seçilir, sorular/şıklar düzenlenir. Geçersiz ve seçilmeyen satırlar inceleme kaydında kalır.
+- Form, ilk arama tamamlanana kadar ana ekrandan düzenlenebilir; ardından kilitlenir. `.ayst` şablon dosyası kaynak sütun görevleriyle birlikte paylaşılır ve içe alındığında kaydedilir. Görev dağıtımı eklendiğinde ilk görev anında da kilitlenmelidir.
 - Projeler ve kişi cevapları AsyncStorage'da cihaz üzerinde saklanır. Anket ekranı değişiklikleri taslağa ve proje kaydına yazar.
 - Sonuçlar Excel/CSV olarak paylaşılabilir veya kaydedilebilir. Bu dışa aktarma, ileride tasarlanan görev/sonuç paket biçimi değildir.
-- Her proje `.ays` tam yedeği olarak dışa aktarılabilir. Dosya SHA-256 ile doğrulanır; geri yüklemeden önce etkinlik ve kişi sayısı gösterilir. Aynı içerik ikinci kez içe alınmaz. Farklı içerikli mevcut etkinliğin üzerine otomatik yazılmaz.
+- Her proje `.ays` sürüm 2 tam yedeği olarak dışa aktarılabilir; sürüm 1 de okunur. Dosya SHA-256 ile doğrulanır; geri yüklemeden önce etkinlik ve kişi sayısı gösterilir. Aynı içerik ikinci kez içe alınmaz. Farklı içerikli mevcut etkinliğin üzerine otomatik yazılmaz.
 - Geliştirici paneli JavaScript hata bilgilerini ve uygulama içindeki son işlem izlerini gösterip paylaşır. Android yerel çökme kaydı sonraki açılışta okunur; yerel bir çökme anında uygulamanın kapanmasını tamamen önlemek teknik olarak mümkün değildir.
 - Android için `localapk.bat` ile yerel APK üretilebilir. Bu çıktı mevcut Android debug anahtarıyla imzalanır; mağaza yayını için ayrı imzalama gerekir.
 
 ## Henüz yapılmadı
 
 - Ayrı koordinatör/gönüllü rolleri, tek ana liste üzerinden çakışmasız görev dağıtımı, sonuç paketlerini geri alıp birleştirme, geri arama turları.
-- Form/görev/sonuç paketleri ve bunların sürüm sözleşmeleri; mevcut `.ays` sürüm 1 yalnızca tam etkinlik yedeğidir.
+- Görev/sonuç paketleri ve bunların sürüm sözleşmeleri; mevcut `.ays` sürüm 2 yalnızca tam etkinlik yedeğidir.
 - Kalıcı, çevrimdışı çalışan ve gerçek iPhone'da doğrulanmış PWA dağıtımı.
 - Büyük veri setleri ve 100 gönüllü senaryosu için performans doğrulaması.
 
@@ -30,7 +31,7 @@ Bu gereksinimlerin tasarımı [plan.md](plan.md) içindedir. Kodda varmış gibi
 
 ## Bilinen riskler
 
-- Yerel depolama silinirse, uygulamanın içinde kalan cevaplar kaybolabilir. Mevcut Excel/CSV dışa aktarımı düzenli alınmalıdır; tam geri yükleme henüz yoktur.
+- Yerel depolama silinirse, uygulamanın içinde kalan cevaplar kaybolabilir. Düzenli `.ays` tam yedeği alınmalıdır; farklı içerikli mevcut etkinliğin üzerine güvenli geri alma henüz yoktur.
 - Depo herkese açıktır. Telefon listelerini, gönüllü dosyalarını ve paylaşılan tanılama raporlarını Git'e koymayın.
 - Hata paneli tanılama içindir. Raporun içinde hata metni ve işlem izleri bulunur; paylaşan kişi içeriği kontrol etmelidir.
 - `.ays` dosyası şifrelenmez ve kişi verileri içerir. SHA-256 bozulmayı saptar, dosyayı kimin oluşturduğunu kanıtlamaz. Aynı etkinliğin farklı içerikli yedeğini geri almak için güvenli değiştirme akışı henüz yoktur.
