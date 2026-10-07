@@ -12,6 +12,7 @@ import { Alert, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as XLSX from 'xlsx';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Crypto from 'expo-crypto';
 import { createProject } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { parsePastedText, parseExcelContacts } from '../utils/phoneUtils';
@@ -201,8 +202,9 @@ export default function NewProjectScreen({ navigation }) {
         finalImportedData = parseExcelContacts(rawExcelRows, fields).data;
       }
 
+      const eventId = Crypto.randomUUID();
       const project = {
-        id: uid(), name: projectName.trim(), createdAt: new Date().toISOString(), currentIndex: 0,
+        id: eventId, eventId, name: projectName.trim(), createdAt: new Date().toISOString(), currentIndex: 0,
         fields: saveFields.map((f, i) => ({
           id: f.id, label: f.label.trim(), type: f.type,
           options: f.type === 'select' ? f.options.filter(o => o.trim()) : [],
@@ -211,7 +213,8 @@ export default function NewProjectScreen({ navigation }) {
         })),
         contacts: parsedNumbers.map(phone => {
           const contactData = finalImportedData[phone] ? { ...finalImportedData[phone] } : {};
-          return { id: uid(), phone, data: contactData, completed: false, completedAt: null };
+          const recordId = Crypto.randomUUID();
+          return { id: recordId, recordId, phone, data: contactData, completed: false, completedAt: null };
         }),
       };
       await createProject(project);

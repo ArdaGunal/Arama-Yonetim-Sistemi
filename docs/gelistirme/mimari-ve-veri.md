@@ -13,6 +13,7 @@
 | `src/utils/phoneUtils.js` | Telefon temizleme ve metin/Excel ayrıştırma |
 | `src/utils/exportUtils.js`, `src/screens/ExportScreen.js` | Excel/CSV çıktısı |
 | `src/utils/diagnostics.js`, `src/screens/DeveloperPanel.js` | Hata kaydı ve rapor paylaşımı |
+| `src/utils/backupFormat.js`, `src/screens/BackupScreen.js` | Sürümlü `.ays` yedeği, doğrulama, dışa aktarma ve geri yükleme |
 | `plugins/withCrashInfo.js`, `native-crash/` | Android yerel çökme kaydını Expo prebuild sırasında ekleme |
 | `src/theme/colors.js` | Ortak renkler |
 | `tests/regression.test.cjs` | Depolama ve içe aktarma regresyonları |

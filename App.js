@@ -14,6 +14,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import NewProjectScreen from './src/screens/NewProjectScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import ExportScreen from './src/screens/ExportScreen';
+import BackupScreen from './src/screens/BackupScreen';
 import DeveloperPanel from './src/screens/DeveloperPanel';
 import { Colors } from './src/theme/colors';
 import { addBreadcrumb, installGlobalErrorHandler, loadLastDiagnostic, reportError, subscribeToDiagnostics } from './src/utils/diagnostics';
@@ -128,6 +129,11 @@ export default function App() {
           name="Export"
           component={ExportScreen}
           options={{ title: 'Dışa Aktar' }}
+        />
+        <Stack.Screen
+          name="Backup"
+          component={BackupScreen}
+          options={{ title: 'Etkinlik Yedekleri' }}
         />
       </Stack.Navigator>
       </NavigationContainer>

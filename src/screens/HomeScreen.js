@@ -203,6 +203,10 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
         <Text style={styles.diagnosticText}>Tanılama ve hata raporu  ↗</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity accessibilityRole="button" style={styles.backupLink} onPress={() => navigation.navigate('Backup')}>
+        <Text style={styles.backupText}>Yedek al veya geri yükle  ↗</Text>
+      </TouchableOpacity>
+
       {/* Proje Listesi */}
       <FlatList
         data={projects}
@@ -433,4 +437,6 @@ const styles = StyleSheet.create({
   },
   diagnosticLink: { alignSelf: 'flex-end', paddingHorizontal: 22, paddingVertical: 12 },
   diagnosticText: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
+  backupLink: { alignSelf: 'flex-end', paddingHorizontal: 22, paddingVertical: 10 },
+  backupText: { color: Colors.accentLight, fontSize: 13, fontWeight: '800' },
 });

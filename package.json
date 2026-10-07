@@ -1,6 +1,6 @@
 {
   "name": "arama-yonetim-sistemi",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -15,6 +15,7 @@
     "@react-navigation/native": "^7.2.4",
     "@react-navigation/native-stack": "^7.14.14",
     "expo": "~54.0.37",
+    "expo-crypto": "~15.0.9",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.24",
     "expo-navigation-bar": "~5.0.10",

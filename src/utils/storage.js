@@ -3,6 +3,7 @@
  * Tüm proje verilerini yerel olarak yönetir.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { normalizeBackupProject, sameBackupProject } from './backupFormat';
 
 const PROJECTS_KEY = '@ays_projects';
 const PROJECT_DATA_PREFIX = '@ays_project_data_';
@@ -120,6 +121,64 @@ export async function createProject(project) {
     await saveAllProjects(projects);
     
     return project;
+  });
+}
+
+/** Bekleyen form taslağını da katarak dışa aktarılabilir tam görüntüyü döndürür. */
+export async function getProjectForBackup(projectId) {
+  await waitForPendingWrites();
+  const project = await getProject(projectId);
+  if (!project) throw new Error('Yedeklenecek proje bulunamadı.');
+  const draft = await loadDraft(projectId);
+  if (draft && Number.isInteger(draft.contactIndex) &&
+      draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
+      draft.formData && typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {
+    project.contacts = project.contacts.map((contact, index) =>
+      index === draft.contactIndex ? { ...contact, data: { ...draft.formData } } : contact
+    );
+  }
+  return project;
+}
+
+/** Aynı etkinliği çoğaltmaz; farklı içerikle gelen dosya mevcut projeyi ezemez. */
+export async function restoreProjectBackup(input) {
+  const project = normalizeBackupProject(input);
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const existing = projects.find((item) => item.id === project.id || item.eventId === project.eventId);
+    if (existing) {
+      if (existing.id !== project.id) throw new Error('Etkinlik kimliği başka bir projede kullanılıyor.');
+      const stored = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + project.id);
+      const oldProject = { ...existing, contacts: stored ? JSON.parse(stored) : existing.contacts || [] };
+      const draftValue = await AsyncStorage.getItem(DRAFT_KEY + project.id);
+      if (draftValue) {
+        const draft = JSON.parse(draftValue);
+        if (Number.isInteger(draft.contactIndex) && draft.contactIndex >= 0 &&
+            draft.contactIndex < oldProject.contacts.length && draft.formData &&
+            typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {
+          oldProject.contacts[draft.contactIndex] = {
+            ...oldProject.contacts[draft.contactIndex], data: { ...draft.formData },
+          };
+        }
+      }
+      if (sameBackupProject(oldProject, project)) return 'already-present';
+      throw new Error('Bu etkinlik cihazda farklı içerikle var. Mevcut proje otomatik olarak değiştirilmedi.');
+    }
+    const key = PROJECT_DATA_PREFIX + project.id;
+    if (await AsyncStorage.getItem(key)) {
+      throw new Error('Bu kimlikte tamamlanmamış bir yerel kayıt var. Geri yükleme durduruldu.');
+    }
+    const { contacts, ...meta } = project;
+    meta.totalContacts = contacts.length;
+    meta.completedContacts = contacts.filter((contact) => contact.completed).length;
+    await AsyncStorage.setItem(key, JSON.stringify(contacts));
+    try {
+      await saveAllProjects([meta, ...projects]);
+    } catch (error) {
+      await AsyncStorage.removeItem(key).catch(() => {});
+      throw error;
+    }
+    return 'restored';
   });
 }
 

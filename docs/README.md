@@ -8,6 +8,7 @@ Bu klasör, projeyi devralacak kişinin kodu çalıştırması ve önceki kararl
 2. [Ürün ve geliştirme planı](hafiza/plan.md): koordinatör, gönüllü, dağıtım, birleştirme ve iPhone hedefleri.
 3. [Kurulum, test ve APK](gelistirme/kurulum-ve-yayin.md): yeni bilgisayarda çalıştırma ve sürüm üretme.
 4. [Mimari ve veri](gelistirme/mimari-ve-veri.md): ana dosyalar, kayıt yapısı ve değişiklik yaparken dikkat edilecekler.
+5. [Yedek dosyası sözleşmesi](gelistirme/dosya-sozlesmesi.md): `.ays` sürüm 1 biçimi ve geri yükleme kuralları.
 
 ## Hafıza dosyaları için kural
 

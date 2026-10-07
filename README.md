@@ -9,6 +9,7 @@ Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. And
 - Metin listesinden veya Excel/CSV/TSV dosyasından kişi içe aktarma.
 - Projeye özel metin ve seçim alanları oluşturma, kişileri arayıp cevapları kaydetme.
 - Sonuçları Excel veya CSV olarak dışa aktarma.
+- Projeyi `.ays` dosyası olarak yedekleme ve önizleyerek geri yükleme.
 - Android'de hata raporunu geliştirici panelinden paylaşma; önceki açılışta kaydedilen yerel çökme bilgisini görüntüleme.
 
 ## Hızlı başlangıç
@@ -25,4 +26,4 @@ Windows'ta Android Studio ve Android SDK kuruluysa `localapk.bat` yerel APK üre
 
 ## Önemli sınır
 
-Şu anki Excel/CSV çıktısı çalışılan projenin sonuç dosyasıdır; birden fazla gönüllünün sonucunu güvenle birleştiren görev paketi sistemi henüz yoktur. Kişi verisi içeren gerçek dosyaları ve hata raporlarını herkese açık GitHub deposuna eklemeyin.
+Şu anki `.ays` biçimi yalnızca tam etkinlik yedeğidir. Excel/CSV çıktısı çalışılan projenin sonuç dosyasıdır; birden fazla gönüllünün sonucunu güvenle birleştiren görev paketi sistemi henüz yoktur. Kişi verisi içeren gerçek dosyaları ve hata raporlarını herkese açık GitHub deposuna eklemeyin.

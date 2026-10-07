@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const babel = require('@babel/core');
+const nodeCrypto = require('node:crypto');
 
 function loadSource(relativePath, mocks = {}) {
   const file = path.join(__dirname, '..', relativePath);
@@ -11,10 +12,17 @@ function loadSource(relativePath, mocks = {}) {
     plugins: ['@babel/plugin-transform-modules-commonjs'],
   });
   const module = { exports: {} };
-  const localRequire = (name) => mocks[name] || require(name);
+  const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
 }
+
+const backupFormat = loadSource('src/utils/backupFormat.js', {
+  'expo-crypto': {
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    digestStringAsync: async (_algorithm, value) => nodeCrypto.createHash('sha256').update(value, 'utf8').digest('hex'),
+  },
+});
 
 function memoryStorage() {
   const values = new Map();
@@ -84,4 +92,59 @@ test('headerless spreadsheets find the phone column and preserve the name', () =
 
   const headered = parseExcelContacts([['Okul', 'Telefon', 'İsim Soyisim'], ['Anadolu', '05321234567', 'Ayşe']], fields);
   assert.deepEqual(headered.data[phone], { school: 'Anadolu', name: 'Ayşe' });
+});
+
+function sampleProject() {
+  return {
+    id: 'event-1', name: 'Güz Etkinliği', createdAt: '2026-10-07T08:00:00.000Z', currentIndex: 0,
+    fields: [{ id: 'name', label: 'İsim Soyisim', type: 'text', options: [], order: 0, isSystemField: 'name' }],
+    contacts: [{ id: 'record-1', phone: '+905321234567', data: { name: 'Ayşe Yılmaz' }, completed: false, completedAt: null }],
+  };
+}
+
+test('versioned backup restores legacy IDs and detects changed content', async () => {
+  const file = await backupFormat.createBackupFile(sampleProject());
+  const parsed = await backupFormat.readBackupFile(file);
+  assert.equal(parsed.project.eventId, 'event-1');
+  assert.equal(parsed.project.contacts[0].recordId, 'record-1');
+  assert.equal(parsed.project.contacts[0].data.name, 'Ayşe Yılmaz');
+
+  const tampered = JSON.parse(file);
+  tampered.payload.project.contacts[0].data.name = 'Değiştirildi';
+  await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
+
+  const unsupported = JSON.parse(file);
+  unsupported.schemaVersion = 2;
+  await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
+  const duplicate = sampleProject();
+  duplicate.contacts.push({ ...duplicate.contacts[0] });
+  await assert.rejects(backupFormat.createBackupFile(duplicate), /yinelenen/);
+});
+
+test('backup restore is idempotent and never silently overwrites a changed event', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  const project = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(sampleProject()))).project;
+  assert.equal(await storage.restoreProjectBackup(project), 'restored');
+  assert.equal(await storage.restoreProjectBackup(project), 'already-present');
+  assert.equal((await storage.getAllProjects()).length, 1);
+  const altered = { ...project, contacts: [{ ...project.contacts[0], data: { name: 'Başka cevap' } }] };
+  await assert.rejects(storage.restoreProjectBackup(altered), /farklı içerikle/);
+  assert.equal((await storage.getProject(project.id)).contacts[0].data.name, 'Ayşe Yılmaz');
+});
+
+test('backup snapshot includes a pending form draft', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  const project = sampleProject();
+  await storage.createProject(project);
+  await storage.saveDraft(project.id, { contactIndex: 0, formData: { name: 'Yeni cevap' } });
+  const snapshot = await storage.getProjectForBackup(project.id);
+  assert.equal(snapshot.contacts[0].data.name, 'Yeni cevap');
+  assert.equal((await storage.getProject(project.id)).contacts[0].data.name, 'Ayşe Yılmaz');
+  assert.equal(await storage.restoreProjectBackup(snapshot), 'already-present');
 });
