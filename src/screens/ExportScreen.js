@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
 import { getProject } from '../utils/storage';
 import { shareExcel, saveExcel, shareCSV, saveCSV } from '../utils/exportUtils';
+import { reportError } from '../utils/diagnostics';
 
 const msg = (title, m) => Platform.OS === 'web' ? window.alert(m) : Alert.alert(title, m);
 
@@ -24,6 +25,7 @@ export default function ExportScreen({ route, navigation }) {
       if (!loaded) throw new Error('Proje bulunamadı.');
       setProject(loaded);
     } catch (error) {
+      reportError(error, 'Dışa aktarma ekranı yüklenirken');
       setLoadError(error.message || 'Proje yüklenemedi.');
     } finally {
       setLoading(false);
@@ -37,6 +39,7 @@ export default function ExportScreen({ route, navigation }) {
       const result = await fn(project);
       if (result) msg('Başarılı ✅', `${label} işlemi tamamlandı!`);
     } catch (e) {
+      reportError(e, `Dışa aktarma: ${label}`);
       msg('Hata', e.message);
     }
     setBusy(null);

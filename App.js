@@ -2,7 +2,7 @@
  * Arama Yönetim Sistemi - Entry Point
  * Ana giriş dosyası. React Navigation ile sayfa yönetimi.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -14,9 +14,34 @@ import HomeScreen from './src/screens/HomeScreen';
 import NewProjectScreen from './src/screens/NewProjectScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import ExportScreen from './src/screens/ExportScreen';
+import DeveloperPanel from './src/screens/DeveloperPanel';
 import { Colors } from './src/theme/colors';
+import { addBreadcrumb, installGlobalErrorHandler, loadLastDiagnostic, reportError, subscribeToDiagnostics } from './src/utils/diagnostics';
 
 const Stack = createNativeStackNavigator();
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { report: null };
+  }
+
+  static getDerivedStateFromError() {
+    return { report: true };
+  }
+
+  componentDidCatch(error, info) {
+    const report = reportError(error, 'Ekran oluşturulurken', true, info?.componentStack || '');
+    this.setState({ report });
+  }
+
+  render() {
+    if (this.state.report) {
+      return <DeveloperPanel report={this.state.report === true ? null : this.state.report} onBack={this.props.onRecover} />;
+    }
+    return this.props.children;
+  }
+}
 
 const screenOptions = {
   headerStyle: {
@@ -38,21 +63,53 @@ const screenOptions = {
 };
 
 export default function App() {
+  const [report, setReport] = useState(null);
+  const [showPanel, setShowPanel] = useState(false);
+  const [treeKey, setTreeKey] = useState(0);
+
   useEffect(() => {
+    installGlobalErrorHandler();
+    const unsubscribe = subscribeToDiagnostics((nextReport) => {
+      if (nextReport?.fatal) {
+        setReport(nextReport);
+        setShowPanel(true);
+      }
+    });
+    loadLastDiagnostic().then((result) => {
+      if (result?.autoShow) {
+        setReport(result.report);
+        setShowPanel(true);
+      }
+    });
     if (Platform.OS === 'android') {
-      NavigationBar.setBackgroundColorAsync(Colors.bg);
-      NavigationBar.setButtonStyleAsync('light');
+      NavigationBar.setButtonStyleAsync('light').catch(() => {});
     }
+    return unsubscribe;
   }, []);
+
+  const recover = () => {
+    setShowPanel(false);
+    setTreeKey((value) => value + 1);
+  };
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      {showPanel ? (
+        <DeveloperPanel report={report} onBack={recover} />
+      ) : (
+      <AppErrorBoundary key={treeKey} onRecover={recover}>
+      <NavigationContainer onReady={() => addBreadcrumb('Ana ekran açıldı')} onStateChange={(state) => {
+        const route = state?.routes?.[state.index];
+        if (route?.name) addBreadcrumb(`Ekran: ${route.name}`);
+      }}>
         <StatusBar style="light" backgroundColor={Colors.bg} />
       <Stack.Navigator screenOptions={screenOptions}>
         <Stack.Screen
           name="Home"
-          component={HomeScreen}
+          children={(props) => <HomeScreen {...props} onDeveloperPanel={() => {
+            setReport(null);
+            setShowPanel(true);
+          }} />}
           options={{ headerShown: false }}
         />
         <Stack.Screen
@@ -74,6 +131,8 @@ export default function App() {
         />
       </Stack.Navigator>
       </NavigationContainer>
+      </AppErrorBoundary>
+      )}
     </SafeAreaProvider>
   );
 }

@@ -22,9 +22,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../theme/colors';
 import { getProjectSummaries, deleteProject } from '../utils/storage';
+import { reportError } from '../utils/diagnostics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, onDeveloperPanel }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -44,6 +45,7 @@ export default function HomeScreen({ navigation }) {
     try {
       setProjects(await getProjectSummaries());
     } catch (error) {
+      reportError(error, 'Proje listesi yüklenirken');
       setLoadError(error.message || 'Projeler yüklenemedi.');
     } finally {
       setLoading(false);
@@ -196,6 +198,10 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.headerBadgeLabel}>proje</Text>
         </View>
       </View>
+
+      <TouchableOpacity accessibilityRole="button" style={styles.diagnosticLink} onPress={onDeveloperPanel}>
+        <Text style={styles.diagnosticText}>Tanılama ve hata raporu  ↗</Text>
+      </TouchableOpacity>
 
       {/* Proje Listesi */}
       <FlatList
@@ -425,4 +431,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
+  diagnosticLink: { alignSelf: 'flex-end', paddingHorizontal: 22, paddingVertical: 12 },
+  diagnosticText: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
 });

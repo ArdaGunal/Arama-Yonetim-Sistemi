@@ -13,6 +13,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as XLSX from 'xlsx';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createProject } from '../utils/storage';
+import { reportError } from '../utils/diagnostics';
 import { parsePastedText, parseExcelContacts } from '../utils/phoneUtils';
 import Step1Info from '../features/new-project/Step1Info';
 import Step2Builder from '../features/new-project/Step2Builder';
@@ -119,7 +120,7 @@ export default function NewProjectScreen({ navigation }) {
       setImportedData(imported.data);
       setImportedFileName(file.name);
       setLoading(false);
-    } catch (e) { setLoading(false); msg('Dosya okunamadı: ' + e.message); }
+    } catch (e) { setLoading(false); reportError(e, 'Dosya içe aktarılırken'); msg('Dosya okunamadı: ' + e.message); }
   };
 
   // ── Alan İşlemleri ──
@@ -216,6 +217,7 @@ export default function NewProjectScreen({ navigation }) {
       await createProject(project);
       navigation.goBack();
     } catch (error) {
+      reportError(error, 'Proje oluşturulurken');
       msg('Proje kaydedilirken bir hata oluştu: ' + error.message);
     } finally {
       setLoading(false);

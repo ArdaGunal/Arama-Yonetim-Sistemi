@@ -10,8 +10,7 @@ if "%APP_DIR:~-1%"=="\" set "APP_DIR=%APP_DIR:~0,-1%"
 echo ==========================================
 echo   Arama Yonetim Sistemi - Yerel APK
 echo ==========================================
-echo Proje artik sorunsuz ASCII dizininde bulundugu icin
-echo kopyalama gerekmeksizin dogrudan derleniyor...
+echo APK ciktilari surum bilgisiyle APK klasorune arsivlenir.
 echo.
 
 where node >nul 2>&1
@@ -40,22 +39,26 @@ if not exist "%ANDROID_HOME%\platform-tools" (
 
 pushd "%APP_DIR%"
 
-echo [1/3] Bagimliliklar kontrol ediliyor...
+echo [1/4] Bagimliliklar kontrol ediliyor...
 if not exist "node_modules\expo\package.json" (
     call npm ci
     if errorlevel 1 goto :fail
 )
 
-echo [2/3] Android projesi kontrol ediliyor...
-if not exist "android\gradlew.bat" (
-    call npx expo prebuild --platform android --no-install
-    if errorlevel 1 goto :fail
-)
+echo [2/4] Android projesi ve uygulama surumu guncelleniyor...
+call npx expo prebuild --platform android --no-install
+if errorlevel 1 goto :fail
+if not exist "android\gradlew.bat" goto :fail
+
+for /f "delims=" %%V in ('powershell -NoProfile -Command "(Get-Content app.json -Raw | ConvertFrom-Json).expo.version"') do set "APP_VERSION=%%V"
+for /f "delims=" %%V in ('powershell -NoProfile -Command "(Get-Content app.json -Raw | ConvertFrom-Json).expo.android.versionCode"') do set "APP_CODE=%%V"
+if not defined APP_VERSION goto :fail
+if not defined APP_CODE goto :fail
 
 set "SDKDIR=%ANDROID_HOME:\=\\%"
 > "android\local.properties" echo sdk.dir=%SDKDIR%
 
-echo [3/3] APK derleniyor (Gradle - bu islem biraz surebilir)...
+echo [3/4] APK derleniyor (Gradle - bu islem biraz surebilir)...
 cd android
 call gradlew.bat assembleRelease --no-daemon
 if errorlevel 1 goto :fail
@@ -68,10 +71,18 @@ if not exist "%SRC_APK%" (
     goto :fail
 )
 
+echo [4/4] APK surum arsivine kopyalaniyor...
 for /f %%T in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set "STAMP=%%T"
-if not exist "%~dp0APK" mkdir "%~dp0APK"
-set "OUT_APK=%~dp0APK\AramaYonetim-%STAMP%.apk"
-copy /y "%SRC_APK%" "%OUT_APK%" >nul
+if not defined STAMP goto :fail
+set "OUT_DIR=%APP_DIR%\APK"
+if not exist "%OUT_DIR%\" (
+    mkdir "%OUT_DIR%"
+    if errorlevel 1 goto :fail
+)
+set "OUT_APK=%OUT_DIR%\AramaYonetim-v%APP_VERSION%-b%APP_CODE%-%STAMP%.apk"
+copy /b /y "%SRC_APK%" "%OUT_APK%" >nul
+if errorlevel 1 goto :fail
+if not exist "%OUT_APK%" goto :fail
 
 popd
 

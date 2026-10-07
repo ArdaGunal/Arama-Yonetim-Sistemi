@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Platform, Alert } from 'react-native';
 import { getProject, updateProject, saveDraft, loadDraft, clearDraft, waitForPendingWrites } from '../utils/storage';
 import { parsePastedText } from '../utils/phoneUtils';
+import { reportError } from '../utils/diagnostics';
 
 const SurveyContext = createContext(null);
 
@@ -91,6 +92,7 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
       setFormData(data);
       formDataRef.current = data;
     } catch (error) {
+      reportError(error, 'Anket projesi yüklenirken');
       setProject(null);
       projectRef.current = null;
       setLoadError(error.message || 'Proje yüklenemedi.');
@@ -190,6 +192,7 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     setFormData(nd);
     formDataRef.current = nd;
     } catch (error) {
+      reportError(error, 'Kişi kaydedilirken');
       const message = 'Kişi kaydedilemedi: ' + error.message;
       Platform.OS === 'web' ? window.alert(message) : Alert.alert('Hata', message);
     } finally {
@@ -237,6 +240,7 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     }
     setEditingContact(null);
     } catch (error) {
+      reportError(error, 'Kişi düzenlenirken');
       const message = 'Kişi düzenlenemedi: ' + error.message;
       Platform.OS === 'web' ? window.alert(message) : Alert.alert('Hata', message);
     } finally {
@@ -338,6 +342,7 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     const m = `${newResults.length} yeni kişi eklendi! Toplam: ${updatedContacts.length}`;
     Platform.OS === 'web' ? window.alert(m) : Alert.alert('Başarılı ✅', m);
     } catch (error) {
+      reportError(error, 'Kişi eklenirken');
       const message = 'Kişiler eklenemedi: ' + error.message;
       Platform.OS === 'web' ? window.alert(message) : Alert.alert('Hata', message);
     } finally {

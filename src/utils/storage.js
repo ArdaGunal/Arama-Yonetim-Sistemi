@@ -7,6 +7,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const PROJECTS_KEY = '@ays_projects';
 const PROJECT_DATA_PREFIX = '@ays_project_data_';
 const DRAFT_KEY = '@ays_draft_';
+const DIAGNOSTIC_KEY = '@ays_last_diagnostic';
+
+export async function getLastDiagnostic() {
+  const value = await AsyncStorage.getItem(DIAGNOSTIC_KEY);
+  return value ? JSON.parse(value) : null;
+}
+
+export async function saveLastDiagnostic(report) {
+  await AsyncStorage.setItem(DIAGNOSTIC_KEY, JSON.stringify(report));
+}
+
+export async function deleteLastDiagnostic() {
+  await AsyncStorage.removeItem(DIAGNOSTIC_KEY);
+}
 
 // Eşzamanlı okuma-yazma yarışlarını önlemek için basit bir Mutex (kuyruk)
 let writeQueue = Promise.resolve();
