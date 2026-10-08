@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,13 @@ export default function AssignmentsScreen({ navigation, route }) {
   const [error, setError] = useState('');
   const [backupHint, setBackupHint] = useState(false);
   const [mode, setMode] = useState('first');
+  const [showFinished, setShowFinished] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20);
+  const available = useMemo(() => project ? getAvailableContacts(project).length : 0, [project]);
+  const callbacks = useMemo(() => project ? getCallbackCandidates(project).length : 0, [project]);
+  const listedAssignments = useMemo(() => (project?.assignments || [])
+    .filter((item) => showFinished || !['completed', 'cancelled'].includes(item.status))
+    .slice().reverse(), [project, showFinished]);
   const refresh = useCallback(async () => {
     try {
       const loaded = await getProject(route.params.projectId);
@@ -77,9 +84,9 @@ export default function AssignmentsScreen({ navigation, route }) {
 
   if (error) return <View style={s.center}><Text style={s.warning}>{error}</Text><TouchableOpacity onPress={refresh}><Text style={s.link}>Tekrar dene</Text></TouchableOpacity></View>;
   if (!project) return <View style={s.center}><ActivityIndicator color={Colors.accentLight} /></View>;
-  const available = getAvailableContacts(project).length;
-  const callbacks = getCallbackCandidates(project).length;
   const active = (project.assignments || []).filter((item) => item.status !== 'cancelled');
+  const finishedCount = (project.assignments || []).length -
+    (project.assignments || []).filter((item) => !['completed', 'cancelled'].includes(item.status)).length;
   return <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 20) }]} keyboardShouldPersistTaps="handled">
     <Text style={s.title}>Görevleri dağıt</Text>
     <Text style={s.intro}>Her kişi tek bir etkin göreve ayrılır. Görev sayısını yazın; kişiler sırayla atanır.</Text>
@@ -116,8 +123,12 @@ export default function AssignmentsScreen({ navigation, route }) {
       <Text style={s.backupText}>Yeni görev kaydedildi. Etkinlik yedeğini al →</Text>
     </TouchableOpacity>}
     <Text style={s.listTitle}>Hazırlanan görevler</Text>
-    {!project.assignments?.length && <Text style={s.muted}>Henüz görev hazırlanmadı.</Text>}
-    {(project.assignments || []).slice().reverse().map((assignment) => <View key={assignment.assignmentId} style={s.card}>
+    {finishedCount > 0 && <TouchableOpacity accessibilityRole="button" style={s.finishedToggle}
+      onPress={() => { setShowFinished((current) => !current); setVisibleCount(20); }}>
+      <Text style={s.finishedToggleText}>{showFinished ? 'Biten görevleri gizle' : `${finishedCount} biten/iptal edilen görevi göster`}</Text>
+    </TouchableOpacity>}
+    {!listedAssignments.length && <Text style={s.muted}>{project.assignments?.length ? 'Devam eden görev yok.' : 'Henüz görev hazırlanmadı.'}</Text>}
+    {listedAssignments.slice(0, visibleCount).map((assignment) => <View key={assignment.assignmentId} style={s.card}>
       <View style={s.heading}><Text style={s.cardTitle}>{assignment.volunteerName}</Text><Text style={s.badge}>{statuses[assignment.status]}</Text></View>
       <Text style={s.detail}>{assignment.contacts.length} kişi · Tur {assignment.round} · Form {assignment.formVersion}</Text>
       <Text style={s.detail}>Görev kimliği: {assignment.assignmentId.slice(0, 8)}</Text>
@@ -133,6 +144,10 @@ export default function AssignmentsScreen({ navigation, route }) {
         <Text style={s.cancelText}>Görevi iptal et</Text>
       </TouchableOpacity>}
     </View>)}
+    {listedAssignments.length > visibleCount && <TouchableOpacity accessibilityRole="button" style={s.moreButton}
+      onPress={() => setVisibleCount((current) => current + 20)}>
+      <Text style={s.moreText}>20 görev daha göster ({listedAssignments.length - visibleCount} kaldı)</Text>
+    </TouchableOpacity>}
   </ScrollView>;
 }
 
@@ -158,5 +173,9 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8, marginTop: 14 }, secondary: { borderWidth: 1, borderColor: Colors.borderAccent, borderRadius: 10, minHeight: 44, alignItems: 'center', justifyContent: 'center', padding: 8 },
   flex: { flex: 1 }, link: { color: Colors.accentLight, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   cancel: { alignSelf: 'flex-start', paddingVertical: 10, marginTop: 6 }, cancelText: { color: Colors.danger, fontSize: 13, fontWeight: '700' },
+  finishedToggle: { borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 12, padding: 13, marginBottom: 14 },
+  finishedToggleText: { color: Colors.accentLight, fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  moreButton: { borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 14 },
+  moreText: { color: Colors.accentLight, fontSize: 14, fontWeight: '800', textAlign: 'center' },
   warning: { color: Colors.warning },
 });

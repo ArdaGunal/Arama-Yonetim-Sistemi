@@ -18,13 +18,14 @@ Son gözden geçirme: 8 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Y
 - Yeni etkinliklerde ilk sayfanın kaynak sütunları ve hücreleri nihai Excel'in başında korunur; özgün Excel'in ek sayfaları ve görsel biçimi korunmaz. Eski etkinliklerde önceden saklanmamış kaynak hücreleri geri getirilemez.
 - Geliştirici paneli JavaScript hata bilgilerini ve uygulama içindeki son işlem izlerini gösterip paylaşır. Android yerel çökme kaydı sonraki açılışta okunur; yerel bir çökme anında uygulamanın kapanmasını tamamen önlemek teknik olarak mümkün değildir.
 - Android için `localapk.bat` ile yerel APK üretilebilir. Bu çıktı mevcut Android debug anahtarıyla imzalanır; mağaza yayını için ayrı imzalama gerekir.
+- 5.000 kişi/100 görev/100 sonuç için [sentetik ölçüm komutu](../gelistirme/buyuk-veri-performansi.md) vardır. Geri arama adayları görevleri bir kez dizinler; görev ekranı bitenleri gizler ve uzun listeyi 20'şer gösterir. Yerel web önizlemesinde büyük yedek açıldı. Android telefon üzerinde gerçek süreler henüz ölçülmedi.
 
 ## Henüz yapılmadı
 
 - Orijinal Excel'in ek sayfaları ve görsel biçimi otomatik dışa aktarılmaz; ilk kaynak dosya ayrıca saklanmalıdır.
 - Gönderilmiş dosyanın karşı tarafta gerçekten açıldığını doğrulayan merkezi sistem yoktur; durum koordinatör tarafından işaretlenir.
-- Gerçek iPhone'da uçak modu/dosya akışı/WhatsApp paylaşımı ve temiz cihazda yedekten geri yükleme doğrulaması.
-- Büyük veri setleri ve 100 gönüllü senaryosu için performans doğrulaması.
+- Gerçek iPhone'da uçak modu/dosya akışı/WhatsApp paylaşımı ve temiz cihazda yedekten geri yükleme doğrulaması (kullanıcı uygun cihaz bulana kadar ertelendi).
+- Büyük veri setleri ve 100 gönüllü senaryosu için gerçek Android telefon performans doğrulaması.
 
 Bu gereksinimlerin tasarımı [plan.md](plan.md) içindedir. Kodda varmış gibi kabul etmeyin.
 

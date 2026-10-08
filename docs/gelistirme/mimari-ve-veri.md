@@ -40,4 +40,4 @@ JS hatası raporu hata metni, yığın izi, platform, sürüm ve son işlem izle
 
 ## Tasarlanan gelecek yapı
 
-Sonraki büyük iş, gerçek iPhone'da çevrimdışı PWA ve dosya akışının doğrulanmasıdır. Ayrıca 5.000 kişi/100 görev performansı ile WhatsApp'ın farklı Android sürümlerinde dosyaya dokunarak açma davranışı ölçülmelidir.
+Sonraki kabul işleri, [5.000 kişi/100 görev senaryosunun](buyuk-veri-performansi.md) gerçek Android telefonda ölçülmesi, WhatsApp'ın farklı Android sürümlerinde dosyaya dokunarak açma davranışı ve kullanıcı uygun cihaz bulduğunda gerçek iPhone'da çevrimdışı PWA ile dosya akışının doğrulanmasıdır.

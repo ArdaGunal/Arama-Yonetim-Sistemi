@@ -353,21 +353,36 @@ export function getAvailableContacts(project) {
 
 /** Sonra ara sonucunu almış ve hâlihazırda geri arama görevinde olmayan kişiler. */
 export function getCallbackCandidates(project) {
-  const active = (project.assignments || []).filter((item) =>
-    item.round >= 2 && ['prepared', 'sent', 'partial'].includes(item.status));
+  const activeIds = new Set();
+  const activePhones = new Set();
+  const latestByRecord = new Map();
+  for (const assignment of project.assignments || []) {
+    if (assignment.status === 'cancelled') continue;
+    const round = assignment.round || 1;
+    const isActiveCallback = round >= 2 && ['prepared', 'sent', 'partial'].includes(assignment.status);
+    for (const row of assignment.contacts || []) {
+      if (isActiveCallback) {
+        activeIds.add(row.recordId);
+        activePhones.add(cleanPhoneNumber(row.phone));
+      }
+      const prior = latestByRecord.get(row.recordId);
+      if (!prior || round > prior.round) {
+        latestByRecord.set(row.recordId, { round, unfinished: assignment.status !== 'completed' });
+      } else if (round === prior.round && assignment.status !== 'completed') {
+        prior.unfinished = true;
+      }
+    }
+  }
   const seenPhones = new Set();
   return (project.contacts || []).flatMap((contact) => {
     if (contact.callStatus !== 'later' || !contact.completed) return [];
     const recordId = contact.recordId || contact.id;
     const phone = cleanPhoneNumber(contact.phone);
-    if (!phone || seenPhones.has(phone) || active.some((assignment) =>
-        assignment.contacts.some((row) => row.recordId === recordId || cleanPhoneNumber(row.phone) === phone))) return [];
+    if (!phone || seenPhones.has(phone) || activeIds.has(recordId) || activePhones.has(phone)) return [];
     seenPhones.add(phone);
-    const priorAssignments = (project.assignments || []).filter((assignment) =>
-      assignment.status !== 'cancelled' && assignment.contacts.some((row) => row.recordId === recordId));
-    const lastRound = Math.max(1, ...priorAssignments.map((assignment) => assignment.round));
-    if (priorAssignments.some((assignment) => assignment.round === lastRound && assignment.status !== 'completed')) return [];
-    return [{ contact, round: lastRound + 1 }];
+    const prior = latestByRecord.get(recordId);
+    if (prior?.unfinished) return [];
+    return [{ contact, round: (prior?.round || 1) + 1 }];
   });
 }
 
