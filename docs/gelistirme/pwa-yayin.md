@@ -17,7 +17,9 @@
 
 ## GitHub Pages yayını
 
-`.github/workflows/pages.yml` elle çalıştırılabilen yayın iş akışıdır. Yayına geçmeden önce deponun **Settings → Pages → Source** bölümünde **GitHub Actions** seçin. Sonra **Actions → iPhone web uygulaması → Run workflow** ile `main` dalını yayınlayın. Beklenen adres `https://ardagunal.github.io/Arama-Yonetim-Sistemi/` olur; dağıtım çıktısındaki gerçek URL'yi esas alın. İş akışı kaynak kodu derler, testleri çalıştırır, yalnızca `dist/` klasörünü yayınlar. Kişi dosyaları depoda veya sitede bulunmamalıdır.
+Uygulama 8 Ekim 2026'da [GitHub Pages adresinde](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) yayınlandı. İlk [yayın iş akışı](https://github.com/ArdaGunal/Arama-Yonetim-Sistemi/actions/runs/37732819182) başarılı oldu; canlı ana ekran, `manifest.json`, `sw.js` ve simge dosyası açıldı. Bu kontrol gerçek iPhone kabul testinin yerini tutmaz.
+
+`.github/workflows/pages.yml` elle çalıştırılabilen yayın iş akışıdır. Sonraki kod güncellemelerinde **Actions → iPhone web uygulaması → Run workflow** ile `main` dalını yeniden yayınlayın. İş akışı kaynak kodu derler, testleri çalıştırır, yalnızca `dist/` klasörünü yayınlar. Kişi dosyaları depoda veya sitede bulunmamalıdır. Yayın ayarı yeniden yapılacaksa **Settings → Pages → Source** bölümünde **GitHub Actions** seçilmelidir.
 
 GitHub hesabı bireysel olduğu için topluluğa devredilecekse depo ve Pages yönetimi topluluğun denetlediği hesaba/organizasyona taşınmalı, yeni yolda `baseUrl` güncellenmeli ve eski adresten geçiş duyurulmalıdır. Uygulamadaki veriler bu taşınma sırasında kendiliğinden aktarılmaz; kullanıcılar önceden `.ays` yedeği almalıdır.
 

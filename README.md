@@ -1,8 +1,8 @@
 # Arama Yönetim Sistemi
 
-Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. Android uygulaması React Native ve Expo ile geliştirilir; iPhone için ana ekrana eklenebilen web sürümünün yayın paketi hazırlanmıştır. Veriler cihazın yerel depolamasında tutulur.
+Topluluk etkinlikleri için çevrimdışı kişi arama ve anket uygulaması. Android uygulaması React Native ve Expo ile geliştirilir; iPhone için ana ekrana eklenebilen [web sürümü](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) yayınlanmıştır. Veriler cihazın yerel depolamasında tutulur.
 
-> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. iPhone PWA derlemesi hazır; GitHub Pages yayını ve gerçek cihaz doğrulaması bekliyor.
+> **Devir için başlangıç noktası:** [docs/README.md](docs/README.md). Ürünün uzun vadeli hedefleri [docs/hafiza/plan.md](docs/hafiza/plan.md) içindedir. iPhone PWA yayında; gerçek iPhone cihaz doğrulaması bekliyor.
 
 ## Bugün neler yapılabiliyor?
 

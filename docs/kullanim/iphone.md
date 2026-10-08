@@ -4,7 +4,7 @@ Bu yönerge iPhone kullanan gönüllüler içindir. Bir görev dosyası yalnızc
 
 ## İlk kurulum
 
-1. Koordinatörün verdiği **web uygulaması bağlantısını Safari'de** açın. İlk açılışta internet gerekir.
+1. [Arama Sistemi bağlantısını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) **Safari'de** açın. İlk açılışta internet gerekir.
 2. Safari'de **Paylaş → Ana Ekrana Ekle → Web Uygulaması Olarak Aç → Ekle** yolunu izleyin.
 3. Sonraki kullanımlarda ana ekrandaki **Arama Sistemi** simgesine basın. Uçak moduna almadan önce uygulamayı bir kez açıp görev dosyasını içe aktarın.
 
