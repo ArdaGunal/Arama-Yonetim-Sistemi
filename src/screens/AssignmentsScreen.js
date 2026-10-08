@@ -10,6 +10,7 @@ import { createAssignment, createCallbackAssignment, getAvailableContacts, getCa
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
+import { saveEventBackup } from '../utils/automaticBackup';
 
 const inform = (message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
 const statuses = { prepared: 'Hazırlandı', sent: 'Gönderildi', partial: 'Kısmi sonuç', completed: 'Sonuçlandı', cancelled: 'İptal edildi' };
@@ -39,7 +40,7 @@ export default function AssignmentsScreen({ navigation, route }) {
     try {
       const loaded = await getProject(route.params.projectId);
       if (!loaded || loaded.role === 'volunteer') throw new Error('Koordinatör etkinliği bulunamadı.');
-      setProject(loaded); setError('');
+      setProject(loaded); setBackupHint(!!loaded.backupPending); setError('');
     } catch (reason) { reportError(reason, 'Görev ekranı açılırken'); setError(reason.message); }
   }, [route.params.projectId]);
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
@@ -51,11 +52,24 @@ export default function AssignmentsScreen({ navigation, route }) {
     catch (reason) { reportError(reason, 'Görev işlemi'); inform(reason.message || 'İşlem tamamlanamadı.'); }
     finally { setBusy(''); }
   };
+  const backupAfterChange = async (reason) => {
+    try {
+      const result = await saveEventBackup(project.id, reason);
+      setBackupHint(!result.saved);
+      return result.saved;
+    } catch (reason) {
+      reportError(reason, 'Görev sonrası otomatik yedek');
+      setBackupHint(true);
+      return false;
+    }
+  };
   const make = () => run('create', async () => {
     await (mode === 'callback' ? createCallbackAssignment : createAssignment)(project.id, { assignmentId: Crypto.randomUUID(),
       volunteerName: volunteerName.trim(), count: Number(count), createdAt: new Date().toISOString() });
-    setVolunteerName(''); setCount(''); setBackupHint(true);
-    inform('Görev ayrıldı. Şimdi görev paketini paylaşın ve etkinlik yedeğini kaydedin.');
+    setVolunteerName(''); setCount('');
+    const backedUp = await backupAfterChange('Gorev-hazirlandi');
+    inform(backedUp ? 'Görev ayrıldı ve yedek dosyası kaydedildi. Şimdi görev paketini paylaşın.' :
+      'Görev ayrıldı. Yedek dışarı kaydedilemedi; paketi paylaşmadan önce aşağıdaki yedek düğmesini kullanın.');
   });
   const share = (assignment) => run(assignment.assignmentId, async () => {
     const content = await createAssignmentFile(assignment);
@@ -71,7 +85,8 @@ export default function AssignmentsScreen({ navigation, route }) {
     }
   });
   const markSent = (assignment) => run(`sent-${assignment.assignmentId}`, async () => {
-    await setAssignmentStatus(project.id, assignment.assignmentId, 'sent'); setBackupHint(true);
+    await setAssignmentStatus(project.id, assignment.assignmentId, 'sent');
+    if (!await backupAfterChange('Gorev-gonderildi')) inform('Görev gönderildi işaretlendi. Etkinlik yedeğini ayrıca kaydedin.');
   });
   const cancel = (assignment) => confirm('Görevi iptal et',
     assignment.status === 'sent'
@@ -79,7 +94,7 @@ export default function AssignmentsScreen({ navigation, route }) {
       : 'Bu görevdeki kişiler yeniden atanabilir havuza dönecek.',
     () => run(`cancel-${assignment.assignmentId}`, async () => {
       await setAssignmentStatus(project.id, assignment.assignmentId, 'cancelled', assignment.status === 'sent');
-      setBackupHint(true);
+      if (!await backupAfterChange('Gorev-iptal')) inform('Görev iptal edildi. Etkinlik yedeğini ayrıca kaydedin.');
     }));
 
   if (error) return <View style={s.center}><Text style={s.warning}>{error}</Text><TouchableOpacity onPress={refresh}><Text style={s.link}>Tekrar dene</Text></TouchableOpacity></View>;
@@ -120,7 +135,7 @@ export default function AssignmentsScreen({ navigation, route }) {
       </TouchableOpacity>
     </View>
     {backupHint && <TouchableOpacity accessibilityRole="button" style={s.backup} onPress={() => navigation.navigate('Backup')}>
-      <Text style={s.backupText}>Yeni görev kaydedildi. Etkinlik yedeğini al →</Text>
+      <Text style={s.backupText}>Yedek dosyası kaydedilemedi. Etkinlik yedeğini kaydet →</Text>
     </TouchableOpacity>}
     <Text style={s.listTitle}>Hazırlanan görevler</Text>
     {finishedCount > 0 && <TouchableOpacity accessibilityRole="button" style={s.finishedToggle}

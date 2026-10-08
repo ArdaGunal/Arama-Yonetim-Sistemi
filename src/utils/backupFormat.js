@@ -6,7 +6,7 @@ import { CALL_STATUSES, normalizeAttempts } from './resultFormat';
 export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 4;
+export const BACKUP_SCHEMA_VERSION = 5;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -121,6 +121,32 @@ function normalizeAnswerSnapshot(raw, fieldIds) {
     callbackNote: raw.callbackNote || '', callbackAt: raw.callbackAt || null };
 }
 
+function normalizeFields(input, label) {
+  if (!Array.isArray(input) || !input.length || input.length > 100) throw new Error(`${label} geçersiz.`);
+  const ids = new Set();
+  const fields = input.map((raw, index) => {
+    const field = object(raw, `${label} alanı`);
+    const id = identifier(field.id, 'Alan kimliği');
+    if (ids.has(id) || ['__proto__', 'constructor', 'prototype'].includes(id) ||
+        typeof field.label !== 'string' || !field.label.trim() ||
+        !['text', 'select'].includes(field.type) || !Array.isArray(field.options) ||
+        field.options.some((option) => typeof option !== 'string') ||
+        (field.required !== undefined && typeof field.required !== 'boolean') ||
+        (field.isSystemField !== undefined && field.isSystemField !== 'name')) {
+      throw new Error(`${label} alanı geçersiz.`);
+    }
+    ids.add(id);
+    return { id, label: field.label, type: field.type, options: [...field.options],
+      order: Number.isInteger(field.order) ? field.order : index,
+      ...(field.required !== undefined ? { required: field.required } : {}),
+      ...(field.isSystemField ? { isSystemField: 'name' } : {}) };
+  });
+  if (fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1) {
+    throw new Error(`${label} içinde isim alanı eksik.`);
+  }
+  return fields;
+}
+
 export function normalizeBackupProject(input) {
   const project = object(input, 'Proje');
   const id = identifier(project.id, 'Proje kimliği');
@@ -135,29 +161,31 @@ export function normalizeBackupProject(input) {
   if (!Array.isArray(project.fields) || !Array.isArray(project.contacts)) {
     throw new Error('Yedekte alanlar veya kişiler eksik.');
   }
-  const fieldIds = new Set();
-  const fields = project.fields.map((raw, index) => {
-    const field = object(raw, `Alan ${index + 1}`);
-    const fieldId = identifier(field.id, 'Alan kimliği');
-    if (fieldIds.has(fieldId) || ['__proto__', 'constructor', 'prototype'].includes(fieldId)) {
-      throw new Error('Yedekte yinelenen veya geçersiz alan kimliği var.');
+  const fields = normalizeFields(project.fields, 'Form');
+  const formVersion = project.formVersion || 1;
+  const historyInput = project.formHistory || [
+    ...(project.assignments || []).filter((item) => item.formVersion !== formVersion)
+      .map((item) => ({ version: item.formVersion, fields: item.fields })),
+    { version: formVersion, fields },
+  ];
+  if (!Array.isArray(historyInput) || historyInput.length > 1000) throw new Error('Form geçmişi geçersiz.');
+  const historyMap = new Map();
+  for (const raw of historyInput) {
+    if (!Number.isInteger(raw?.version) || raw.version < 1 || raw.version > formVersion) {
+      throw new Error('Form geçmişi sürümü geçersiz.');
     }
-    fieldIds.add(fieldId);
-    if (typeof field.label !== 'string' || !field.label.trim() ||
-        !['text', 'select'].includes(field.type) || !Array.isArray(field.options) ||
-        field.options.some((option) => typeof option !== 'string')) {
-      throw new Error(`Alan ${index + 1} geçersiz.`);
+    const snapshot = normalizeFields(raw.fields, 'Form geçmişi');
+    if (historyMap.has(raw.version) && canonicalJson(historyMap.get(raw.version)) !== canonicalJson(snapshot)) {
+      throw new Error('Aynı sürüm için farklı form var.');
     }
-    const normalized = {
-      id: fieldId, label: field.label, type: field.type,
-      options: [...field.options], order: Number.isInteger(field.order) ? field.order : index,
-    };
-    if (field.isSystemField !== undefined) {
-      if (field.isSystemField !== 'name') throw new Error('Desteklenmeyen sistem alanı.');
-      normalized.isSystemField = field.isSystemField;
-    }
-    return normalized;
-  });
+    historyMap.set(raw.version, snapshot);
+  }
+  if (canonicalJson(historyMap.get(formVersion)) !== canonicalJson(fields)) {
+    throw new Error('Güncel form sürümü geçmişle uyuşmuyor.');
+  }
+  const formHistory = [...historyMap].sort((a, b) => a[0] - b[0])
+    .map(([version, snapshot]) => ({ version, fields: snapshot }));
+  const fieldIds = new Set(formHistory.flatMap((item) => item.fields.map((field) => field.id)));
   const recordIds = new Set();
   const contacts = project.contacts.map((raw, index) => {
     const contact = object(raw, `Kişi ${index + 1}`);
@@ -224,7 +252,6 @@ export function normalizeBackupProject(input) {
   if (role === 'volunteer' && !/^[a-f0-9]{64}$/.test(project.importDigest || '')) {
     throw new Error('Gönüllü görevi özeti geçersiz.');
   }
-  const formVersion = project.formVersion || 1;
   if (project.resultRevision != null && (!Number.isInteger(project.resultRevision) || project.resultRevision < 0)) {
     throw new Error('Sonuç sürümü geçersiz.');
   }
@@ -233,6 +260,12 @@ export function normalizeBackupProject(input) {
   }
   const assignments = role === 'coordinator'
     ? normalizeAssignments(project.assignments, eventId, recordIds, formVersion) : [];
+  for (const assignment of assignments) {
+    const snapshot = historyMap.get(assignment.formVersion);
+    if (!snapshot || canonicalJson(snapshot) !== canonicalJson(assignment.fields)) {
+      throw new Error('Görev formu, kayıtlı form sürümüyle uyuşmuyor.');
+    }
+  }
   if (role === 'volunteer' && project.assignments?.length) throw new Error('Gönüllü projesinde görev listesi olamaz.');
   if (project.mergeConflicts != null && !Array.isArray(project.mergeConflicts)) throw new Error('Çakışma geçmişi geçersiz.');
   const mergeConflicts = (project.mergeConflicts || []).map((raw) => {
@@ -247,7 +280,7 @@ export function normalizeBackupProject(input) {
   });
   return {
     id, eventId, name: project.name, createdAt: isoDate(project.createdAt, 'Proje tarihi'),
-    currentIndex, fields, contacts, formVersion,
+    currentIndex, fields, formHistory, contacts, formVersion,
     formLocked: project.formLocked || false, templateId: project.templateId || null,
     sourceReview: sourceReview(project.sourceReview, fieldIds),
     role, assignmentId: role === 'volunteer' ? id : null,
@@ -281,7 +314,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, 2, 3, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, 3, 4, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,

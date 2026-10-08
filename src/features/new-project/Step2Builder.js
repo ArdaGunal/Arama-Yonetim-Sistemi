@@ -5,14 +5,15 @@ import { Colors } from '../../theme/colors';
 
 export default function Step2Builder({ fields, expandedField, setExpandedField, selectedCount, loading,
   updateField, removeField, addField, addOption, updateOption, removeOption,
-  setStep, handleSave, saveTemplate, shareTemplate, editing = false, onBack }) {
+  setStep, handleSave, saveTemplate, shareTemplate, editing = false, locked = false, onBack }) {
   const insets = useSafeAreaInsets();
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.step}>{editing ? 'Form düzenleme' : '3 / 3 · Soruları hazırla'}</Text>
       <Text style={s.title}>Hangi bilgileri soracağız?</Text>
-      <Text style={s.intro}>{editing ? 'Arama başlamadan soruları ve şıkları düzenleyebilirsiniz.' : 'İsim ve telefon hazır. Gerekli soruları ekleyin, sonra etkinliği oluşturun.'}</Text>
+      <Text style={s.intro}>{editing ? 'Soruları düzenleyin. Görev dağıtıldıysa kaydettiğiniz değişiklikler yeni form sürümüne uygulanır.' : 'İsim ve telefon hazır. Gerekli soruları ekleyin, sonra etkinliği oluşturun.'}</Text>
       <View style={s.notice}><Text style={s.noticeText}>{selectedCount} kişi {editing ? 'bu formu kullanıyor.' : 'eklenecek. Soruları aramaya başlamadan önce kontrol edin.'}</Text></View>
+      {locked && <View style={s.versionNotice}><Text style={s.versionNoticeText}>Yeni görevler yeni formu kullanır. Eski görevler ve cevapları eski sürümde kalır. Değişen soruların önceki cevapları yeni soruya otomatik taşınmaz.</Text></View>}
       {fields.map((field, index) => {
         const phone = field.isSystemField === 'phone';
         const open = expandedField === field.id;
@@ -22,7 +23,7 @@ export default function Step2Builder({ fields, expandedField, setExpandedField, 
             <View style={s.number}><Text style={s.numberText}>{index + 1}</Text></View>
             <View style={s.headText}>
               <Text style={s.fieldTitle}>{field.label || 'Yeni soru'}</Text>
-              <Text style={s.caption}>{phone ? 'Telefon · otomatik' : field.isSystemField === 'name' ? 'İsim · zorunlu' : field.type === 'select' ? 'Şıklı soru' : 'Yazılı cevap'}</Text>
+              <Text style={s.caption}>{phone ? 'Telefon · otomatik' : `${field.type === 'select' ? 'Şıklı soru' : 'Yazılı cevap'} · ${field.isSystemField === 'name' || field.required ? 'zorunlu' : 'isteğe bağlı'}`}</Text>
             </View>
             {!phone && <Text style={s.chevron}>{open ? '▲' : '▼'}</Text>}
           </TouchableOpacity>
@@ -39,6 +40,12 @@ export default function Step2Builder({ fields, expandedField, setExpandedField, 
                     <Text style={[s.typeText, field.type === type && s.typeTextActive]}>{label}</Text>
                   </TouchableOpacity>)}
               </View>
+              <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: !!field.required }}
+                style={s.requiredRow} onPress={() => updateField(field.id, 'required', !field.required)}>
+                <Text style={s.requiredMark}>{field.required ? '☑' : '□'}</Text>
+                <View style={s.requiredText}><Text style={s.requiredTitle}>Cevap zorunlu</Text>
+                  <Text style={s.requiredHelp}>Görüşüldü seçilirse boş bırakılamaz.</Text></View>
+              </TouchableOpacity>
             </>}
             {field.type === 'select' && <>
               <Text style={s.label}>Şıklar</Text>
@@ -84,6 +91,8 @@ const s = StyleSheet.create({
   intro: { color: Colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: 17 },
   notice: { backgroundColor: Colors.infoBg, padding: 13, borderRadius: 12, marginBottom: 17 },
   noticeText: { color: Colors.textPrimary, fontSize: 13, lineHeight: 19 },
+  versionNotice: { backgroundColor: Colors.warningBg, padding: 13, borderRadius: 12, marginBottom: 17 },
+  versionNoticeText: { color: Colors.warning, fontSize: 13, lineHeight: 19 },
   card: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderRadius: 15, marginBottom: 10, overflow: 'hidden' },
   head: { flexDirection: 'row', alignItems: 'center', padding: 15, minHeight: 66 },
   number: { width: 29, height: 29, borderRadius: 15, backgroundColor: Colors.accent, justifyContent: 'center', alignItems: 'center', marginRight: 11 },
@@ -96,6 +105,10 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8 }, type: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: Colors.bgInput, alignItems: 'center' },
   typeActive: { backgroundColor: Colors.accent }, typeText: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700' },
   typeTextActive: { color: '#fff' }, optionRow: { flexDirection: 'row', gap: 8, marginBottom: 8 }, optionInput: { flex: 1 },
+  requiredRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, marginTop: 10 },
+  requiredMark: { color: Colors.accentLight, fontSize: 26, marginRight: 10 }, requiredText: { flex: 1 },
+  requiredTitle: { color: Colors.textPrimary, fontWeight: '800', fontSize: 14 },
+  requiredHelp: { color: Colors.textSecondary, fontSize: 12, marginTop: 3 },
   removeOption: { width: 42, borderRadius: 10, backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center' },
   removeText: { color: '#fff', fontSize: 23 }, secondary: { backgroundColor: Colors.bgInput, borderRadius: 10, padding: 12, alignItems: 'center' },
   secondaryText: { color: Colors.accentLight, fontSize: 13, fontWeight: '800' }, delete: { alignSelf: 'flex-start', marginTop: 18, padding: 5 },

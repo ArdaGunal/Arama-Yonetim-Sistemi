@@ -2,7 +2,9 @@ import { canonicalJson } from './canonicalJson';
 import { cleanPhoneNumber } from './phoneUtils';
 
 const same = (left, right) => canonicalJson(left) === canonicalJson(right);
-const answerView = (contact) => ({ data: contact.data || {}, completed: !!contact.completed,
+const answerView = (contact, fieldIds) => ({ data: fieldIds
+  ? Object.fromEntries(Object.entries(contact.data || {}).filter(([id]) => fieldIds.has(id)))
+  : contact.data || {}, completed: !!contact.completed,
   callStatus: contact.callStatus || null, callbackNote: contact.callbackNote || '', callbackAt: contact.callbackAt || null });
 
 /** Doğrulanmış dosyaları, cihazdaki ana listeye yazmadan önce inceler. */
@@ -48,6 +50,8 @@ export function previewResultMerge(project, packets) {
       throw new Error('Aynı gönderim sürümünde farklı sonuç var; otomatik birleştirilemez.');
     }
     const originals = new Map(assignment.contacts.map((contact) => [contact.recordId, contact]));
+    const assignmentFields = assignment.fields;
+    const fieldIds = new Set(assignmentFields.map((field) => field.id));
     for (const incoming of result.contacts) {
       if (!incoming.completed && !incoming.attempts.length) continue;
       if (usedRecords.has(incoming.recordId)) throw new Error('Aynı kişi birden çok sonuç dosyasında var; dosyaları sırayla birleştirin.');
@@ -57,10 +61,10 @@ export function previewResultMerge(project, packets) {
       const original = originals.get(incoming.recordId);
       const baseline = previous || original.baseline || { data: original.data, completed: false };
       const item = { assignmentId: result.assignmentId, recordId: incoming.recordId,
-        name: incoming.data[project.fields.find((field) => field.isSystemField === 'name')?.id] || incoming.recordId,
+        name: incoming.data[assignmentFields.find((field) => field.isSystemField === 'name')?.id] || incoming.recordId,
         old, incoming, revision: result.revision,
         differences: [
-          ...project.fields.filter((field) => (old.data?.[field.id] || '') !== (incoming.data?.[field.id] || ''))
+          ...assignmentFields.filter((field) => (old.data?.[field.id] || '') !== (incoming.data?.[field.id] || ''))
             .map((field) => ({ label: field.label, old: old.data?.[field.id] || 'Boş',
               incoming: incoming.data?.[field.id] || 'Boş' })),
           ...(old.callStatus !== incoming.callStatus ? [{ label: 'Arama sonucu',
@@ -68,7 +72,7 @@ export function previewResultMerge(project, packets) {
           ...((old.callbackNote || '') !== incoming.callbackNote ? [{ label: 'Geri arama notu',
             old: old.callbackNote || 'Boş', incoming: incoming.callbackNote || 'Boş' }] : []),
         ] };
-      if (!same(answerView(old), answerView(baseline))) conflicts.push(item);
+      if (!same(answerView(old, fieldIds), answerView(baseline, fieldIds))) conflicts.push(item);
       else changes.push(item);
     }
   }
@@ -76,6 +80,8 @@ export function previewResultMerge(project, packets) {
 }
 
 export function applyPreview(project, preview, decisions = {}) {
+  const assignmentFieldIds = new Map((project.assignments || []).map((assignment) =>
+    [assignment.assignmentId, assignment.fields.map((field) => field.id)]));
   const replacements = new Map();
   for (const item of preview.changes) replacements.set(item.recordId, item);
   for (const item of preview.conflicts) {
@@ -89,7 +95,10 @@ export function applyPreview(project, preview, decisions = {}) {
     const incoming = item.incoming;
     const known = new Set((old.attempts || []).map((attempt) => attempt.id));
     const attempts = [...(old.attempts || []), ...incoming.attempts.filter((attempt) => !known.has(attempt.id))];
-    return { ...old, data: { ...incoming.data }, completed: incoming.completed,
+    const data = { ...old.data };
+    for (const fieldId of assignmentFieldIds.get(item.assignmentId) || []) delete data[fieldId];
+    Object.assign(data, incoming.data);
+    return { ...old, data, completed: incoming.completed,
       completedAt: incoming.completedAt, callStatus: incoming.callStatus,
       callbackNote: incoming.callbackNote, callbackAt: incoming.callbackAt, attempts };
   }) };

@@ -191,6 +191,21 @@ export async function getProjectForBackup(projectId) {
   return project;
 }
 
+/** Dış dosya başarıyla üretildikten sonra kalıcı yedek uyarısını kapatır. */
+export async function markProjectBackupSaved(projectId, expectedEpoch) {
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error('Etkinlik bulunamadı.');
+    if ((project.backupEpoch || 0) !== expectedEpoch) return false;
+    if (project.backupPending) {
+      project.backupPending = false;
+      await saveAllProjects(projects);
+    }
+    return true;
+  });
+}
+
 /** Aynı etkinliği çoğaltmaz; farklı içerikle gelen dosya mevcut projeyi ezemez. */
 export async function restoreProjectBackup(input) {
   const project = normalizeBackupProject(input);
@@ -329,6 +344,9 @@ export async function updateProject(projectId, updates) {
 }
 
 const ACTIVE_ASSIGNMENT_STATUSES = new Set(['prepared', 'sent', 'partial', 'completed']);
+const currentAnswers = (data, fields) => Object.fromEntries(
+  (fields || []).filter((field) => typeof data?.[field.id] === 'string')
+    .map((field) => [field.id, data[field.id]]));
 
 /** İlk turda kimliği veya telefonu etkin göreve ayrılmış kişileri havuzdan çıkarır. */
 export function getAvailableContacts(project) {
@@ -408,7 +426,7 @@ export async function createCallbackAssignment(projectId, input) {
       eventName: project.name, volunteerName: input.volunteerName,
       formVersion: project.formVersion || 1, round, createdAt: input.createdAt,
       fields: project.fields, contacts: selected.map(({ contact }) => ({
-        recordId: contact.recordId || contact.id, phone: contact.phone, data: { ...contact.data },
+        recordId: contact.recordId || contact.id, phone: contact.phone, data: currentAnswers(contact.data, project.fields),
         previousCallbackNote: contact.callbackNote || '',
         baseline: { completed: !!contact.completed, callStatus: contact.callStatus || null,
           callbackNote: contact.callbackNote || '', callbackAt: contact.callbackAt || null },
@@ -418,6 +436,8 @@ export async function createCallbackAssignment(projectId, input) {
     const record = { ...assignment, packetDigest, status: 'prepared', sentAt: null, cancelledAt: null,
       resultRevision: 0, resultDigest: null, lastApplied: {} };
     project.assignments = [...(project.assignments || []), record];
+    project.backupPending = true;
+    project.backupEpoch = (project.backupEpoch || 0) + 1;
     await saveAllProjects(projects);
     return record;
   });
@@ -443,7 +463,7 @@ export async function createAssignment(projectId, input) {
       eventName: project.name, volunteerName: input.volunteerName,
       formVersion: project.formVersion || 1, round: 1, createdAt: input.createdAt,
       fields: project.fields, contacts: available.slice(0, count).map((contact) => ({
-        recordId: contact.recordId || contact.id, phone: contact.phone, data: { ...contact.data },
+        recordId: contact.recordId || contact.id, phone: contact.phone, data: currentAnswers(contact.data, project.fields),
       })),
     });
     const packetDigest = JSON.parse(await createAssignmentFile(assignment)).integrity.sha256;
@@ -451,6 +471,8 @@ export async function createAssignment(projectId, input) {
       resultRevision: 0, resultDigest: null, lastApplied: {} };
     project.assignments = [...(project.assignments || []), record];
     project.formLocked = true;
+    project.backupPending = true;
+    project.backupEpoch = (project.backupEpoch || 0) + 1;
     await saveAllProjects(projects);
     return record;
   });
@@ -468,6 +490,8 @@ export async function setAssignmentStatus(projectId, assignmentId, nextStatus, a
         (assignment.status === 'prepared' || (assignment.status === 'sent' && allowSentCancellation))) {
       assignment.status = 'cancelled'; assignment.cancelledAt = new Date().toISOString();
     } else throw new Error('Bu görev durumu değiştirilemez.');
+    project.backupPending = true;
+    project.backupEpoch = (project.backupEpoch || 0) + 1;
     await saveAllProjects(projects);
     return assignment;
   });
@@ -563,6 +587,8 @@ export async function applyImportedResults(projectId, packets, decisions, expect
     const preview = previewResultMerge(prepared, packets);
     const next = applyPreview(prepared, preview, decisions);
     const { contacts, ...meta } = next;
+    meta.backupPending = true;
+    meta.backupEpoch = (project.backupEpoch || 0) + 1;
     projects[index] = meta;
     const journal = JSON.stringify({ projectId, projectsRaw, contactsRaw });
     await AsyncStorage.setItem(MERGE_JOURNAL_KEY, journal);
@@ -594,17 +620,16 @@ export async function lockProjectForm(projectId) {
   });
 }
 
-/** İlk aramadan önce formu atomik olarak günceller ve sürümünü artırır. */
+/** Formun yeni sürümünü oluşturur; eski görevlerin soruları ve cevapları saklanır. */
 export async function updateProjectForm(projectId, fields) {
   return enqueueWrite(async () => {
     const projects = await getAllProjects();
     const project = projects.find((item) => item.id === projectId);
-    if (!project) throw new Error('Etkinlik bulunamadı.');
+    if (!project || project.role === 'volunteer') throw new Error('Koordinatör etkinliği bulunamadı.');
     const stored = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
     const contacts = stored ? JSON.parse(stored) : project.contacts || [];
-    if (project.formLocked || contacts.some((contact) => contact.completed) ||
-        await AsyncStorage.getItem(DRAFT_KEY + projectId)) {
-      throw new Error('Arama başladıktan sonra sorular değiştirilemez.');
+    if (await AsyncStorage.getItem(DRAFT_KEY + projectId)) {
+      throw new Error('Açık bir cevap taslağı var. Önce arama ekranındaki kişiyi kaydedin.');
     }
     if (!Array.isArray(fields) || fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1 ||
         fields.some((field) => field.isSystemField && field.isSystemField !== 'name')) {
@@ -613,7 +638,8 @@ export async function updateProjectForm(projectId, fields) {
     const ids = new Set();
     for (const field of fields) {
       if (!field.id || ids.has(field.id) || !field.label?.trim() ||
-          !['text', 'select'].includes(field.type) || !Array.isArray(field.options)) {
+          !['text', 'select'].includes(field.type) || !Array.isArray(field.options) ||
+          (field.required !== undefined && typeof field.required !== 'boolean')) {
         throw new Error('Formda geçersiz veya tekrar eden alan var.');
       }
       ids.add(field.id);
@@ -623,20 +649,42 @@ export async function updateProjectForm(projectId, fields) {
         throw new Error(`"${field.label}" şıkları geçersiz.`);
       }
     }
-    for (const contact of contacts) {
-      for (const [fieldId, answer] of Object.entries(contact.data || {})) {
-        const field = fields.find((item) => item.id === fieldId);
-        if (!field) throw new Error('Kaynak kişide dolu olan bir alan silinemez.');
-        if (field.type === 'select' && answer && !field.options.includes(answer)) {
-          throw new Error(`"${field.label}" için mevcut cevap şıklarda yok.`);
+    const locked = !!project.formLocked || contacts.some((contact) => contact.completed);
+    if (!locked) {
+      for (const contact of contacts) {
+        for (const [fieldId, answer] of Object.entries(contact.data || {})) {
+          const field = fields.find((item) => item.id === fieldId);
+          if (!field) throw new Error('Kaynak kişide dolu olan bir alan silinemez.');
+          if (field.type === 'select' && answer && !field.options.includes(answer)) {
+            throw new Error(`"${field.label}" için mevcut cevap şıklarda yok.`);
+          }
         }
       }
     }
     if (JSON.stringify(project.fields) === JSON.stringify(fields)) return project;
-    project.fields = fields;
-    project.formVersion = (project.formVersion || 1) + 1;
+    const oldVersion = project.formVersion || 1;
+    const oldFields = project.fields;
+    const usedIds = new Set([...(project.formHistory || []).flatMap((item) => item.fields.map((field) => field.id)),
+      ...oldFields.map((field) => field.id), ...fields.map((field) => field.id)]);
+    const previous = new Map(oldFields.map((field) => [field.id, field]));
+    const nextFields = fields.map((field) => {
+      const old = previous.get(field.id);
+      if (!locked || !old || field.isSystemField === 'name' ||
+          (old.label === field.label && old.type === field.type &&
+            JSON.stringify(old.options) === JSON.stringify(field.options))) return field;
+      let id = `${field.id}_v${oldVersion + 1}`;
+      while (usedIds.has(id)) id += '_';
+      usedIds.add(id);
+      return { ...field, id };
+    });
+    project.fields = nextFields;
+    project.formVersion = oldVersion + 1;
+    project.formLocked = locked;
+    project.formHistory = [...(project.formHistory || [{ version: oldVersion, fields: oldFields }]),
+      { version: project.formVersion, fields: nextFields }];
+    const nextIds = new Set(nextFields.map((field) => field.id));
     if (project.sourceReview) project.sourceReview.columns = project.sourceReview.columns.map((column) => ({
-      ...column, fieldId: ids.has(column.fieldId) ? column.fieldId : null,
+      ...column, fieldId: nextIds.has(column.fieldId) ? column.fieldId : null,
     }));
     await saveAllProjects(projects);
     return project;

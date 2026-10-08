@@ -15,7 +15,7 @@ import Step2Review from '../features/new-project/Step2Review';
 import Step2Builder from '../features/new-project/Step2Builder';
 
 const systemFields = [
-  { id: 'default_isim', label: 'İsim Soyisim', type: 'text', options: [], isSystemField: 'name' },
+  { id: 'default_isim', label: 'İsim Soyisim', type: 'text', options: [], required: true, isSystemField: 'name' },
   { id: 'default_numara', label: 'Telefon', type: 'phone', options: [], isSystemField: 'phone' },
 ];
 const notify = (message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
@@ -158,7 +158,7 @@ export default function NewProjectScreen({ navigation }) {
 
   const addField = () => {
     const id = Crypto.randomUUID();
-    setFields((previous) => [...previous, { id, label: '', type: 'text', options: [] }]);
+    setFields((previous) => [...previous, { id, label: '', type: 'text', options: [], required: false }]);
     setExpandedField(id);
   };
   const updateField = (id, key, value) => setFields((previous) => previous.map((field) =>
@@ -223,7 +223,8 @@ export default function NewProjectScreen({ navigation }) {
         .map((field, index) => ({
           id: field.id, label: field.label.trim(), type: field.type,
           options: field.type === 'select' ? field.options.map((option) => option.trim()).filter(Boolean) : [],
-          order: index, ...(field.isSystemField ? { isSystemField: field.isSystemField } : {}),
+          order: index, required: field.isSystemField === 'name' || !!field.required,
+          ...(field.isSystemField ? { isSystemField: field.isSystemField } : {}),
         }));
       if (!saveFields.some((field) => field.isSystemField === 'name')) throw new Error('İsim alanı gerekli.');
       for (const field of saveFields) {
@@ -257,7 +258,7 @@ export default function NewProjectScreen({ navigation }) {
       const project = {
         id: eventId, eventId, name: projectName.trim(), createdAt: new Date().toISOString(),
         currentIndex: 0, formVersion: 1, formLocked: false, templateId,
-        fields: saveFields, contacts,
+        fields: saveFields, formHistory: [{ version: 1, fields: saveFields }], contacts,
         sourceReview: {
           sourceName: source.sourceName, hasHeader: source.hasHeader, totalRows: source.rows.length,
           columns: source.columns.map((column) => ({ index: column.index, label: column.label,

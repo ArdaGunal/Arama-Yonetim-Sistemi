@@ -3,7 +3,7 @@ import { canonicalJson } from './canonicalJson';
 import { cleanPhoneNumber } from './phoneUtils';
 
 export const ASSIGNMENT_EXTENSION = '.ays';
-export const ASSIGNMENT_SCHEMA_VERSION = 1;
+export const ASSIGNMENT_SCHEMA_VERSION = 2;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_CHARS = 30 * 1024 * 1024;
 
@@ -26,11 +26,13 @@ function normalizeFields(input) {
     const fieldId = id(raw.id, 'Alan kimliği');
     if (seen.has(fieldId) || typeof raw.label !== 'string' || !raw.label.trim() ||
         !['text', 'select'].includes(raw.type) || !Array.isArray(raw.options) ||
-        raw.options.some((option) => typeof option !== 'string')) throw new Error('Görev alanı geçersiz.');
+        raw.options.some((option) => typeof option !== 'string') ||
+        (raw.required !== undefined && typeof raw.required !== 'boolean')) throw new Error('Görev alanı geçersiz.');
     seen.add(fieldId);
     if (raw.isSystemField != null && raw.isSystemField !== 'name') throw new Error('Görev sistem alanı geçersiz.');
     return { id: fieldId, label: raw.label, type: raw.type, options: [...raw.options],
       order: Number.isInteger(raw.order) ? raw.order : index,
+      ...(raw.required !== undefined ? { required: raw.required } : {}),
       ...(raw.isSystemField ? { isSystemField: 'name' } : {}) };
   });
   if (fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1) {
@@ -92,7 +94,8 @@ export function normalizeAssignment(input) {
 
 export async function createAssignmentFile(input) {
   const assignment = normalizeAssignment(input);
-  const body = { format: FORMAT, schemaVersion: ASSIGNMENT_SCHEMA_VERSION, kind: 'assignment',
+  const schemaVersion = assignment.fields.some((field) => field.required !== undefined) ? 2 : 1;
+  const body = { format: FORMAT, schemaVersion, kind: 'assignment',
     eventId: assignment.eventId, assignmentId: assignment.assignmentId,
     createdAt: assignment.createdAt, payload: { assignment } };
   const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalJson(body));
@@ -103,7 +106,7 @@ export async function readAssignmentFile(text) {
   if (typeof text !== 'string' || text.length > MAX_CHARS) throw new Error('Görev dosyası çok büyük veya okunamadı.');
   let file;
   try { file = JSON.parse(text); } catch { throw new Error('Görev dosyası geçerli JSON değil.'); }
-  if (file?.format !== FORMAT || file.kind !== 'assignment' || file.schemaVersion !== ASSIGNMENT_SCHEMA_VERSION) {
+  if (file?.format !== FORMAT || file.kind !== 'assignment' || ![1, ASSIGNMENT_SCHEMA_VERSION].includes(file.schemaVersion)) {
     throw new Error('Bu dosya desteklenen bir görev paketi değil.');
   }
   const body = { format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,

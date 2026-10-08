@@ -6,7 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { BACKUP_EXTENSION, createBackupFile, readBackupFile, sameBackupProject } from '../utils/backupFormat';
-import { getProjectForBackup, getProjectSummaries, replaceProjectBackup, restoreProjectBackup } from '../utils/storage';
+import { getProjectForBackup, getProjectSummaries, markProjectBackupSaved, replaceProjectBackup, restoreProjectBackup } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 import { downloadWebFile, shareOrDownloadWebFile } from '../utils/webFileTransfer';
@@ -49,8 +49,9 @@ export default function BackupScreen() {
       const content = await createBackupFile(project);
       const name = fileName(project);
       if (Platform.OS === 'web') {
-        if (mode === 'share') await shareOrDownloadWebFile(content, name);
-        else downloadWebFile(content, name);
+        if (mode === 'share') {
+          if (await shareOrDownloadWebFile(content, name) === 'cancelled') return null;
+        } else downloadWebFile(content, name);
       } else if (mode === 'save' && Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
         const saf = FileSystem.StorageAccessFramework;
         const permission = await saf.requestDirectoryPermissionsAsync();
@@ -64,6 +65,7 @@ export default function BackupScreen() {
         await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
         await Sharing.shareAsync(uri, { mimeType: MIME, dialogTitle: 'Etkinlik yedeğini paylaş' });
       }
+      await markProjectBackupSaved(projectId, project.backupEpoch || 0);
       return project;
     } catch (error) {
       reportError(error, 'Etkinlik yedeği dışa aktarılırken');

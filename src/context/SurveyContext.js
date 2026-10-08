@@ -9,6 +9,7 @@ import { Platform, Alert } from 'react-native';
 import { getProject, updateProject, saveDraft, loadDraft, clearDraft, waitForPendingWrites } from '../utils/storage';
 import { parsePastedText } from '../utils/phoneUtils';
 import { reportError } from '../utils/diagnostics';
+import { missingRequiredField } from '../utils/formValidation';
 
 const SurveyContext = createContext(null);
 
@@ -153,6 +154,12 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     if (projectRef.current.role === 'volunteer' && !callStatus) {
       const message = 'Önce arama sonucunu seçin.';
       Platform.OS === 'web' ? window.alert(message) : Alert.alert('Arama sonucu eksik', message);
+      return;
+    }
+    const missing = missingRequiredField(projectRef.current.fields, formDataRef.current, callStatus || 'contacted');
+    if (missing) {
+      const message = `"${missing.label}" cevabını girin.`;
+      Platform.OS === 'web' ? window.alert(message) : Alert.alert('Zorunlu cevap eksik', message);
       return;
     }
     if (callStatus === 'later' && callbackDate && (!/^\d{4}-\d{2}-\d{2}$/.test(callbackDate) ||

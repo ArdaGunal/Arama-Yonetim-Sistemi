@@ -45,9 +45,17 @@ const statusLabel = { contacted: 'Görüşüldü', unreached: 'Ulaşılamadı', 
 
 export function buildWorkbook(project) {
   const fields = project.fields || [];
+  const currentIds = new Set(fields.map((field) => field.id));
+  const historical = new Map();
+  for (const snapshot of project.formHistory || []) for (const field of snapshot.fields || []) {
+    if (!currentIds.has(field.id) && field.isSystemField !== 'name') {
+      historical.set(field.id, { ...field, label: `${field.label} (Form ${snapshot.version})` });
+    }
+  }
   // isSystemField:'name' alanını bul — label'a bağlı değil, kimlik bazlı
   const nameField = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
-  const otherFields = fields.filter(f => f !== nameField);
+  const otherFields = [...fields.filter(f => f !== nameField), ...historical.values()];
+  const outputFields = [...fields, ...historical.values()];
 
   // Sütun sıralaması: İsim Soyisim | Tel No | diğer alanlar...
   const headers = [];
@@ -73,7 +81,7 @@ export function buildWorkbook(project) {
   const hasSourceCells = sourceColumns?.length && project.contacts.some((contact) => contact.sourceCells);
   const sourceHeaders = hasSourceCells ? sourceColumns.map((column) => column.label) : [];
   const currentHeaders = hasSourceCells ? [
-    ...fields.map((field) => `Güncel: ${field.label}`), 'Güncel: Tel No',
+    ...outputFields.map((field) => `Güncel: ${field.label}`), 'Güncel: Tel No',
     'Arama Durumu', 'Geri Arama Tarihi', 'Geri Arama Notu', 'Kayıt Kimliği', 'Kaynak Satırı',
   ] : headers;
   const ws = hasSourceCells
@@ -81,7 +89,7 @@ export function buildWorkbook(project) {
       [...sourceHeaders, ...currentHeaders],
       ...project.contacts.map((contact) => [
         ...sourceColumns.map((column) => String(contact.sourceCells?.[column.index] ?? '')),
-        ...fields.map((field) => contact.data?.[field.id] || ''), contact.phone,
+        ...outputFields.map((field) => contact.data?.[field.id] || ''), contact.phone,
         statusLabel[contact.callStatus] || (contact.completed ? 'Tamamlandı' : 'Aranmadı'),
         contact.callbackAt?.slice(0, 10) || '', contact.callbackNote || '',
         contact.recordId || contact.id, contact.sourceRow || '',
@@ -91,7 +99,7 @@ export function buildWorkbook(project) {
   ws['!cols'] = (hasSourceCells ? [...sourceHeaders, ...currentHeaders] : headers).map(() => ({ wch: 18 }));
 
   // Telefon ve kaynak kimlik sütunları metin olarak kalır.
-  const phoneColIdx = hasSourceCells ? sourceHeaders.length + fields.length : nameField ? 1 : 0;
+  const phoneColIdx = hasSourceCells ? sourceHeaders.length + outputFields.length : nameField ? 1 : 0;
   const ref = ws['!ref'];
   if (ref) {
     const range = XLSX.utils.decode_range(ref);
@@ -132,7 +140,14 @@ export function buildWorkbook(project) {
 function buildCSV(project) {
   const fields = project.fields || [];
   const nameField = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
-  const otherFields = fields.filter(f => f !== nameField);
+  const currentIds = new Set(fields.map((field) => field.id));
+  const historical = new Map();
+  for (const snapshot of project.formHistory || []) for (const field of snapshot.fields || []) {
+    if (!currentIds.has(field.id) && field.isSystemField !== 'name') {
+      historical.set(field.id, { ...field, label: `${field.label} (Form ${snapshot.version})` });
+    }
+  }
+  const otherFields = [...fields.filter(f => f !== nameField), ...historical.values()];
   const esc = (v) => `"${String(v || '').replace(/"/g, '""')}"`;
 
   // Sütun sıralaması: İsim Soyisim | Tel No | diğer alanlar...

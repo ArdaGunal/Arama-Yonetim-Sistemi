@@ -31,7 +31,7 @@ export default function EditFormScreen({ navigation, route }) {
     field.id === id && !(field.isSystemField && key === 'type') ? { ...field, [key]: value } : field));
   const addField = () => {
     const id = Crypto.randomUUID();
-    setFields((items) => [...items.slice(0, -1), { id, label: '', type: 'text', options: [] }, items[items.length - 1]]);
+    setFields((items) => [...items.slice(0, -1), { id, label: '', type: 'text', options: [], required: false }, items[items.length - 1]]);
     setExpandedField(id);
   };
   const removeField = (id) => setFields((items) => items.filter((field) => field.id !== id || field.isSystemField));
@@ -45,6 +45,7 @@ export default function EditFormScreen({ navigation, route }) {
   const currentFields = () => fields.filter((field) => field.isSystemField !== 'phone').map((field, index) => ({
     id: field.id, label: field.label.trim(), type: field.type,
     options: field.type === 'select' ? field.options.map((option) => option.trim()) : [], order: index,
+    required: field.isSystemField === 'name' || !!field.required,
     ...(field.isSystemField ? { isSystemField: field.isSystemField } : {}),
   }));
   const save = async () => {
@@ -75,17 +76,12 @@ export default function EditFormScreen({ navigation, route }) {
 
   if (error) return <View style={s.center}><Text style={s.text}>{error}</Text></View>;
   if (!project) return <View style={s.center}><ActivityIndicator color={Colors.accentLight} /></View>;
-  if (project.formLocked || project.contacts.some((contact) => contact.completed)) return <View style={s.center}>
-    <Text style={s.title}>Form kilitli</Text>
-    <Text style={s.text}>Arama başladı. Eski cevapların doğru kalması için sorular artık değiştirilemez.</Text>
-    <TouchableOpacity style={s.button} onPress={() => template(false)}><Text style={s.buttonText}>Şablonu kaydet</Text></TouchableOpacity>
-    <TouchableOpacity style={s.button} onPress={() => template(true)}><Text style={s.buttonText}>Şablonu paylaş</Text></TouchableOpacity>
-  </View>;
   return <Step2Builder fields={fields} expandedField={expandedField} setExpandedField={setExpandedField}
     selectedCount={project.contacts.length} loading={loading} updateField={updateField}
     removeField={removeField} addField={addField} addOption={addOption} updateOption={updateOption}
     removeOption={removeOption} handleSave={save} saveTemplate={() => template(false)} shareTemplate={() => template(true)}
-    editing onBack={() => navigation.goBack()} />;
+    editing locked={project.formLocked || project.contacts.some((contact) => contact.completed)}
+    onBack={() => navigation.goBack()} />;
 }
 
 const s = StyleSheet.create({

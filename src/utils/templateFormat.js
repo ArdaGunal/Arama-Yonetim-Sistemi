@@ -25,8 +25,12 @@ export function normalizeTemplateFields(input) {
         (raw.isSystemField === 'name' && raw.type !== 'text')) {
       throw new Error('Şablondaki sistem alanı tipi geçersiz.');
     }
+    if (raw.required !== undefined && typeof raw.required !== 'boolean') {
+      throw new Error('Şablondaki zorunlu alan bilgisi geçersiz.');
+    }
     return {
       id: raw.id, label: raw.label, type: raw.type, options: [...raw.options], order: index,
+      ...(raw.required !== undefined ? { required: raw.required } : {}),
       ...(raw.isSystemField ? { isSystemField: raw.isSystemField } : {}),
     };
   });

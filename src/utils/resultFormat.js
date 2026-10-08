@@ -70,6 +70,10 @@ export function normalizeResult(input) {
       if (!fieldIds.has(key) || typeof answer !== 'string') throw new Error('Sonuç cevabı forma uymuyor.');
       data[key] = answer;
     }
+    if (raw.completed && raw.callStatus === 'contacted') {
+      const missing = input.fields.find((field) => field.required === true && !String(data[field.id] || '').trim());
+      if (missing) throw new Error(`Sonuçta "${missing.label}" zorunlu cevabı eksik.`);
+    }
     return { recordId, phone, data, completed: raw.completed,
       completedAt: raw.completedAt ? date(raw.completedAt, 'Tamamlanma tarihi') : null,
       callStatus: raw.callStatus || null, callbackNote: raw.callbackNote || '',

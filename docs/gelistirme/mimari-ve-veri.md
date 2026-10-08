@@ -16,6 +16,8 @@
 | `src/utils/exportUtils.js`, `src/screens/ExportScreen.js` | Excel/CSV çıktısı |
 | `src/utils/diagnostics.js`, `src/screens/DeveloperPanel.js` | Hata kaydı ve rapor paylaşımı |
 | `src/utils/backupFormat.js`, `src/screens/BackupScreen.js` | Sürümlü `.ays` yedeği, doğrulama, dışa aktarma ve geri yükleme |
+| `src/utils/automaticBackup.js` | Önemli işlemlerden sonra dış yedek dosyası ve Android yedek klasörü |
+| `src/utils/formValidation.js` | Görüşülen kişide zorunlu cevap kontrolü |
 | `src/utils/assignmentFormat.js`, `src/utils/canonicalJson.js` | `.ays` görev paketi ve ortak bütünlük hesabı |
 | `src/utils/resultFormat.js`, `src/utils/resultMerge.js` | `.ays` sonuç paketi, sürüm/çakışma incelemesi ve karar uygulama |
 | `plugins/withCrashInfo.js`, `native-crash/` | Android yerel çökme kaydını Expo prebuild sırasında ekleme |
@@ -29,6 +31,8 @@
 Yazmalar kuyruklanır; ekran yüklenirken bekleyen yazmaların bitmesi beklenir. Yeni depolama işlemlerinde `storage.js` üzerinden geçin. Bu yapı cihaz içi kullanım içindir; görevler ve sonuçlar dosyayla aktarılır. Telefon aynı etkin görevler arasında tekrar dağıtımı önler; sonuç birleştirmede kalıcı `recordId` kullanılır. Birleştirmede `@ays_merge_journal` eski kişi/metadata görüntüsünü tutar; kesinti sonrası ilk proje okuması bu görüntüyü geri getirir. Açıkça onaylanan yedek değiştirmesinde aynı günlük taslağı da geri alır.
 
 Koordinatör projesinde `eventId`, `formVersion`, `formLocked` ve `assignments` vardır. Her görev `assignmentId`, gönüllü adı, durum, tur ve ayrılmış kişilerin değişmez başlangıç görüntüsünü tutar. Görev oluşturma ve kişi rezervasyonu aynı kuyruklanmış metadata yazımında yapılır. Gönüllü projesinin `id` değeri görev kimliğidir; `eventId` ana etkinliği gösterir. `importDigest`, aynı dosyayı tekrar açınca cevapları korur. `resultRevision` her sonuç paylaşımında artar. Gönüllü kişi listesi değiştirilemez. Birleştirme telefon veya isim yerine `recordId`, görev için `assignmentId` kullanır; çakışma kararı `mergeConflicts` içinde tutulur.
+
+Formdaki `required` alanı yalnızca `Görüşüldü` olarak tamamlanan kayıtlarda uygulanır. Kilitli formda değişiklik yeni `formVersion` ve `formHistory` kaydı oluşturur; adı/türü/şıkları değişen soruya yeni kimlik verilir. Eski görev paketi kendi alan listesini taşır ve eski sonuç o listeyle doğrulanır. Koordinatörün cevap sözlüğü eski ve yeni alan kimliklerini birlikte tutabilir. `backupPending` ile `backupEpoch`, dış yedek alınamamış önemli değişiklikleri uygulama yeniden açıldığında da görünür kılar; yedek başarılı yazılırsa aynı epoch için uyarı temizlenir.
 
 ## İçe ve dışa aktarma sınırları
 

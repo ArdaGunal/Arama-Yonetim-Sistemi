@@ -165,7 +165,7 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
           </TouchableOpacity>
           <TouchableOpacity accessibilityRole="button" style={styles.formLink}
             onPress={() => navigation.navigate('EditForm', { projectId: item.id })}>
-            <Text style={styles.formLinkText}>{item.formLocked || calledCount > 0 ? 'Sorular / Şablonu paylaş' : 'Soruları düzenle / Şablon'}</Text>
+            <Text style={styles.formLinkText}>{item.formLocked || calledCount > 0 ? 'Soruları düzenle / Yeni sürüm' : 'Soruları düzenle / Şablon'}</Text>
           </TouchableOpacity>
         </>}
 

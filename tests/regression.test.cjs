@@ -123,7 +123,7 @@ test('versioned backup restores legacy IDs and detects changed content', async (
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
 
   const unsupported = JSON.parse(file);
-  unsupported.schemaVersion = 5;
+  unsupported.schemaVersion = 6;
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
   const duplicate = sampleProject();
   duplicate.contacts.push({ ...duplicate.contacts[0] });
@@ -198,7 +198,7 @@ test('version 2 backup preserves source review and reads version 1', async () =>
   assert.equal(restored.project.sourceReview, null);
 });
 
-test('form version increases before calls and locks after the first completed call', async () => {
+test('form version increases and completed calls remain tied to the old version', async () => {
   const memory = memoryStorage();
   const storage = loadSource('src/utils/storage.js', {
     '@react-native-async-storage/async-storage': memory,
@@ -213,7 +213,55 @@ test('form version increases before calls and locks after the first completed ca
   assert.equal((await storage.getProject(project.id)).fields.length, 2);
   await storage.updateProject(project.id, { contacts: [{ ...project.contacts[0], completed: true }] });
   assert.equal((await storage.getProject(project.id)).formLocked, true);
-  await assert.rejects(storage.updateProjectForm(project.id, project.fields), /Arama başladıktan sonra/);
+  const next = await storage.updateProjectForm(project.id, [project.fields[0],
+    { id: 'answer', label: 'Katılıyor musun?', type: 'select', options: ['Evet', 'Hayır'], order: 1, required: true }]);
+  assert.equal(next.formVersion, 3);
+  assert.equal(next.fields[1].id, 'answer_v3');
+  assert.deepEqual(next.formHistory.map((item) => item.version), [1, 2, 3]);
+});
+
+test('required answers are checked only for a completed conversation', () => {
+  const { missingRequiredField } = loadSource('src/utils/formValidation.js');
+  const fields = [{ id: 'name', label: 'İsim', isSystemField: 'name' },
+    { id: 'answer', label: 'Geliyor musun?', required: true }];
+  assert.equal(missingRequiredField(fields, { name: 'Ayşe', answer: '  ' }, 'contacted').id, 'answer');
+  assert.equal(missingRequiredField(fields, { name: 'Ayşe' }, 'unreached'), null);
+  assert.equal(missingRequiredField(fields, { name: 'Ayşe', answer: 'Evet' }, 'contacted'), null);
+  const packet = { eventId: 'event', assignmentId: 'assignment', formVersion: 1, round: 1,
+    revision: 1, assignmentDigest: 'a'.repeat(64), exportedAt: '2026-10-08T08:00:00.000Z',
+    fields: [{ id: 'answer', label: 'Geliyor musun?', required: true }],
+    contacts: [{ recordId: 'record', phone: '+905321234567', completed: true, callStatus: 'contacted', data: {} }] };
+  assert.throws(() => resultFormat.normalizeResult(packet), /zorunlu cevabı eksik/);
+  assert.doesNotThrow(() => resultFormat.normalizeResult({ ...packet,
+    contacts: [{ ...packet.contacts[0], callStatus: 'unreached' }] }));
+});
+
+test('automatic Android backups reuse the selected external folder', async () => {
+  const memory = memoryStorage();
+  let permissions = 0;
+  const written = [];
+  const fileSystem = {
+    EncodingType: { UTF8: 'utf8' },
+    StorageAccessFramework: {
+      async requestDirectoryPermissionsAsync() { permissions += 1; return { granted: true, directoryUri: 'content://backup-folder' }; },
+      async createFileAsync(directory, name) { assert.equal(directory, 'content://backup-folder'); return `content://backup-folder/${name}`; },
+    },
+    async writeAsStringAsync(uri, content) { written.push({ uri, content }); },
+  };
+  const backup = loadSource('src/utils/automaticBackup.js', {
+    '@react-native-async-storage/async-storage': memory,
+    'react-native': { Platform: { OS: 'android' } },
+    'expo-file-system/legacy': fileSystem,
+    'expo-sharing': {},
+    './backupFormat': backupFormat,
+    './storage': { getProjectForBackup: async () => sampleProject(), markProjectBackupSaved: async () => true },
+    './webFileTransfer': {},
+  });
+  assert.equal((await backup.saveEventBackup('event-1', 'Gorev')).saved, true);
+  assert.equal((await backup.saveEventBackup('event-1', 'Sonuc')).saved, true);
+  assert.equal(permissions, 1);
+  assert.equal(written.length, 2);
+  for (const item of written) assert.equal((await backupFormat.readBackupFile(item.content)).project.id, 'event-1');
 });
 
 test('backup restore is idempotent and never silently overwrites a changed event', async () => {
@@ -327,10 +375,15 @@ test('2000-person pool distributes 10, 50 and 17 without overlap', async () => {
   const project = await storage.getProject('large-event');
   assert.equal(storage.getAvailableContacts(project).length, 1923);
   assert.equal(project.formLocked, true);
+  assert.equal(project.backupPending, true);
+  assert.equal(await storage.markProjectBackupSaved('large-event', project.backupEpoch), true);
+  assert.equal((await storage.getProject('large-event')).backupPending, false);
   await assert.rejects(storage.createAssignment('large-event', {
     assignmentId: 'too-many', volunteerName: 'D', count: 1924, createdAt: '2026-10-08T08:01:00.000Z',
   }), /1923/);
   await storage.setAssignmentStatus('large-event', 'task-A', 'sent');
+  assert.equal((await storage.getProject('large-event')).backupPending, true);
+  assert.equal(await storage.markProjectBackupSaved('large-event', project.backupEpoch), false);
   await assert.rejects(storage.setAssignmentStatus('large-event', 'task-A', 'cancelled'), /durumu değiştirilemez/);
   await storage.setAssignmentStatus('large-event', 'task-A', 'cancelled', true);
   assert.equal(storage.getAvailableContacts(await storage.getProject('large-event')).length, 1933);
@@ -343,6 +396,7 @@ test('assignment packet is stable, private and idempotent on volunteer import', 
     assignmentId: 'task-one', volunteerName: 'Ayşe', count: 2, createdAt: '2026-10-08T08:01:00.000Z',
   });
   const file = await assignmentFormat.createAssignmentFile(assignment);
+  assert.equal(JSON.parse(file).schemaVersion, 1);
   assert.equal(file, await assignmentFormat.createAssignmentFile(assignment));
   const parsed = await assignmentFormat.readAssignmentFile(file);
   assert.equal(parsed.assignment.contacts.length, 2);
@@ -362,6 +416,63 @@ test('assignment packet is stable, private and idempotent on volunteer import', 
   await assert.rejects(storage.updateProject('task-one', { contacts: [...progressed, progressed[0]] }), /değiştirilemez/);
 });
 
+test('new form version keeps old task answers and backup history', async () => {
+  const coordinator = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  const volunteer = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await coordinator.createProject(distributionProject(2));
+  const first = await coordinator.createAssignment('large-event', {
+    assignmentId: 'old-task', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const oldFile = await assignmentFormat.createAssignmentFile(first);
+  const oldParsed = await assignmentFormat.readAssignmentFile(oldFile);
+  await volunteer.importVolunteerAssignment(oldParsed.assignment, oldParsed.sha256);
+  const changed = await coordinator.updateProjectForm('large-event', [first.fields[0], {
+    ...first.fields[1], label: 'Kesin katılıyor musun?', options: ['Evet', 'Hayır', 'Belki'], required: true,
+  }]);
+  assert.equal(changed.formVersion, 2);
+  assert.equal(changed.fields[1].id, 'answer_v2');
+  const second = await coordinator.createAssignment('large-event', {
+    assignmentId: 'new-task', volunteerName: 'B', count: 1, createdAt: '2026-10-08T08:02:00.000Z',
+  });
+  assert.equal(second.formVersion, 2);
+  assert.equal(second.fields[1].required, true);
+  assert.equal(JSON.parse(await assignmentFormat.createAssignmentFile(second)).schemaVersion, 2);
+  assert.equal(second.contacts[0].data.answer_v2, undefined);
+  const volunteerProject = await volunteer.getProject('old-task');
+  await volunteer.updateProject('old-task', { contacts: [{ ...volunteerProject.contacts[0],
+    completed: true, callStatus: 'contacted', data: { ...volunteerProject.contacts[0].data, answer: 'Evet' },
+  }] });
+  const result = await resultFormat.readResultFile((await volunteer.createVolunteerResultFile('old-task')).content);
+  const preview = await coordinator.previewImportedResults('large-event', [result]);
+  assert.equal(preview.changes.length, 1);
+  await coordinator.applyImportedResults('large-event', [result], {}, preview.snapshot);
+  const master = await coordinator.getProject('large-event');
+  assert.equal(master.contacts[0].data.answer, 'Evet');
+  assert.equal(master.contacts[0].data.answer_v2, undefined);
+  const backup = await backupFormat.readBackupFile(await backupFormat.createBackupFile(master));
+  assert.equal(backup.project.formHistory.length, 2);
+  assert.equal(backup.project.assignments[0].fields[1].id, 'answer');
+  assert.equal(backup.project.contacts[0].data.answer, 'Evet');
+  assert.equal((await assignmentFormat.readAssignmentFile(oldFile)).sha256, oldParsed.sha256);
+  assert.equal(await assignmentFormat.createAssignmentFile(backup.project.assignments[0]), oldFile);
+  const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
+  const sheet = exports.buildWorkbook(backup.project).Sheets['Güncel Durum'];
+  assert.ok(Object.values(sheet).some((cell) => cell?.v === 'Geliyor musun? (Form 1)'));
+  const current = await coordinator.getProject('large-event');
+  await coordinator.updateProject('large-event', { contacts: current.contacts.map((contact, index) => index === 0
+    ? { ...contact, data: { ...contact.data, answer_v2: 'Hayır' } } : contact) });
+  const oldTask = await volunteer.getProject('old-task');
+  await volunteer.updateProject('old-task', { contacts: [{ ...oldTask.contacts[0],
+    data: { name: oldTask.contacts[0].data.name } }] });
+  const cleared = await resultFormat.readResultFile((await volunteer.createVolunteerResultFile('old-task')).content);
+  const clearPreview = await coordinator.previewImportedResults('large-event', [cleared]);
+  assert.equal(clearPreview.conflicts.length, 0);
+  await coordinator.applyImportedResults('large-event', [cleared], {}, clearPreview.snapshot);
+  const combined = (await coordinator.getProject('large-event')).contacts[0].data;
+  assert.equal(combined.answer, undefined);
+  assert.equal(combined.answer_v2, 'Hayır');
+});
+
 test('version 3 backup retains task reservations and volunteer identity', async () => {
   const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
   await storage.createProject(distributionProject(3));
@@ -379,6 +490,22 @@ test('version 3 backup retains task reservations and volunteer identity', async 
   assert.equal(volunteerBackup.project.eventId, 'large-event');
   assert.equal(volunteerBackup.project.assignmentId, 'task-backup');
   assert.equal(await fresh.restoreProjectBackup(volunteerBackup.project), 'restored');
+});
+
+test('version 4 coordinator backup reconstructs form history from old tasks', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject(distributionProject(2));
+  await storage.createAssignment('large-event', {
+    assignmentId: 'old-task', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const legacy = JSON.parse(await backupFormat.createBackupFile(await storage.getProject('large-event')));
+  legacy.schemaVersion = 4;
+  delete legacy.payload.project.formHistory;
+  const { integrity, ...body } = legacy;
+  legacy.integrity.sha256 = await cryptoMock.digestStringAsync('SHA-256', backupFormat.canonicalJson(body));
+  const restored = await backupFormat.readBackupFile(JSON.stringify(legacy));
+  assert.equal(restored.project.formHistory[0].version, 1);
+  assert.equal(restored.project.assignments[0].packetDigest.length, 64);
 });
 
 test('partial result, newer revision and callback round merge without losing the first answer', async () => {

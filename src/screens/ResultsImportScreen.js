@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { readResultFile } from '../utils/resultFormat';
-import { createBackupFile } from '../utils/backupFormat';
-import { applyImportedResults, getProjectForBackup, previewImportedResults } from '../utils/storage';
+import { applyImportedResults, getProject, previewImportedResults } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
+import { saveEventBackup } from '../utils/automaticBackup';
 
 const inform = (title, message) => Platform.OS === 'web' ? window.alert(`${title}\n${message}`) : Alert.alert(title, message);
 
@@ -17,6 +16,11 @@ export default function ResultsImportScreen({ route, navigation }) {
   const [preview, setPreview] = useState(null);
   const [decisions, setDecisions] = useState({});
   const [backupReady, setBackupReady] = useState(false);
+  const [backupWarning, setBackupWarning] = useState(false);
+  useEffect(() => {
+    getProject(projectId).then((project) => setBackupWarning(!!project?.backupPending))
+      .catch((error) => reportError(error, 'Yedek durumu okunurken'));
+  }, [projectId]);
   useEffect(() => {
     if (!route.params?.initialPacket) return;
     previewImportedResults(projectId, [route.params.initialPacket])
@@ -50,27 +54,9 @@ export default function ResultsImportScreen({ route, navigation }) {
     if (busy || !preview) return;
     setBusy('backup');
     try {
-      const project = await getProjectForBackup(projectId);
-      const content = await createBackupFile(project);
-      const name = `Birlesme-oncesi-${projectId.slice(0, 8)}-${Date.now()}.ays`;
-      if (Platform.OS === 'web') {
-        const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
-        const link = document.createElement('a'); link.href = url; link.download = name;
-        document.body.appendChild(link); link.click(); link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } else if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
-        const SAF = FileSystem.StorageAccessFramework;
-        const permission = await SAF.requestDirectoryPermissionsAsync();
-        if (!permission.granted) return;
-        const uri = await SAF.createFileAsync(permission.directoryUri, name, 'application/json');
-        await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
-      } else {
-        const uri = `${FileSystem.documentDirectory}${name}`;
-        await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
-        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri,
-          { mimeType: 'application/json', dialogTitle: 'Birleştirme öncesi yedeği sakla' });
-      }
-      setBackupReady(true);
+      const result = await saveEventBackup(projectId, 'Birlesme-oncesi');
+      if (result.saved) { setBackupReady(true); setBackupWarning(false); }
+      else inform('Yedek gerekli', 'Önce yedek klasörü seçin veya dosyayı kaydedin.');
     } catch (error) { reportError(error, 'Birleştirme öncesi yedek'); inform('Yedek alınamadı', error.message); }
     finally { setBusy(''); }
   };
@@ -80,7 +66,14 @@ export default function ResultsImportScreen({ route, navigation }) {
     try {
       const stats = await applyImportedResults(projectId, preview.inputPackets, decisions, preview.snapshot);
       setPreview(null); setBackupReady(false);
-      inform('Sonuçlar işlendi', `${stats.changed + stats.conflicts} kayıt incelendi. ${stats.skipped} eski/tekrar dosya atlandı.`);
+      let backedUp = false;
+      try {
+        backedUp = (await saveEventBackup(projectId, 'Birlesme-sonrasi')).saved;
+      } catch (error) { reportError(error, 'Birleştirme sonrası otomatik yedek'); }
+      setBackupWarning(!backedUp);
+      inform('Sonuçlar işlendi', `${stats.changed + stats.conflicts} kayıt incelendi. ${stats.skipped} eski/tekrar dosya atlandı.` +
+        (backedUp ? ' Güncel yedek dosyası oluşturuldu.' : ' Güncel yedeği şimdi ayrıca kaydedin.'));
+      if (!backedUp) return;
       if (route.params?.initialPacket) navigation.navigate('Home');
       else navigation.goBack();
     } catch (error) { reportError(error, 'Sonuçlar birleştirilirken'); inform('Birleştirilemedi', error.message); }
@@ -93,6 +86,18 @@ export default function ResultsImportScreen({ route, navigation }) {
     <TouchableOpacity accessibilityRole="button" style={s.primary} disabled={!!busy} onPress={choose}>
       {busy === 'choose' ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>Sonuç dosyalarını seç</Text>}
     </TouchableOpacity>
+    {backupWarning && <View style={s.card}>
+      <Text style={s.cardTitle}>Güncel yedek bekliyor</Text>
+      <Text style={s.detail}>Sonuçlar birleştirildi. Yeni durumu cihaz dışında saklamak için yedeği kaydedin.</Text>
+      <TouchableOpacity accessibilityRole="button" style={s.secondary} disabled={!!busy} onPress={async () => {
+        setBusy('backup-after');
+        try {
+          const result = await saveEventBackup(projectId, 'Birlesme-sonrasi');
+          if (result.saved) setBackupWarning(false);
+        } catch (error) { reportError(error, 'Birleştirme sonrası yedek'); inform('Yedek alınamadı', error.message); }
+        finally { setBusy(''); }
+      }}><Text style={s.secondaryText}>Güncel yedeği kaydet</Text></TouchableOpacity>
+    </View>}
     {preview && <>
       <View style={s.card}>
         <Text style={s.cardTitle}>{preview.fileCount} dosya incelendi</Text>

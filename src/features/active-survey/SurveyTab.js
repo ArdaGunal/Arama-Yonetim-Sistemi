@@ -132,7 +132,7 @@ export default function SurveyTab() {
         {/* Dinamik Form Alanları */}
         {fields.map((field) => (
           <View key={field.id} style={st.dynField}>
-            <Text style={st.dynLabel}>{field.label}</Text>
+            <Text style={st.dynLabel}>{field.label}{field.isSystemField === 'name' || field.required ? ' *' : ''}</Text>
             {field.type === 'text' ? (
               <TextInput
                 style={st.dynInput}
