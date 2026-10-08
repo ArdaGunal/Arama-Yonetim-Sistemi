@@ -6,7 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { BACKUP_EXTENSION, createBackupFile, readBackupFile, sameBackupProject } from '../utils/backupFormat';
-import { getProjectForBackup, getProjectSummaries, restoreProjectBackup } from '../utils/storage';
+import { getProjectForBackup, getProjectSummaries, replaceProjectBackup, restoreProjectBackup } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 import { downloadWebFile, shareOrDownloadWebFile } from '../utils/webFileTransfer';
@@ -26,6 +26,7 @@ export default function BackupScreen() {
   const [projects, setProjects] = useState([]);
   const [busy, setBusy] = useState('');
   const [preview, setPreview] = useState(null);
+  const [safetyCopy, setSafetyCopy] = useState(null);
   const [loadError, setLoadError] = useState('');
 
   const refresh = useCallback(async () => {
@@ -53,7 +54,7 @@ export default function BackupScreen() {
       } else if (mode === 'save' && Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
         const saf = FileSystem.StorageAccessFramework;
         const permission = await saf.requestDirectoryPermissionsAsync();
-        if (!permission.granted) return;
+        if (!permission.granted) return null;
         const uri = await saf.createFileAsync(permission.directoryUri, name, SAVE_MIME);
         await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
         inform('Yedek kaydedildi', 'Dosyayı seçtiğiniz klasörde saklayın.');
@@ -63,9 +64,11 @@ export default function BackupScreen() {
         await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
         await Sharing.shareAsync(uri, { mimeType: MIME, dialogTitle: 'Etkinlik yedeğini paylaş' });
       }
+      return project;
     } catch (error) {
       reportError(error, 'Etkinlik yedeği dışa aktarılırken');
       inform('Yedek oluşturulamadı', error.message || 'Lütfen yeniden deneyin.');
+      return null;
     } finally {
       setBusy('');
     }
@@ -75,6 +78,7 @@ export default function BackupScreen() {
     if (busy) return;
     setBusy('choose');
     setPreview(null);
+    setSafetyCopy(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
       if (result.canceled) return;
@@ -97,7 +101,8 @@ export default function BackupScreen() {
         ? await getProjectForBackup(parsed.project.id) : null;
       const state = existingSummary
         ? (existing && sameBackupProject(existing, parsed.project) ? 'same' : 'conflict') : 'new';
-      setPreview({ ...parsed, state, fileName: file.name });
+      setPreview({ ...parsed, state, fileName: file.name, existingSummary,
+        canReplace: state === 'conflict' && existingSummary?.id === parsed.project.id });
     } catch (error) {
       reportError(error, 'Etkinlik yedeği okunurken');
       inform('Yedek açılamadı', error.message || 'Dosyayı kontrol edin.');
@@ -123,6 +128,45 @@ export default function BackupScreen() {
     }
   };
 
+  const saveCurrentBeforeReplace = async () => {
+    if (!preview?.canReplace || busy) return;
+    const saved = await exportBackup(preview.existingSummary.id, 'save');
+    if (saved) setSafetyCopy(saved);
+  };
+
+  const performReplace = async () => {
+    if (!preview?.canReplace || !safetyCopy || busy) return;
+    setBusy('replace');
+    try {
+      const result = await replaceProjectBackup(preview.project, safetyCopy);
+      await refresh();
+      setPreview(null);
+      setSafetyCopy(null);
+      inform(result === 'already-present' ? 'Zaten aynı' : 'Etkinlik değiştirildi',
+        result === 'already-present' ? 'Cihazdaki etkinlik bu yedekle aynı.' :
+          'Seçilen yedek geri yüklendi. Önceki sürümün dışarı kaydedilen yedeğini saklayın.');
+    } catch (error) {
+      setSafetyCopy(null);
+      reportError(error, 'Etkinlik yedeğiyle değiştirilirken');
+      inform('Değiştirme yapılamadı', error.message || 'Mevcut verileri kontrol edin.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const confirmReplace = () => {
+    if (!preview?.canReplace || !safetyCopy || busy) return;
+    const message = 'Cihazdaki etkinlik, seçilen yedekteki verilerle değişecek. Sonradan girilen cevaplar silinebilir. Önceki etkinlik yedeğinin Dosyalar/İndirilenler içinde durduğunu kontrol ettiniz mi?';
+    if (Platform.OS === 'web') {
+      if (window.confirm(message)) performReplace();
+    } else {
+      Alert.alert('Etkinliği değiştir?', message, [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Yedeği kontrol ettim, değiştir', style: 'destructive', onPress: performReplace },
+      ]);
+    }
+  };
+
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 30, 44) }]}>
       <Text style={styles.title}>Etkinlik yedekleri</Text>
@@ -130,7 +174,7 @@ export default function BackupScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Yedeği geri yükle</Text>
-        <Text style={styles.helper}>.ays dosyası önce doğrulanır ve içeriği gösterilir. Aynı etkinliğin farklı verileri otomatik olarak mevcut projenin üzerine yazılmaz.</Text>
+        <Text style={styles.helper}>.ays dosyası önce doğrulanır ve içeriği gösterilir. Farklı bir sürüm varsa mevcut etkinliği dışarı yedekledikten sonra değiştirebilirsiniz.</Text>
         <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton} onPress={chooseBackup}>
           <Text style={styles.primaryText}>{busy === 'choose' ? 'Dosya okunuyor…' : 'Yedek dosyası seç'}</Text>
         </TouchableOpacity>
@@ -145,13 +189,25 @@ export default function BackupScreen() {
           <Text style={styles.detail}>Yedek tarihi: {new Date(preview.createdAt).toLocaleString('tr-TR')}</Text>
           <Text selectable style={styles.identity}>Etkinlik kimliği: {preview.project.eventId}</Text>
           {preview.state === 'conflict' ? (
-            <Text style={styles.warning}>Bu etkinlik cihazda farklı içerikle var. Önce mevcut projeyi yedekleyin; bu dosya otomatik olarak üzerine yazılamaz.</Text>
+            <View>
+              <Text style={styles.warning}>Bu etkinliğin cihazdaki ve dosyadaki içeriği farklı. Değiştirirseniz cihazdaki yeni cevaplar kaybolabilir.</Text>
+              {preview.existingSummary ? <Text style={styles.detail}>Cihazda: {preview.existingSummary.totalContacts ?? '?'} kişi · {preview.existingSummary.completedContacts ?? '?'} tamamlanan</Text> : null}
+              <Text style={styles.detail}>Dosyada: {preview.project.contacts.length} kişi · {preview.project.contacts.filter((contact) => contact.completed).length} tamamlanan</Text>
+              {preview.canReplace ? <>
+                <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton} onPress={saveCurrentBeforeReplace}>
+                  <Text style={styles.primaryText}>{busy?.endsWith('-save') ? 'Yedek kaydediliyor…' : '1. Cihazdaki etkinliği yedekle'}</Text>
+                </TouchableOpacity>
+                {safetyCopy ? <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.replaceButton} onPress={confirmReplace}>
+                  <Text style={styles.replaceText}>2. Yedeği kontrol ettim, değiştir</Text>
+                </TouchableOpacity> : <Text style={styles.helper}>Önce mevcut yedeği kaydedin. Sonra yeni dosyayla değiştirme düğmesi açılır.</Text>}
+              </> : <Text style={styles.warning}>Bu kimlik başka bir projeye ait. Yanlış etkinliği değiştirmemek için işlem durduruldu.</Text>}
+            </View>
           ) : (
             <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton} onPress={restore}>
               <Text style={styles.primaryText}>{busy === 'restore' ? 'Geri yükleniyor…' : preview.state === 'same' ? 'Aynı yedeği kontrol et' : 'Etkinliği geri yükle'}</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity accessibilityRole="button" style={styles.dismissButton} onPress={() => setPreview(null)}>
+          <TouchableOpacity accessibilityRole="button" style={styles.dismissButton} onPress={() => { setPreview(null); setSafetyCopy(null); }}>
             <Text style={styles.dismissText}>Önizlemeyi kapat</Text>
           </TouchableOpacity>
         </View>
@@ -200,5 +256,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   secondaryButton: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: Colors.borderAccent, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: Colors.accentLight, fontWeight: '700', fontSize: 14 },
+  replaceButton: { backgroundColor: Colors.dangerBg, borderColor: Colors.danger, borderWidth: 1, borderRadius: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 12, paddingHorizontal: 12 },
+  replaceText: { color: Colors.textPrimary, fontWeight: '800', fontSize: 14, textAlign: 'center' },
   spinner: { marginTop: 8 },
 });

@@ -10,6 +10,7 @@ Son gözden geçirme: 8 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Y
 - Projeler ve kişi cevapları AsyncStorage'da cihaz üzerinde saklanır. Anket ekranı değişiklikleri taslağa ve proje kaydına yazar.
 - Sonuçlar `.ays` paketleriyle kısmi veya tam paylaşılır. Daha yeni gönderim sürümü öncekinin yerine işlenir; çakışmalar koordinatöre gösterilir. Excel/CSV ayrıca insan tarafından okunabilen çıktı olarak alınabilir.
 - Her proje `.ays` sürüm 4 tam yedeği olarak dışa aktarılabilir; sürüm 1, 2 ve 3 de okunur. Görevler, arama geçmişi ve birleştirme kararları yedeğe girer. Dosya SHA-256 ile doğrulanır; aynı içerik ikinci kez içe alınmaz ve farklı içerikli etkinlik otomatik ezilmez.
+- Farklı içerikli aynı etkinlik yedeği, önce mevcut sürüm dışarı kaydedilip açık onay verildikten sonra geri yüklenebilir. İşlem öncesi sürüm yeniden karşılaştırılır; kesintide eski proje, kişiler ve taslak kurtarılır. Bu işlem gelen sonuçları birleştirme yerine kullanılmamalıdır.
 - Koordinatör kişi sayısıyla ilk tur görevi ayırır; paket yalnızca ayrılmış kişileri ve formu taşır. Hazırlandı/gönderildi/iptal durumları izlenir. Gönüllü Android veya web uygulamasında dosyayı seçince sorular ve kendi kişileri açılır. Aynı dosyanın yeniden açılması cevapları sıfırlamaz.
 - `Sonra ara` cevaplarından yeni tur görevi oluşturulur. Önceki arama denemeleri ve anlamlı cevaplar saklanır. Nihai Excel'de Güncel Durum, Arama Geçmişi ve varsa İncelenecek Çakışmalar sayfaları vardır.
 - Android uygulaması `ACTION_VIEW` ile gelen dosyaları açar. Kullanıcı WhatsApp dosyasına dokununca uygulamanın açıldığını gerçek kullanımda doğruladı; Dosyalar'dan seçme yolu da korunur.
@@ -37,7 +38,7 @@ Bu gereksinimlerin tasarımı [plan.md](plan.md) içindedir. Kodda varmış gibi
 
 ## Bilinen riskler
 
-- Yerel depolama silinirse, uygulamanın içinde kalan cevaplar kaybolabilir. Düzenli `.ays` tam yedeği alınmalıdır; farklı içerikli mevcut etkinliğin üzerine güvenli geri alma henüz yoktur.
+- Yerel depolama silinirse, uygulamanın içinde kalan cevaplar kaybolabilir. Düzenli `.ays` tam yedeği alınmalıdır. Eski yedeği geri yükleme yeni cevapları silebilir; önce mevcut sürümün dışarı kaydedildiğini kontrol edin.
 - Depo herkese açıktır. Telefon listelerini, gönüllü dosyalarını ve paylaşılan tanılama raporlarını Git'e koymayın.
 - Hata paneli tanılama içindir. Raporun içinde hata metni ve işlem izleri bulunur; paylaşan kişi içeriği kontrol etmelidir.
 - `.ays` dosyası şifrelenmez ve kişi verileri içerir. SHA-256 bozulmayı saptar, dosyayı kimin oluşturduğunu kanıtlamaz. Aynı etkinliğin farklı içerikli yedeğini geri almak için güvenli değiştirme akışı henüz yoktur.

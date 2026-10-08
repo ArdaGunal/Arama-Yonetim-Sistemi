@@ -244,6 +244,66 @@ test('backup snapshot includes a pending form draft', async () => {
   assert.equal(await storage.restoreProjectBackup(snapshot), 'already-present');
 });
 
+test('explicit backup replacement checks the saved copy and preserves an interrupted write', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  const original = sampleProject();
+  await storage.createProject(original);
+  await storage.saveDraft(original.id, { contactIndex: 0, formData: { name: 'Kaydedilmemiş cevap' } });
+  const savedCopy = await storage.getProjectForBackup(original.id);
+  const incoming = { ...original, contacts: [{ ...original.contacts[0], data: { name: 'Dosyadaki cevap' } }] };
+  const staleCopy = { ...savedCopy, contacts: [{ ...savedCopy.contacts[0], data: { name: 'Eski görüntü' } }] };
+  await assert.rejects(storage.replaceProjectBackup(incoming, staleCopy), /Yeniden yedek alın/);
+  assert.equal((await storage.getProject(original.id)).contacts[0].data.name, 'Ayşe Yılmaz');
+
+  const setItem = memory.setItem.bind(memory);
+  let failOnce = true;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_projects' && failOnce) {
+      failOnce = false;
+      throw new Error('Kesilen yazma');
+    }
+    return setItem(key, value);
+  };
+  await assert.rejects(storage.replaceProjectBackup(incoming, savedCopy), /Kesilen yazma/);
+  assert.equal((await storage.getProject(original.id)).contacts[0].data.name, 'Ayşe Yılmaz');
+  assert.equal((await storage.loadDraft(original.id)).formData.name, 'Kaydedilmemiş cevap');
+  assert.equal(memory.values.has('@ays_merge_journal'), false);
+
+  assert.equal(await storage.replaceProjectBackup(incoming, savedCopy), 'replaced');
+  assert.equal((await storage.getProject(original.id)).contacts[0].data.name, 'Dosyadaki cevap');
+  assert.equal(await storage.loadDraft(original.id), null);
+  assert.equal((await storage.getProjectSummaries())[0].completedContacts, 0);
+});
+
+test('restart rolls back an unfinished backup replacement including its draft', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  const original = sampleProject();
+  await storage.createProject(original);
+  await storage.saveDraft(original.id, { contactIndex: 0, formData: { name: 'Taslak cevap' } });
+  const projectsRaw = memory.values.get('@ays_projects');
+  const contactsRaw = memory.values.get('@ays_project_data_event-1');
+  const draftRaw = memory.values.get('@ays_draft_event-1');
+  memory.values.set('@ays_merge_journal', JSON.stringify({
+    projectId: original.id, projectsRaw, contactsRaw, draftRaw, restoreDraft: true,
+  }));
+  memory.values.set('@ays_project_data_event-1', JSON.stringify([{ ...original.contacts[0],
+    data: { name: 'Yarım kalmış değişiklik' } }]));
+  memory.values.delete('@ays_draft_event-1');
+
+  const restarted = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  assert.equal((await restarted.getProject(original.id)).contacts[0].data.name, 'Ayşe Yılmaz');
+  assert.equal((await restarted.loadDraft(original.id)).formData.name, 'Taslak cevap');
+  assert.equal(memory.values.has('@ays_merge_journal'), false);
+});
+
 function distributionProject(size) {
   return { id: 'large-event', eventId: 'large-event', name: 'Topluluk buluşması',
     createdAt: '2026-10-08T08:00:00.000Z', currentIndex: 0, formVersion: 1, formLocked: false,

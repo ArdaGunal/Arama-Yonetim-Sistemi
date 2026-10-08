@@ -30,6 +30,13 @@ async function recoverPendingMerge() {
         typeof journal.contactsRaw !== 'string') throw new Error('Birleştirme kurtarma kaydı bozuk.');
     await AsyncStorage.setItem(PROJECT_DATA_PREFIX + journal.projectId, journal.contactsRaw);
     await AsyncStorage.setItem(PROJECTS_KEY, journal.projectsRaw);
+    if (journal.restoreDraft) {
+      if (typeof journal.draftRaw === 'string') {
+        await AsyncStorage.setItem(DRAFT_KEY + journal.projectId, journal.draftRaw);
+      } else {
+        await AsyncStorage.removeItem(DRAFT_KEY + journal.projectId);
+      }
+    }
     await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
   })();
   try { await recoveryPromise; } finally { recoveryPromise = null; }
@@ -224,6 +231,61 @@ export async function restoreProjectBackup(input) {
       throw error;
     }
     return 'restored';
+  });
+}
+
+/** Kullanıcının dışarı kaydettiği mevcut kopyayı doğrulayarak etkinliği yedekle değiştirir. */
+export async function replaceProjectBackup(input, expectedCurrent) {
+  const incoming = normalizeBackupProject(input);
+  const expected = normalizeBackupProject(expectedCurrent);
+  if (incoming.id !== expected.id || incoming.eventId !== expected.eventId) {
+    throw new Error('Seçilen yedek bu etkinliğe ait değil.');
+  }
+  return enqueueWrite(async () => {
+    await recoverPendingMerge();
+    const projectsRaw = await AsyncStorage.getItem(PROJECTS_KEY);
+    const contactsRaw = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + incoming.id);
+    if (!projectsRaw || !contactsRaw) throw new Error('Değiştirilecek etkinlik bulunamadı.');
+    const projects = JSON.parse(projectsRaw);
+    const index = projects.findIndex((item) => item.id === incoming.id);
+    if (index < 0) throw new Error('Değiştirilecek etkinlik bulunamadı.');
+    if (projects.some((item, i) => i !== index && item.role !== 'volunteer' &&
+        incoming.role !== 'volunteer' && item.eventId === incoming.eventId)) {
+      throw new Error('Bu etkinlik kimliği başka bir projede de kullanılıyor.');
+    }
+    const draftRaw = await AsyncStorage.getItem(DRAFT_KEY + incoming.id);
+    const current = { ...projects[index], contacts: JSON.parse(contactsRaw) };
+    if (draftRaw) {
+      const draft = JSON.parse(draftRaw);
+      if (Number.isInteger(draft.contactIndex) && draft.contactIndex >= 0 &&
+          draft.contactIndex < current.contacts.length && draft.formData &&
+          typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {
+        current.contacts[draft.contactIndex] = {
+          ...current.contacts[draft.contactIndex], data: { ...draft.formData },
+        };
+      }
+    }
+    if (!sameBackupProject(current, expected)) {
+      throw new Error('Etkinlik, güvenlik yedeği alındıktan sonra değişti. Yeniden yedek alın.');
+    }
+    if (sameBackupProject(current, incoming)) return 'already-present';
+    const { contacts, ...meta } = incoming;
+    meta.totalContacts = contacts.length;
+    meta.completedContacts = contacts.filter((contact) => contact.completed).length;
+    projects[index] = meta;
+    await AsyncStorage.setItem(MERGE_JOURNAL_KEY, JSON.stringify({
+      projectId: incoming.id, projectsRaw, contactsRaw, draftRaw, restoreDraft: true,
+    }));
+    try {
+      await AsyncStorage.setItem(PROJECT_DATA_PREFIX + incoming.id, JSON.stringify(contacts));
+      await AsyncStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+      await AsyncStorage.removeItem(DRAFT_KEY + incoming.id);
+      await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
+    } catch (error) {
+      await recoverPendingMerge().catch(() => {});
+      throw error;
+    }
+    return 'replaced';
   });
 }
 

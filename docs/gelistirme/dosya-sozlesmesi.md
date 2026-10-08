@@ -55,7 +55,7 @@ Web uygulamasında SHA-256 için güvenli bağlam gerekir: geliştirmede `localh
 1. Dosya kullanıcı tarafından seçilir; etkinlik adı, kimliği, kişi/alan sayıları ve tarih önizlemede gösterilir.
 2. Cihazda aynı etkinlik yoksa proje tam olarak bir kez eklenir.
 3. Aynı etkinlik ve aynı içerik varsa ikinci içe aktarma atlanır.
-4. Aynı etkinlik farklı içerikle varsa işlem durur; mevcut veri silinmez veya sessizce birleştirilmez.
+4. Aynı etkinlik farklı içerikle varsa otomatik işlem durur. Kullanıcı mevcut etkinliği dışarı yedekledikten ve açıkça onayladıktan sonra, aynı proje ve etkinlik kimliğine sahip dosyayla değiştirebilir. Değiştirme bir birleştirme değildir; dosyadaki eski cevaplar cihazdaki yeni cevapların yerini alabilir.
 5. Bilinmeyen sürüm, yinelenen `recordId`, bozuk özet veya yanlış kimlikler reddedilir.
 
-Mevcut projeyi farklı içerikli yedekten otomatik olarak ezme hâlâ yoktur. Sonuç paketleri yedek geri yükleme ekranından değil, etkinliğin **Gelen sonuçları topla** ekranından işlenir.
+Değiştirmede dışarı kaydedilen mevcut sürümle işlemin başındaki sürüm yeniden karşılaştırılır. Arada değişiklik varsa yeniden yedek istenir. Yazma kesilirse yerel kurtarma günlüğü eski proje, kişi ve taslağı geri getirir. Dışarı kaydedilen `.ays` dosyası ayrıca korunmalıdır. Sonuç paketleri yedek geri yükleme ekranından değil, etkinliğin **Gelen sonuçları topla** ekranından işlenir.
