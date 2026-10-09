@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const babel = require('@babel/core');
 const nodeCrypto = require('node:crypto');
+const XLSX = require('xlsx');
+const { unzipSync } = require('fflate');
 
 function loadSource(relativePath, mocks = {}) {
   const file = path.join(__dirname, '..', relativePath);
@@ -13,7 +15,10 @@ function loadSource(relativePath, mocks = {}) {
   });
   const module = { exports: {} };
   const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat :
+    name === 'expo-crypto' ? cryptoMock :
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
+      name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
+        name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
         name === './resultFormat' ? resultFormat :
           name === './resultMerge' ? resultMerge : require(name));
@@ -26,6 +31,13 @@ const cryptoMock = {
   digestStringAsync: async (_algorithm, value) => nodeCrypto.createHash('sha256').update(value, 'utf8').digest('hex'),
   randomUUID: () => nodeCrypto.randomUUID(),
 };
+const sourceFiles = new Map();
+const sourceWorkbookStore = {
+  async writeSourceWorkbook(ref, base64) { sourceFiles.set(ref, base64); },
+  async readSourceWorkbook(ref) { return sourceFiles.get(ref) || null; },
+  async removeSourceWorkbook(ref) { sourceFiles.delete(ref); },
+};
+const sourceWorkbookArchive = loadSource('src/utils/sourceWorkbookArchive.js', { 'expo-crypto': cryptoMock });
 const canonicalModule = loadSource('src/utils/canonicalJson.js');
 const phoneUtils = loadSource('src/utils/phoneUtils.js');
 const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-crypto': cryptoMock });
@@ -684,6 +696,132 @@ test('source columns survive backup and appear before current answers in final E
   assert.equal(sheet.A2.t, 's');
   assert.equal(sheet.B2.t, 's');
   assert.equal(sheet.D1.v, 'Güncel: Tel No');
+});
+
+test('original Excel sheets survive export byte for byte and backup restores the attachment', async () => {
+  const sourceBook = XLSX.utils.book_new();
+  const people = XLSX.utils.aoa_to_sheet([['İsim', 'Telefon'], ['Ayşe', '05321234567']]);
+  people['!cols'] = [{ wch: 24 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(sourceBook, people, 'Ana Liste');
+  const notes = XLSX.utils.aoa_to_sheet([['Notlar', 'Hesap'], [7, 14]]);
+  notes.B2 = { t: 'n', f: 'A2*2', v: 14 };
+  notes['!merges'] = [{ s: { r: 2, c: 0 }, e: { r: 2, c: 1 } }];
+  XLSX.utils.book_append_sheet(sourceBook, notes, 'Güncel Durum');
+  const originalBytes = new Uint8Array(XLSX.write(sourceBook, { bookType: 'xlsx', type: 'array', cellStyles: true }));
+  const attachment = await sourceWorkbookArchive.captureSourceWorkbook('Liste.xlsx', originalBytes, 'array');
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject({ ...distributionProject(1), sourceWorkbook: attachment });
+  assert.equal(memory.values.get('@ays_projects').includes(attachment.base64), false);
+  const project = await storage.getProjectForExport('large-event');
+  assert.deepEqual(Buffer.from(sourceWorkbookArchive.sourceWorkbookBytes(project.sourceWorkbook)), Buffer.from(originalBytes));
+
+  const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
+  const resultBytes = exports.createExcelOutput(project);
+  const originalZip = unzipSync(originalBytes);
+  const resultZip = unzipSync(resultBytes);
+  for (const path of Object.keys(originalZip).filter((name) =>
+    !['xl/workbook.xml', 'xl/_rels/workbook.xml.rels', '[Content_Types].xml'].includes(name))) {
+    assert.deepEqual(Buffer.from(resultZip[path]), Buffer.from(originalZip[path]), `${path} changed`);
+  }
+  const resultBook = XLSX.read(resultBytes, { type: 'array', cellFormula: true });
+  assert.deepEqual(resultBook.SheetNames, ['Ana Liste', 'Güncel Durum', 'Güncel Durum (2)', 'Arama Geçmişi']);
+  assert.equal(resultBook.Sheets['Güncel Durum'].B2.f, 'A2*2');
+  assert.equal(resultBook.Sheets['Ana Liste'].B2.v, '05321234567');
+  assert.equal(resultBook.Sheets['Güncel Durum (2)'].B2.v, '+905320000000');
+
+  const backup = await backupFormat.readBackupFile(await backupFormat.createBackupFile(project));
+  const restoredStorage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await restoredStorage.restoreProjectBackup(backup.project);
+  const restored = await restoredStorage.getProjectForBackup('large-event');
+  assert.deepEqual(Buffer.from(sourceWorkbookArchive.sourceWorkbookBytes(restored.sourceWorkbook)), Buffer.from(originalBytes));
+  sourceFiles.delete(restored.sourceWorkbookMeta.ref);
+  await assert.rejects(restoredStorage.getProjectForBackup('large-event'), /bulunamadı/);
+  const fallback = await restoredStorage.getProjectForExport('large-event');
+  assert.equal(fallback.sourceWorkbookMissing, true);
+  assert.equal(XLSX.read(exports.createExcelOutput(fallback), { type: 'array' }).SheetNames[0], 'Güncel Durum');
+});
+
+test('corrupted original Excel attachment is rejected before creating a project', async () => {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['İsim'], ['Ayşe']]), 'Liste');
+  const bytes = new Uint8Array(XLSX.write(book, { bookType: 'xlsx', type: 'array' }));
+  const source = await sourceWorkbookArchive.captureSourceWorkbook('Liste.xlsx', bytes, 'array');
+  const corrupted = { ...source, base64: `A${source.base64.slice(1)}` };
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await assert.rejects(storage.createProject({ ...distributionProject(1), sourceWorkbook: corrupted }), /bozulmuş/);
+  assert.equal((await storage.getAllProjects()).length, 0);
+});
+
+test('original Excel sidecar persists on web and native storage without filling project metadata', async () => {
+  const previousIndexedDB = global.indexedDB;
+  global.indexedDB = require('fake-indexeddb').indexedDB;
+  try {
+    const webStore = loadSource('src/utils/sourceWorkbookStore.js', {
+      'react-native': { Platform: { OS: 'web' } }, 'expo-file-system/legacy': {},
+    });
+    await webStore.writeSourceWorkbook('web-source', 'UEsDBA==');
+    assert.equal(await webStore.readSourceWorkbook('web-source'), 'UEsDBA==');
+    await webStore.removeSourceWorkbook('web-source');
+    assert.equal(await webStore.readSourceWorkbook('web-source'), null);
+  } finally { global.indexedDB = previousIndexedDB; }
+
+  const files = new Map();
+  const nativeStore = loadSource('src/utils/sourceWorkbookStore.js', {
+    'react-native': { Platform: { OS: 'android' } },
+    'expo-file-system/legacy': {
+      documentDirectory: 'file:///docs/', EncodingType: { Base64: 'base64' },
+      async writeAsStringAsync(uri, value) { files.set(uri, value); },
+      async getInfoAsync(uri) { return { exists: files.has(uri) }; },
+      async readAsStringAsync(uri) { return files.get(uri); },
+      async deleteAsync(uri) { files.delete(uri); },
+    },
+  });
+  await nativeStore.writeSourceWorkbook('native-source', 'UEsDBA==');
+  assert.equal(await nativeStore.readSourceWorkbook('native-source'), 'UEsDBA==');
+  await nativeStore.removeSourceWorkbook('native-source');
+  assert.equal(await nativeStore.readSourceWorkbook('native-source'), null);
+});
+
+test('replacing and deleting an event switches immutable source attachments safely', async () => {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Liste'], ['A']]), 'İlk');
+  const first = await sourceWorkbookArchive.captureSourceWorkbook('ilk.xlsx',
+    new Uint8Array(XLSX.write(book, { bookType: 'xlsx', type: 'array' })), 'array');
+  book.Sheets['İlk'].A2.v = 'B';
+  const second = await sourceWorkbookArchive.captureSourceWorkbook('yeni.xlsx',
+    new Uint8Array(XLSX.write(book, { bookType: 'xlsx', type: 'array' })), 'array');
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject({ ...distributionProject(1), sourceWorkbook: first });
+  const expected = await storage.getProjectForBackup('large-event');
+  const oldRef = expected.sourceWorkbookMeta.ref;
+  const incoming = { ...expected, sourceWorkbook: second };
+  assert.equal(await storage.replaceProjectBackup(incoming, expected), 'replaced');
+  const replaced = await storage.getProjectForBackup('large-event');
+  assert.equal(replaced.sourceWorkbook.sha256, second.sha256);
+  assert.equal(sourceFiles.has(oldRef), false);
+  const newRef = replaced.sourceWorkbookMeta.ref;
+  await storage.deleteProject('large-event', replaced);
+  assert.equal(sourceFiles.has(newRef), false);
+});
+
+test('macro workbook remains macro-enabled and old XLS keeps a separate result workbook', async () => {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['İsim'], ['Ayşe']]), 'Kaynak');
+  const macroBytes = new Uint8Array(XLSX.write(book, { bookType: 'xlsm', type: 'array' }));
+  const macroSource = await sourceWorkbookArchive.captureSourceWorkbook('Kaynak.xlsm', macroBytes, 'array');
+  const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
+  const macroOutput = exports.createExcelOutput({ ...distributionProject(1), sourceWorkbook: macroSource });
+  assert.match(Buffer.from(unzipSync(macroOutput)['[Content_Types].xml']).toString(), /macroEnabled/);
+  assert.deepEqual(XLSX.read(macroOutput, { type: 'array' }).SheetNames,
+    ['Kaynak', 'Güncel Durum', 'Arama Geçmişi']);
+
+  const oldBytes = new Uint8Array(XLSX.write(book, { bookType: 'biff8', type: 'array' }));
+  const oldSource = await sourceWorkbookArchive.captureSourceWorkbook('Kaynak.xls', oldBytes, 'array');
+  const oldOutput = exports.createExcelOutput({ ...distributionProject(1), sourceWorkbook: oldSource });
+  assert.deepEqual(XLSX.read(oldOutput, { type: 'array' }).SheetNames,
+    ['Güncel Durum', 'Arama Geçmişi']);
+  assert.deepEqual(Buffer.from(sourceWorkbookArchive.sourceWorkbookBytes(oldSource)), Buffer.from(oldBytes));
 });
 
 test('interrupted merge journal restores the previous project before reading', async () => {

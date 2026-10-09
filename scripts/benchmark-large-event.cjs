@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const babel = require('@babel/core');
+const XLSX = require('xlsx');
 
 function loadSource(relativePath, mocks = {}) {
   const file = path.join(__dirname, '..', relativePath);
@@ -14,7 +15,10 @@ function loadSource(relativePath, mocks = {}) {
   });
   const module = { exports: {} };
   const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat :
+    name === 'expo-crypto' ? cryptoMock :
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
+      name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
+        name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
         name === './resultFormat' ? resultFormat :
           name === './resultMerge' ? resultMerge : require(name));
@@ -27,6 +31,13 @@ const cryptoMock = {
   digestStringAsync: async (_algorithm, value) =>
     nodeCrypto.createHash('sha256').update(value, 'utf8').digest('hex'),
 };
+const sourceFiles = new Map();
+const sourceWorkbookStore = {
+  async writeSourceWorkbook(ref, data) { sourceFiles.set(ref, data); },
+  async readSourceWorkbook(ref) { return sourceFiles.get(ref) || null; },
+  async removeSourceWorkbook(ref) { sourceFiles.delete(ref); },
+};
+const sourceWorkbookArchive = loadSource('src/utils/sourceWorkbookArchive.js', { 'expo-crypto': cryptoMock });
 const canonicalModule = loadSource('src/utils/canonicalJson.js');
 const phoneUtils = loadSource('src/utils/phoneUtils.js');
 const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-crypto': cryptoMock });
@@ -69,10 +80,20 @@ async function main() {
   assert.equal(analyzed.valid.length, 5000);
   assert.equal(analyzed.duplicates.length, 0);
 
+  const originalBook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(originalBook,
+    XLSX.utils.aoa_to_sheet([['İsim Soyisim', 'Telefon'], ...rows]), 'Ana Liste');
+  XLSX.utils.book_append_sheet(originalBook,
+    XLSX.utils.aoa_to_sheet([['Notlar'], ['Kaynak dosya saklanır']]), 'Ek Sayfa');
+  const originalBytes = new Uint8Array(XLSX.write(originalBook, { bookType: 'xlsx', type: 'array' }));
+  const originalWorkbook = await measure('orijinalExcelHazirla', () =>
+    sourceWorkbookArchive.captureSourceWorkbook('sentetik.xlsx', originalBytes, 'array'));
+
   const project = {
     id: 'large-event', eventId: 'large-event', name: 'Sentetik Etkinlik',
     createdAt: '2026-10-08T08:00:00.000Z', currentIndex: 0,
     role: 'coordinator', formVersion: 1, formLocked: false, fields,
+    sourceWorkbook: originalWorkbook,
     contacts: analyzed.valid.map((row, index) => ({
       id: `record-${index}`, recordId: `record-${index}`, phone: row.phone,
       data: { name: row.name }, completed: false, completedAt: null,
@@ -119,8 +140,12 @@ async function main() {
   assert.equal(merged.completedContacts, 5000);
   const callbacks = await measure('geriAramaAdaylari', () => storage.getCallbackCandidates(merged));
   assert.equal(callbacks.length, 5000);
-  await measure('excelOlustur', () => workbookUtils.buildWorkbook(merged));
-  const backup = await measure('yedekOlustur', () => backupFormat.createBackupFile(merged));
+  const exportProject = await storage.getProjectForExport(project.id);
+  const finalExcel = await measure('excelOlustur', () => workbookUtils.createExcelOutput(exportProject));
+  assert.deepEqual(XLSX.read(finalExcel, { type: 'array', bookSheets: true }).SheetNames.slice(0, 2),
+    ['Ana Liste', 'Ek Sayfa']);
+  const backupProject = await storage.getProjectForBackup(project.id);
+  const backup = await measure('yedekOlustur', () => backupFormat.createBackupFile(backupProject));
   await measure('yedekDogrula', () => backupFormat.readBackupFile(backup));
   if (process.argv[2] === '--write-backup') {
     if (!process.argv[3]) throw new Error('Çıktı .ays dosyası yolu gerekli.');
@@ -135,6 +160,7 @@ async function main() {
     unit: 'ms', durations, backupBytes: Buffer.byteLength(backup),
     metadataBytes: Buffer.byteLength(values.get('@ays_projects')),
     contactBytes: Buffer.byteLength(values.get('@ays_project_data_large-event')),
+    sourceAttachmentBytes: Buffer.byteLength(originalWorkbook.base64),
     peakStorageBytes: peakBytes }, null, 2));
 }
 

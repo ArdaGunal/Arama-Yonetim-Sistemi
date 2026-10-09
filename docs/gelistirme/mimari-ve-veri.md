@@ -14,6 +14,7 @@
 | `src/utils/storage.js` | AsyncStorage okuma/yazma ve taslaklar |
 | `src/utils/phoneUtils.js` | Telefon temizleme ve metin/Excel ayrıştırma |
 | `src/utils/exportUtils.js`, `src/screens/ExportScreen.js` | Excel/CSV çıktısı |
+| `src/utils/sourceWorkbookArchive.js`, `src/utils/sourceWorkbookStore.js` | Orijinal Excel eki, ayrı cihaz depolaması ve OOXML sonuç sayfaları |
 | `src/utils/diagnostics.js`, `src/screens/DeveloperPanel.js` | Hata kaydı ve rapor paylaşımı |
 | `src/utils/backupFormat.js`, `src/screens/BackupScreen.js` | Sürümlü `.ays` yedeği, doğrulama, dışa aktarma ve geri yükleme |
 | `src/utils/automaticBackup.js` | Önemli işlemlerden sonra dış yedek dosyası ve Android yedek klasörü |
@@ -28,6 +29,8 @@
 
 `storage.js`, proje özetlerini `@ays_projects`, kişi dizisini `@ays_project_data_<id>`, o anda yazılan form taslağını `@ays_draft_<id>` anahtarlarında tutar. Tanılama kaydı ayrıca saklanır. Projede `fields` (sorular/şıklar), `contacts`, `currentIndex` vardır. Kişide `id`, `recordId`, normalleştirilmiş `phone`, alan kimliklerine göre `data`, `completed`, `completedAt`, ayrı `callStatus` ve kimlikli `attempts` geçmişi bulunur.
 
+Orijinal Excel baytları proje metadata'sına konmaz. Metadata yalnızca dosya adı, biçim, boyut, SHA-256 ve değişmez ek kimliğini taşır; web'de içerik IndexedDB, Android/iOS'ta uygulama belge dizininde saklanır. `.ays` tam yedeği ekin tamamını içerir. Geri yüklemede ek önce yazılır, sonra proje metadata'sı ona işaret eder. Yedek değiştirme günlüğü eski işaretçiyi geri getirir; kaynak ekleri değişmez kimlikle tutulduğu için kesintide eski dosya korunur.
+
 Ana ekrandan silme `saveEventBackup` ile dış dosya üretildikten ve kullanıcı dosyayı kontrol ettiğini onayladıktan sonra `deleteProject(projectId, snapshot)` çağırır. Depolama kuyruğu içinde güncel kişi, form ve taslak görüntüsü yedek görüntüsüyle tekrar karşılaştırılır; arada değişiklik varsa silme reddedilir. `deleteProject` için yedek görüntüsü zorunludur.
 
 Yazmalar kuyruklanır; ekran yüklenirken bekleyen yazmaların bitmesi beklenir. Yeni depolama işlemlerinde `storage.js` üzerinden geçin. Bu yapı cihaz içi kullanım içindir; görevler ve sonuçlar dosyayla aktarılır. Telefon aynı etkin görevler arasında tekrar dağıtımı önler; sonuç birleştirmede kalıcı `recordId` kullanılır. Birleştirmede `@ays_merge_journal` eski kişi/metadata görüntüsünü tutar; kesinti sonrası ilk proje okuması bu görüntüyü geri getirir. Açıkça onaylanan yedek değiştirmesinde aynı günlük taslağı da geri alır.
@@ -38,7 +41,7 @@ Formdaki `required` alanı yalnızca `Görüşüldü` olarak tamamlanan kayıtla
 
 ## İçe ve dışa aktarma sınırları
 
-Metin ayrıştırma ve ilk Excel sayfasından veri okuma `sourcePreview.js`, `phoneUtils.js` ve `NewProjectScreen.js` içindedir. Telefon biçimini ve sütun eşleştirmesini değiştirirken başlıksız tablo, isimlerin aynı olması ve baştaki sıfırları içeren numaralar için test ekleyin. Yeni etkinliklerde kaynak satır hücreleri saklanır; nihai Excel'de ilk sayfadaki kaynak sütunları kendi sıralarında, güncel cevaplar ise yanlarında görünür. Eski etkinliklerin daha önce saklanmamış hücreleri geri getirilemez. Özgün Excel biçimi ve ek sayfalar korunmaz.
+Metin ayrıştırma ve ilk Excel sayfasından veri okuma `sourcePreview.js`, `phoneUtils.js` ve `NewProjectScreen.js` içindedir. Telefon biçimini ve sütun eşleştirmesini değiştirirken başlıksız tablo, isimlerin aynı olması ve baştaki sıfırları içeren numaralar için test ekleyin. Yeni etkinliklerde kaynak satır hücreleri saklanır. `.xlsx/.xlsm` içe aktarımında kaynak ZIP parçaları, ek sayfalar, formüller ve stiller korunur; nihai dosyaya yalnızca yeni sonuç sayfası XML'leri eklenir. Çakışan sayfa adına `(2)` eki verilir. `.xls` ve Excel eki olmayan eski projelerde önceki yeniden üretilen çıktı kullanılır. Eski etkinliklerin daha önce saklanmamış kaynak dosyası geri getirilemez.
 
 ## Tanılama
 

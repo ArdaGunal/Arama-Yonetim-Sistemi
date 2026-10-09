@@ -22,6 +22,8 @@ Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignme
 
 Sürüm 2'de `payload.project` ayrıca `formVersion`, `formLocked`, `templateId` ve `sourceReview` taşır. Kişide `sourceRow` bulunabilir. `sourceReview` içinde kaynak dosya adı, başlık durumu, veri satırı sayısı, sütun görevleri ile seçilmeyen tekrar ve okunamayan satırların `sourceRow`, `cells`, `reason` kayıtları vardır. Sürüm 3'te `role`, `assignmentId`, `importDigest` ve `assignments` eklenir. Sürüm 4 kişi başına `callStatus`, `callbackNote`, `callbackAt`, `attempts`; görev başına `packetDigest`, `resultRevision`, `resultDigest`, `lastApplied`; koordinatöre `mergeConflicts`, gönüllüye `round` ve `resultRevision` ekler. Sürüm 5 `formHistory` içine `{ version, fields }` kayıtlarını ekler. Kişi cevaplarında artık kullanılmayan eski alan kimlikleri korunur. Sürüm 1–4 yedekleri okunur.
 
+Sürüm 5 koordinatör yedeğinde isteğe bağlı `sourceWorkbook` eki de bulunabilir: `{ name, format, base64, byteLength, sha256 }`. `format` `xlsx`, `xlsm` veya `xls` olur; orijinal dosya en fazla 8 MiB'dir. `base64` orijinal baytları aynen taşır; iç SHA-256 bu baytların base64 metni üzerinden hesaplanır. Dış zarf özeti bütün eki de kapsar. Gönüllü yedeğinde ana Excel bulunmaz. Eski uygulama sürümü bu isteğe bağlı alanı okuyup yeniden yedeklerken atabilir; kaynak biçimini korumak için güncel sürümle geri yükleyin.
+
 Koordinatör kilitli formu düzenlediğinde `formVersion` artar. Adı, türü veya şıkları değişen soruya yeni alan kimliği verilir; eski cevap kendi eski alanında ve görev formunda kalır. Güncel Excel eski alanları form sürümü etiketiyle ayrıca gösterir. Eski görevden gelen sonuç kendi görev formuyla doğrulanır ve güncel formun başka alanlarını silmez.
 
 ## `.ays` görev paketi
@@ -44,7 +46,7 @@ Gönüllü aynı dosyayı tekrar açarsa ikinci proje oluşmaz ve cevapları sil
 
 Şablon UTF-8 JSON'dur; `format: "arama-yonetim-template"`, `schemaVersion: 1`, `kind: "template"`, `templateId`, `createdAt`, `name`, `fields`, `sourceColumns` ve aynı SHA-256 `integrity` zarfını kullanır. Alanlar isim ve telefon sistem alanlarını, soru türlerini, şıkları, zorunlu alan bilgisini ve sıralamayı taşır. `sourceColumns` etiket/görev (`phone`, `name`, `field`, `ignore`) ve varsa alan kimliği eşleştirmesidir. Şablonda kişi, telefon listesi veya cevap bulunmaz. İçe aktarılan şablon cihazda saklanır ve yeni etkinlikte seçilebilir.
 
-Yedek, uygulamaya aktarılmış bilgileri saklar; başlangıçtaki Excel dosyasının özgün biçimini veya bütün ek sayfalarını içermez. Koordinatör orijinal Excel'i ayrıca korumalıdır.
+Yeni içe alınan Excel'in orijinali tam yedeğe eklenir; daha önce oluşturulmuş etkinliklerde kaynak dosya sonradan üretilemez. Kaynak dosyanın ayrıca topluluk arşivinde saklanması gerekir.
 
 ## Bütünlük hesabı
 

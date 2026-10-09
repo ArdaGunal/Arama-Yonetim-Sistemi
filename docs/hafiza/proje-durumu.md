@@ -19,14 +19,14 @@ Son gözden geçirme: 10 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_
 - Android uygulaması `ACTION_VIEW` ile gelen dosyaları açar. Kullanıcı WhatsApp dosyasına dokununca uygulamanın açıldığını gerçek kullanımda doğruladı; Dosyalar'dan seçme yolu da korunur.
 - iPhone için ana ekrana eklenebilen PWA üretim derlemesi, sürümlü çevrimdışı önbellek ve dosya paylaşımı hazırlandı. Yerel tarayıcıda sunucu kapalıyken uygulama yeniden açıldı; sahte görev içe aktarıldı, cevap kaydedildi ve yenilemeden sonra korundu. [GitHub Pages yayını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) 8 Ekim 2026'da açıldı; yayın iş akışı başarılı ve canlı ana ekran, manifest, servis işçisi ile simge HTTP 200 döndü. Gerçek iPhone kabul testi bekliyor.
 - Web yedek ekranında tarayıcının kalıcı depolama izni durumu gösterilir ve destekleniyorsa kullanıcı düğmeyle ek koruma isteyebilir. Tarayıcı izin vermeyebilir; bu özellik `.ays` dış yedeğinin yerini tutmaz.
-- Yeni etkinliklerde ilk sayfanın kaynak sütunları ve hücreleri nihai Excel'in başında korunur; özgün Excel'in ek sayfaları ve görsel biçimi korunmaz. Eski etkinliklerde önceden saklanmamış kaynak hücreleri geri getirilemez.
+- Yeni içe alınan `.xlsx` ve `.xlsm` dosyalarının orijinal baytları saklanır; nihai Excel'e sonuç sayfaları eklenirken kaynak sayfalar, formüller ve stil parçaları yeniden yazılmaz. Orijinal dosya ayrıca aynen dışa verilebilir ve `.ays` tam yedeğinde taşınır. `.xls` dosyası aynen saklanır fakat nihai sonuç ayrı `.xlsx` olur. Excel eki üst sınırı 8 MB'dir. Eski etkinliklerin daha önce saklanmamış kaynak dosyası geri getirilemez.
 - Geliştirici paneli JavaScript hata bilgilerini ve uygulama içindeki son işlem izlerini gösterip paylaşır. Android yerel çökme kaydı sonraki açılışta okunur; yerel bir çökme anında uygulamanın kapanmasını tamamen önlemek teknik olarak mümkün değildir.
 - Android için `localapk.bat` ile yerel APK üretilebilir. Bu çıktı mevcut Android debug anahtarıyla imzalanır; mağaza yayını için ayrı imzalama gerekir.
 - 5.000 kişi/100 görev/100 sonuç için [sentetik ölçüm komutu](../gelistirme/buyuk-veri-performansi.md) vardır. Geri arama adayları görevleri bir kez dizinler; görev ekranı bitenleri gizler ve uzun listeyi 20'şer gösterir. Yerel web önizlemesinde büyük yedek açıldı. Android telefon üzerinde gerçek süreler henüz ölçülmedi.
 
 ## Henüz yapılmadı
 
-- Orijinal Excel'in ek sayfaları ve görsel biçimi otomatik dışa aktarılmaz; ilk kaynak dosya ayrıca saklanmalıdır.
+- Gerçek Excel/LibreOffice ve Android cihazda farklı biçim, makro ve büyük dosya örnekleriyle kaynak biçimi doğrulaması yapılmadı. Standart dışı OOXML dosyaları sonuç sayfası eklemeyi reddedebilir; orijinal dosya her durumda ayrı saklanmalıdır.
 - Gönderilmiş dosyanın karşı tarafta gerçekten açıldığını doğrulayan merkezi sistem yoktur; durum koordinatör tarafından işaretlenir.
 - Gerçek iPhone'da uçak modu/dosya akışı/WhatsApp paylaşımı ve temiz cihazda yedekten geri yükleme doğrulaması (kullanıcı uygun cihaz bulana kadar ertelendi).
 - Büyük veri setleri ve 100 gönüllü senaryosu için gerçek Android telefon performans doğrulaması.

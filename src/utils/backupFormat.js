@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { canonicalJson } from './canonicalJson';
 import { normalizeAssignment } from './assignmentFormat';
 import { CALL_STATUSES, normalizeAttempts } from './resultFormat';
+import { normalizeSourceWorkbook } from './sourceWorkbookArchive';
 
 export { canonicalJson } from './canonicalJson';
 
@@ -267,6 +268,7 @@ export function normalizeBackupProject(input) {
     }
   }
   if (role === 'volunteer' && project.assignments?.length) throw new Error('Gönüllü projesinde görev listesi olamaz.');
+  if (role === 'volunteer' && project.sourceWorkbook != null) throw new Error('Gönüllü yedeğinde ana Excel olamaz.');
   if (project.mergeConflicts != null && !Array.isArray(project.mergeConflicts)) throw new Error('Çakışma geçmişi geçersiz.');
   const mergeConflicts = (project.mergeConflicts || []).map((raw) => {
     if (!raw || typeof raw !== 'object' || !recordIds.has(raw.recordId) ||
@@ -283,6 +285,7 @@ export function normalizeBackupProject(input) {
     currentIndex, fields, formHistory, contacts, formVersion,
     formLocked: project.formLocked || false, templateId: project.templateId || null,
     sourceReview: sourceReview(project.sourceReview, fieldIds),
+    sourceWorkbook: role === 'coordinator' ? normalizeSourceWorkbook(project.sourceWorkbook) : null,
     role, assignmentId: role === 'volunteer' ? id : null,
     importDigest: role === 'volunteer' ? project.importDigest : null, assignments,
     round: role === 'volunteer' ? project.round || 1 : null,
@@ -303,7 +306,11 @@ export async function createBackupFile(project) {
     payload: { project: normalized },
   };
   const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalJson(body));
-  return JSON.stringify({ ...body, integrity: { algorithm: 'SHA-256', sha256 } });
+  const content = JSON.stringify({ ...body, integrity: { algorithm: 'SHA-256', sha256 } });
+  if (content.length > MAX_BACKUP_CHARS) {
+    throw new Error('Yedek dosyası 30 MB sınırını aşıyor. Orijinal Excel ve kişi listesini ayrı saklayın.');
+  }
+  return content;
 }
 
 export async function readBackupFile(text) {

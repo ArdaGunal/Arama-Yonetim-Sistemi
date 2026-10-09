@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
-import { getProject, hasUnexportedVolunteerResult, markVolunteerResultExported, createVolunteerResultFile } from '../utils/storage';
-import { shareExcel, saveExcel, shareCSV, saveCSV } from '../utils/exportUtils';
+import { getProject, getProjectForExport, hasUnexportedVolunteerResult, markVolunteerResultExported, createVolunteerResultFile } from '../utils/storage';
+import { shareExcel, saveExcel, shareCSV, saveCSV, shareOriginalExcel } from '../utils/exportUtils';
 import { reportError } from '../utils/diagnostics';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -24,7 +24,7 @@ export default function ExportScreen({ route, navigation }) {
     setLoading(true);
     setLoadError('');
     try {
-      const loaded = await getProject(projectId);
+      const loaded = await getProjectForExport(projectId);
       if (!loaded) throw new Error('Proje bulunamadı.');
       setProject(loaded);
     } catch (error) {
@@ -135,7 +135,15 @@ export default function ExportScreen({ route, navigation }) {
         )}
 
         {/* ── EXCEL BÖLÜMÜ ── */}
-        <Text style={s.secTitle}>📗 Excel (.xlsx)</Text>
+        <Text style={s.secTitle}>📗 Excel çıktısı</Text>
+        {project.sourceWorkbookMissing && <Text style={s.resultWarning}>
+          Orijinal Excel bu cihazda bulunamadı. Güncel cevaplar yine yeni bir Excel'e aktarılır; önceki sayfalar için orijinal dosyayı veya tam yedeği geri yükleyin.
+        </Text>}
+        {project.sourceWorkbook && <Text style={s.resultHelp}>
+          {['xlsx', 'xlsm'].includes(project.sourceWorkbook.format)
+            ? 'Orijinal Excel sayfaları korunur; güncel sonuçlar yeni sayfalara eklenir.'
+            : 'Eski .xls dosyanız aynen saklanır; güncel sonuçlar ayrı .xlsx çıktısında yer alır.'}
+        </Text>}
         <View style={s.actionRow}>
           <TouchableOpacity style={[s.actionBtn, {backgroundColor:Colors.success}]} onPress={() => doAction(shareExcel, 'Excel paylaşma', 'shareXlsx')} disabled={!!busy} activeOpacity={0.8}>
             {busy==='shareXlsx' ? <ActivityIndicator color="#fff" size="small"/> : <><Text style={{fontSize:20}}>📤</Text><Text style={s.actionBtnT}>Paylaş</Text><Text style={s.actionBtnD}>WhatsApp, Mail vb.</Text></>}
@@ -144,6 +152,10 @@ export default function ExportScreen({ route, navigation }) {
             {busy==='saveXlsx' ? <ActivityIndicator color="#fff" size="small"/> : <><Text style={{fontSize:20}}>💾</Text><Text style={s.actionBtnT}>Kaydet</Text><Text style={s.actionBtnD}>Dosya olarak kaydet</Text></>}
           </TouchableOpacity>
         </View>
+        {project.sourceWorkbook && <TouchableOpacity accessibilityRole="button" style={s.originalButton}
+          disabled={!!busy} onPress={() => doAction(shareOriginalExcel, 'Orijinal Excel paylaşma', 'original')}>
+          <Text style={s.originalButtonText}>{busy === 'original' ? 'Hazırlanıyor…' : 'Orijinal Excel dosyasını paylaş / kaydet'}</Text>
+        </TouchableOpacity>}
 
         {/* ── CSV BÖLÜMÜ ── */}
         <Text style={[s.secTitle,{marginTop:20}]}>📄 CSV</Text>
@@ -181,6 +193,8 @@ const s = StyleSheet.create({
   resultWarning:{color:Colors.warning,fontSize:13,fontWeight:'700',lineHeight:19,marginBottom:14},
   resultButton:{backgroundColor:Colors.success,minHeight:52,borderRadius:12,alignItems:'center',justifyContent:'center'},
   resultButtonText:{color:'#fff',fontSize:15,fontWeight:'800'},
+  originalButton:{borderColor:Colors.borderAccent,borderWidth:1,borderRadius:12,minHeight:48,alignItems:'center',justifyContent:'center',marginTop:12,paddingHorizontal:12},
+  originalButtonText:{color:Colors.accentLight,fontSize:13,fontWeight:'800',textAlign:'center'},
   container:{flex:1,backgroundColor:Colors.bg},
   loadC:{flex:1,backgroundColor:Colors.bg,alignItems:'center',justifyContent:'center'},
   loadError:{color:Colors.textSecondary,fontSize:14,textAlign:'center',marginHorizontal:24,marginBottom:16},

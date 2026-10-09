@@ -5,6 +5,8 @@
  */
 import * as XLSX from 'xlsx';
 import { Platform } from 'react-native';
+import { fromByteArray } from 'base64-js';
+import { appendResultSheetsToSource, sourceWorkbookBytes } from './sourceWorkbookArchive';
 
 let FileSystem = null;
 let Sharing = null;
@@ -181,22 +183,38 @@ async function writeFileToDisk(data, fileName, isBase64) {
 }
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const XLSM_MIME = 'application/vnd.ms-excel.sheet.macroEnabled.12';
+
+/** OOXML kaynak sayfalarını yeniden yazmadan sonuç sayfalarını ekler. */
+export function createExcelOutput(project) {
+  const wb = buildWorkbook(project);
+  const generated = new Uint8Array(XLSX.write(wb, { bookType: 'xlsx', type: 'array', bookSST: false }));
+  const source = project.sourceWorkbook;
+  if (!source || !['xlsx', 'xlsm'].includes(source.format)) return generated;
+  const sourceSheets = XLSX.read(sourceWorkbookBytes(source), { type: 'array', bookSheets: true }).SheetNames;
+  return appendResultSheetsToSource(source, generated, wb.SheetNames, sourceSheets).bytes;
+}
+
+function excelFileDetails(project) {
+  const extension = project.sourceWorkbook?.format === 'xlsm' ? 'xlsm' : 'xlsx';
+  return { fileName: makeFileName(project.name, extension),
+    mimeType: extension === 'xlsm' ? XLSM_MIME : XLSX_MIME };
+}
 
 // ══════════════════════════════════════
 // EXCEL - PAYLAŞ
 // ══════════════════════════════════════
 export async function shareExcel(project) {
-  const wb = buildWorkbook(project);
-  const fileName = makeFileName(project.name, 'xlsx');
+  const bytes = createExcelOutput(project);
+  const { fileName, mimeType } = excelFileDetails(project);
 
   if (Platform.OS === 'web') {
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    downloadBlobWeb(new Blob([wbout], { type: XLSX_MIME }), fileName);
+    downloadBlobWeb(new Blob([bytes], { type: mimeType }), fileName);
     return true;
   }
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+  const wbout = fromByteArray(bytes);
   const filePath = await writeFileToDisk(wbout, fileName, true);
-  await Sharing.shareAsync(filePath, { mimeType: XLSX_MIME, dialogTitle: 'Excel Dosyasını Paylaş' });
+  await Sharing.shareAsync(filePath, { mimeType, dialogTitle: 'Excel Dosyasını Paylaş' });
   return true;
 }
 
@@ -204,30 +222,45 @@ export async function shareExcel(project) {
 // EXCEL - KAYDET (istenilen konuma)
 // ══════════════════════════════════════
 export async function saveExcel(project) {
-  const wb = buildWorkbook(project);
-  const fileName = makeFileName(project.name, 'xlsx');
+  const bytes = createExcelOutput(project);
+  const { fileName, mimeType } = excelFileDetails(project);
 
   if (Platform.OS === 'web') {
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    downloadBlobWeb(new Blob([wbout], { type: XLSX_MIME }), fileName);
+    downloadBlobWeb(new Blob([bytes], { type: mimeType }), fileName);
     return true;
   }
 
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+  const wbout = fromByteArray(bytes);
 
   // Android: SAF ile kullanıcıya konum seçtir
   if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
     const SAF = FileSystem.StorageAccessFramework;
     const perms = await SAF.requestDirectoryPermissionsAsync();
     if (!perms.granted) return false;
-    const uri = await SAF.createFileAsync(perms.directoryUri, fileName, XLSX_MIME);
+    const uri = await SAF.createFileAsync(perms.directoryUri, fileName, mimeType);
     await FileSystem.writeAsStringAsync(uri, wbout, { encoding: 'base64' });
     return true;
   }
 
   // iOS: Paylaş menüsünden "Dosyalara Kaydet" seçilebilir
   const filePath = await writeFileToDisk(wbout, fileName, true);
-  await Sharing.shareAsync(filePath, { mimeType: XLSX_MIME, dialogTitle: 'Excel Dosyasını Kaydet' });
+  await Sharing.shareAsync(filePath, { mimeType, dialogTitle: 'Excel Dosyasını Kaydet' });
+  return true;
+}
+
+/** Kaynak dosyayı yeniden üretmeden, içe alındığı baytlarla dışarı verir. */
+export async function shareOriginalExcel(project) {
+  const source = project.sourceWorkbook;
+  if (!source) throw new Error('Bu etkinlikte saklanmış orijinal Excel yok.');
+  const fileName = makeFileName(`${project.name}_Orijinal`, source.format);
+  const mimeType = source.format === 'xlsm' ? XLSM_MIME : source.format === 'xls'
+    ? 'application/vnd.ms-excel' : XLSX_MIME;
+  if (Platform.OS === 'web') {
+    downloadBlobWeb(new Blob([sourceWorkbookBytes(source)], { type: mimeType }), fileName);
+  } else {
+    const filePath = await writeFileToDisk(source.base64, fileName, true);
+    await Sharing.shareAsync(filePath, { mimeType, dialogTitle: 'Orijinal Excel dosyasını paylaş' });
+  }
   return true;
 }
 

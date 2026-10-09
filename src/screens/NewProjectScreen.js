@@ -10,6 +10,7 @@ import { reportError } from '../utils/diagnostics';
 import { analyzeSource, prepareSource, selectSourceRows, setColumnRole, textToRows } from '../utils/sourcePreview';
 import { normalizeString } from '../utils/phoneUtils';
 import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../utils/templateFormat';
+import { captureSourceWorkbook, MAX_SOURCE_BYTES } from '../utils/sourceWorkbookArchive';
 import Step1Info from '../features/new-project/Step1Info';
 import Step2Review from '../features/new-project/Step2Review';
 import Step2Builder from '../features/new-project/Step2Builder';
@@ -37,6 +38,7 @@ export default function NewProjectScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState('text');
   const [phoneText, setPhoneText] = useState('');
   const [rawRows, setRawRows] = useState([]);
+  const [originalWorkbook, setOriginalWorkbook] = useState(null);
   const [source, setSource] = useState(null);
   const [selections, setSelections] = useState({});
   const [fields, setFields] = useState(systemFields);
@@ -50,7 +52,7 @@ export default function NewProjectScreen({ navigation }) {
 
   useEffect(() => { getTemplates().then(setTemplates).catch((error) => reportError(error, 'Şablonlar yüklenirken')); }, []);
 
-  const useRows = (rows, name) => {
+  const useRows = (rows, name, workbookArchive = null) => {
     let prepared = prepareSource(rows, name);
     const activeTemplate = templates.find((item) => item.id === templateId);
     if (activeTemplate?.sourceColumns?.length) {
@@ -68,6 +70,7 @@ export default function NewProjectScreen({ navigation }) {
           prepared.columns.filter((column) => column.role === 'name').length > 1) prepared = prepareSource(rows, name);
     }
     setRawRows(rows);
+    setOriginalWorkbook(workbookArchive);
     setSource(prepared);
     setSelections({});
     setStep(2);
@@ -79,6 +82,7 @@ export default function NewProjectScreen({ navigation }) {
       const rows = textToRows(phoneText);
       const prepared = prepareSource(rows, 'Yapıştırılan liste', false);
       setRawRows(rows);
+      setOriginalWorkbook(null);
       setSource(prepared);
       setSelections({});
       setStep(2);
@@ -97,6 +101,9 @@ export default function NewProjectScreen({ navigation }) {
         throw new Error('Excel, CSV veya TSV dosyası seçin.');
       }
       const isText = /\.(csv|tsv)$/i.test(file.name);
+      if (!isText && file.size > MAX_SOURCE_BYTES) {
+        throw new Error('Excel dosyası 8 MB sınırını aşıyor. Orijinali ayrıca saklayıp daha küçük bir dosya seçin.');
+      }
       let data;
       let type = isText ? 'string' : 'array';
       if (Platform.OS === 'web') {
@@ -110,7 +117,8 @@ export default function NewProjectScreen({ navigation }) {
       const firstSheet = workbook.Sheets[workbook.SheetNames?.[0]];
       if (!firstSheet) throw new Error('Dosyada okunabilir sayfa yok.');
       const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '', raw: false });
-      useRows(rows, file.name);
+      const archive = isText ? null : await captureSourceWorkbook(file.name, data, type);
+      useRows(rows, file.name, archive);
     } catch (error) {
       reportError(error, 'Kişi dosyası okunurken');
       notify(error.message || 'Dosya açılamadı.');
@@ -259,6 +267,7 @@ export default function NewProjectScreen({ navigation }) {
         id: eventId, eventId, name: projectName.trim(), createdAt: new Date().toISOString(),
         currentIndex: 0, formVersion: 1, formLocked: false, templateId,
         fields: saveFields, formHistory: [{ version: 1, fields: saveFields }], contacts,
+        sourceWorkbook: originalWorkbook,
         sourceReview: {
           sourceName: source.sourceName, hasHeader: source.hasHeader, totalRows: source.rows.length,
           columns: source.columns.map((column) => ({ index: column.index, label: column.label,

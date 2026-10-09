@@ -9,6 +9,9 @@ import { cleanPhoneNumber } from './phoneUtils';
 import { canonicalJson } from './canonicalJson';
 import { createResultFile, normalizeResult } from './resultFormat';
 import { applyPreview, previewResultMerge } from './resultMerge';
+import { verifySourceWorkbook } from './sourceWorkbookArchive';
+import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
+import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
 const PROJECT_DATA_PREFIX = '@ays_project_data_';
@@ -18,6 +21,24 @@ const TEMPLATES_KEY = '@ays_templates';
 const MERGE_JOURNAL_KEY = '@ays_merge_journal';
 let mergeInProgress = false;
 let recoveryPromise = null;
+
+async function storeAttachedSource(projectId, source) {
+  if (!source) return null;
+  const verified = await verifySourceWorkbook(source);
+  const projectDigest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, projectId);
+  const meta = { ref: `src-${projectDigest}-${verified.sha256}`, name: verified.name,
+    format: verified.format, byteLength: verified.byteLength, sha256: verified.sha256 };
+  await writeSourceWorkbook(meta.ref, verified.base64);
+  return meta;
+}
+
+async function loadAttachedSource(meta) {
+  if (!meta) return null;
+  const base64 = await readSourceWorkbook(meta.ref);
+  if (!base64) throw new Error('Orijinal Excel eki cihazda bulunamadı.');
+  return verifySourceWorkbook({ name: meta.name, format: meta.format,
+    byteLength: meta.byteLength, sha256: meta.sha256, base64 });
+}
 
 async function recoverPendingMerge() {
   if (mergeInProgress) return;
@@ -158,38 +179,60 @@ export async function getProject(projectId) {
 export async function createProject(project) {
   return enqueueWrite(async () => {
     const projects = await getAllProjects();
+    if (projects.some((item) => item.id === project.id) ||
+        await AsyncStorage.getItem(PROJECT_DATA_PREFIX + project.id)) {
+      throw new Error('Bu proje kimliği cihazda zaten var. Mevcut veriler korunuyor.');
+    }
     
     // Büyük veriyi ayır
     const contacts = project.contacts || [];
     const metaProject = { ...project };
     delete metaProject.contacts; 
+    delete metaProject.sourceWorkbook;
     metaProject.totalContacts = contacts.length;
     metaProject.completedContacts = contacts.filter((contact) => contact.completed).length;
-
-    await AsyncStorage.setItem(PROJECT_DATA_PREFIX + project.id, JSON.stringify(contacts));
-    
-    projects.unshift(metaProject);
-    await saveAllProjects(projects);
+    const sourceMeta = await storeAttachedSource(project.id, project.sourceWorkbook);
+    metaProject.sourceWorkbookMeta = sourceMeta;
+    try {
+      await AsyncStorage.setItem(PROJECT_DATA_PREFIX + project.id, JSON.stringify(contacts));
+      projects.unshift(metaProject);
+      await saveAllProjects(projects);
+    } catch (error) {
+      await AsyncStorage.removeItem(PROJECT_DATA_PREFIX + project.id).catch(() => {});
+      if (sourceMeta) await removeSourceWorkbook(sourceMeta.ref).catch(() => {});
+      throw error;
+    }
     
     return project;
   });
 }
 
 /** Bekleyen form taslağını da katarak dışa aktarılabilir tam görüntüyü döndürür. */
-export async function getProjectForBackup(projectId) {
-  await waitForPendingWrites();
-  const project = await getProject(projectId);
-  if (!project) throw new Error('Yedeklenecek proje bulunamadı.');
-  const draft = await loadDraft(projectId);
-  if (draft && Number.isInteger(draft.contactIndex) &&
-      draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
-      draft.formData && typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {
-    project.contacts = project.contacts.map((contact, index) =>
-      index === draft.contactIndex ? { ...contact, data: { ...draft.formData } } : contact
-    );
-  }
-  return project;
+export async function getProjectForBackup(projectId, allowMissingSource = false) {
+  return enqueueWrite(async () => {
+    const project = await getProject(projectId);
+    if (!project) throw new Error('Yedeklenecek proje bulunamadı.');
+    const draft = await loadDraft(projectId);
+    if (draft && Number.isInteger(draft.contactIndex) &&
+        draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
+        draft.formData && typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {
+      project.contacts = project.contacts.map((contact, index) =>
+        index === draft.contactIndex ? { ...contact, data: { ...draft.formData } } : contact
+      );
+    }
+    try {
+      project.sourceWorkbook = await loadAttachedSource(project.sourceWorkbookMeta);
+    } catch (error) {
+      if (!allowMissingSource) throw error;
+      project.sourceWorkbook = null;
+      project.sourceWorkbookMissing = true;
+    }
+    return project;
+  });
 }
+
+/** Nihai Excel için kaynak dosyayı ve son taslağı da yükler. */
+export const getProjectForExport = (projectId) => getProjectForBackup(projectId, true);
 
 /** Dış dosya başarıyla üretildikten sonra kalıcı yedek uyarısını kapatır. */
 export async function markProjectBackupSaved(projectId, expectedEpoch) {
@@ -217,6 +260,7 @@ export async function restoreProjectBackup(input) {
       if (existing.id !== project.id) throw new Error('Etkinlik kimliği başka bir projede kullanılıyor.');
       const stored = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + project.id);
       const oldProject = { ...existing, contacts: stored ? JSON.parse(stored) : existing.contacts || [] };
+      oldProject.sourceWorkbook = await loadAttachedSource(existing.sourceWorkbookMeta);
       const draftValue = await AsyncStorage.getItem(DRAFT_KEY + project.id);
       if (draftValue) {
         const draft = JSON.parse(draftValue);
@@ -235,14 +279,17 @@ export async function restoreProjectBackup(input) {
     if (await AsyncStorage.getItem(key)) {
       throw new Error('Bu kimlikte tamamlanmamış bir yerel kayıt var. Geri yükleme durduruldu.');
     }
-    const { contacts, ...meta } = project;
+    const { contacts, sourceWorkbook, ...meta } = project;
+    const sourceMeta = await storeAttachedSource(project.id, sourceWorkbook);
+    meta.sourceWorkbookMeta = sourceMeta;
     meta.totalContacts = contacts.length;
     meta.completedContacts = contacts.filter((contact) => contact.completed).length;
-    await AsyncStorage.setItem(key, JSON.stringify(contacts));
     try {
+      await AsyncStorage.setItem(key, JSON.stringify(contacts));
       await saveAllProjects([meta, ...projects]);
     } catch (error) {
       await AsyncStorage.removeItem(key).catch(() => {});
+      if (sourceMeta) await removeSourceWorkbook(sourceMeta.ref).catch(() => {});
       throw error;
     }
     return 'restored';
@@ -270,6 +317,7 @@ export async function replaceProjectBackup(input, expectedCurrent) {
     }
     const draftRaw = await AsyncStorage.getItem(DRAFT_KEY + incoming.id);
     const current = { ...projects[index], contacts: JSON.parse(contactsRaw) };
+    current.sourceWorkbook = await loadAttachedSource(projects[index].sourceWorkbookMeta);
     if (draftRaw) {
       const draft = JSON.parse(draftRaw);
       if (Number.isInteger(draft.contactIndex) && draft.contactIndex >= 0 &&
@@ -284,7 +332,10 @@ export async function replaceProjectBackup(input, expectedCurrent) {
       throw new Error('Etkinlik, güvenlik yedeği alındıktan sonra değişti. Yeniden yedek alın.');
     }
     if (sameBackupProject(current, incoming)) return 'already-present';
-    const { contacts, ...meta } = incoming;
+    const { contacts, sourceWorkbook, ...meta } = incoming;
+    const oldSourceMeta = projects[index].sourceWorkbookMeta;
+    const sourceMeta = await storeAttachedSource(incoming.id, sourceWorkbook);
+    meta.sourceWorkbookMeta = sourceMeta;
     meta.totalContacts = contacts.length;
     meta.completedContacts = contacts.filter((contact) => contact.completed).length;
     projects[index] = meta;
@@ -298,7 +349,13 @@ export async function replaceProjectBackup(input, expectedCurrent) {
       await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
       await recoverPendingMerge().catch(() => {});
+      if (sourceMeta && sourceMeta.ref !== oldSourceMeta?.ref) {
+        await removeSourceWorkbook(sourceMeta.ref).catch(() => {});
+      }
       throw error;
+    }
+    if (oldSourceMeta && oldSourceMeta.ref !== sourceMeta?.ref) {
+      await removeSourceWorkbook(oldSourceMeta.ref).catch(() => {});
     }
     return 'replaced';
   });
@@ -726,6 +783,7 @@ export async function deleteProject(projectId, expectedBackup) {
     const projects = await getAllProjects();
     const project = await getProject(projectId);
     if (!project) throw new Error('Silinecek proje bulunamadı.');
+    project.sourceWorkbook = await loadAttachedSource(project.sourceWorkbookMeta);
     const draft = await loadDraft(projectId);
     if (draft && Number.isInteger(draft.contactIndex) &&
         draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
@@ -746,6 +804,9 @@ export async function deleteProject(projectId, expectedBackup) {
       await AsyncStorage.removeItem(DRAFT_KEY + projectId);
     } catch (e) {
       console.error('Draft silinemedi:', e);
+    }
+    if (project.sourceWorkbookMeta) {
+      await removeSourceWorkbook(project.sourceWorkbookMeta.ref).catch(() => {});
     }
   });
 }
