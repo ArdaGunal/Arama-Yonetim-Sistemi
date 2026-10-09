@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
-import { getProject } from '../utils/storage';
+import { getProject, hasUnexportedVolunteerResult, markVolunteerResultExported, createVolunteerResultFile } from '../utils/storage';
 import { shareExcel, saveExcel, shareCSV, saveCSV } from '../utils/exportUtils';
 import { reportError } from '../utils/diagnostics';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { createVolunteerResultFile } from '../utils/storage';
 import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
 
 const msg = (title, m) => Platform.OS === 'web' ? window.alert(m) : Alert.alert(title, m);
@@ -64,7 +63,11 @@ export default function ExportScreen({ route, navigation }) {
         await FileSystem.writeAsStringAsync(uri, file.content, { encoding: FileSystem.EncodingType.UTF8 });
         await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Sonucu koordinatöre gönder' });
       }
-      if (method !== 'cancelled') msg('Sonuç hazır', `${file.completed}/${file.total} kişi · Gönderim sürümü ${file.revision}. ${method === 'downloaded' ? 'İndirilen .ays dosyasını koordinatöre gönderin.' : 'Paylaşım menüsünden .ays dosyasını koordinatöre gönderin.'}`);
+      if (method !== 'cancelled') {
+        const current = await markVolunteerResultExported(projectId, file.revision, file.epoch);
+        setProject(await getProject(projectId));
+        msg('Sonuç hazır', `${file.completed}/${file.total} kişi · Gönderim sürümü ${file.revision}. ${current ? '' : 'Bu sırada yeni cevap kaydedildi; güncel dosyayı tekrar paylaşın. '}${method === 'downloaded' ? 'İndirilen .ays dosyasını koordinatöre gönderin.' : 'Paylaşım menüsünden .ays dosyasını koordinatöre gönderdiğinizi kontrol edin.'}`);
+      }
     } catch (error) {
       reportError(error, 'Sonuç paketi oluşturulurken');
       msg('Sonuç gönderilemedi', error.message || 'Yeniden deneyin.');
@@ -97,6 +100,7 @@ export default function ExportScreen({ route, navigation }) {
         {project.role === 'volunteer' && <View style={s.resultCard}>
           <Text style={s.resultTitle}>Sonucu koordinatöre gönder</Text>
           <Text style={s.resultHelp}>Ara verirken de gönderebilirsiniz. Sonraki gönderim daha yeni sürüm olarak işlenir.</Text>
+          {hasUnexportedVolunteerResult(project) && <Text style={s.resultWarning}>Kaydedilmiş yeni cevaplar var. Güncel sonuç dosyasını paylaşın.</Text>}
           <TouchableOpacity accessibilityRole="button" style={s.resultButton} disabled={!!busy} onPress={shareResult}>
             <Text style={s.resultButtonText}>{busy === 'result' ? 'Hazırlanıyor…' : 'Sonuç dosyasını paylaş'}</Text>
           </TouchableOpacity>
@@ -174,6 +178,7 @@ const s = StyleSheet.create({
   resultCard:{backgroundColor:Colors.bgCard,borderColor:Colors.borderAccent,borderWidth:1,borderRadius:16,padding:18,marginBottom:22},
   resultTitle:{color:Colors.textPrimary,fontSize:19,fontWeight:'800'},
   resultHelp:{color:Colors.textSecondary,fontSize:13,lineHeight:19,marginTop:7,marginBottom:14},
+  resultWarning:{color:Colors.warning,fontSize:13,fontWeight:'700',lineHeight:19,marginBottom:14},
   resultButton:{backgroundColor:Colors.success,minHeight:52,borderRadius:12,alignItems:'center',justifyContent:'center'},
   resultButtonText:{color:'#fff',fontSize:15,fontWeight:'800'},
   container:{flex:1,backgroundColor:Colors.bg},

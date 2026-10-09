@@ -21,7 +21,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../theme/colors';
-import { getProjectSummaries, deleteProject } from '../utils/storage';
+import { getProjectSummaries, deleteProject, hasUnexportedVolunteerResult } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -158,7 +158,14 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
           </View>
         </TouchableOpacity>
 
-        {item.role === 'volunteer' ? <Text style={styles.assignmentLabel}>Bana gelen görev · {totalCount} kişi</Text> : <>
+        {item.role === 'volunteer' ? <>
+          <Text style={styles.assignmentLabel}>Bana gelen görev · {totalCount} kişi</Text>
+          {hasUnexportedVolunteerResult(item) &&
+            <TouchableOpacity accessibilityRole="button" style={styles.resultReminder}
+              onPress={() => navigation.navigate('Export', { projectId: item.id, projectName: item.name })}>
+              <Text style={styles.resultReminderText}>Yeni cevaplar bekliyor · Sonuç dosyasını paylaş →</Text>
+            </TouchableOpacity>}
+        </> : <>
           <TouchableOpacity accessibilityRole="button" style={styles.formLink}
             onPress={() => navigation.navigate('Assignments', { projectId: item.id })}>
             <Text style={styles.formLinkText}>Görevleri dağıt →</Text>
@@ -362,6 +369,8 @@ const styles = StyleSheet.create({
   formLink: { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 11, paddingHorizontal: 16 },
   formLinkText: { color: Colors.accentLight, fontSize: 13, fontWeight: '700' },
   assignmentLabel: { color: Colors.success, borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 11, paddingHorizontal: 16, fontSize: 13, fontWeight: '700' },
+  resultReminder: { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: Colors.bgElevated },
+  resultReminderText: { color: Colors.warning, fontSize: 13, fontWeight: '800' },
   cardLeft: {
     flex: 1,
     marginRight: 12,

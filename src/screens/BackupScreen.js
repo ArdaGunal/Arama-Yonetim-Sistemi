@@ -10,6 +10,7 @@ import { getProjectForBackup, getProjectSummaries, markProjectBackupSaved, repla
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 import { downloadWebFile, shareOrDownloadWebFile } from '../utils/webFileTransfer';
+import { getWebStoragePersistence, requestWebStoragePersistence } from '../utils/webStoragePersistence';
 
 const MIME = 'application/json';
 const SAVE_MIME = 'application/x-arama-yonetim-backup';
@@ -28,11 +29,14 @@ export default function BackupScreen() {
   const [preview, setPreview] = useState(null);
   const [safetyCopy, setSafetyCopy] = useState(null);
   const [loadError, setLoadError] = useState('');
+  const [storagePersistence, setStoragePersistence] = useState('checking');
+  const [storageRequestDenied, setStorageRequestDenied] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       setProjects(await getProjectSummaries());
       setLoadError('');
+      if (Platform.OS === 'web') setStoragePersistence(await getWebStoragePersistence());
     } catch (error) {
       reportError(error, 'Yedek ekranı açılırken');
       setLoadError(error.message || 'Projeler okunamadı.');
@@ -40,6 +44,15 @@ export default function BackupScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+
+  const protectWebStorage = async () => {
+    if (busy) return;
+    setBusy('storage');
+    const status = await requestWebStoragePersistence();
+    setStoragePersistence(status);
+    setStorageRequestDenied(status === 'temporary');
+    setBusy('');
+  };
 
   const exportBackup = async (projectId, mode) => {
     if (busy) return;
@@ -173,6 +186,21 @@ export default function BackupScreen() {
     <ScrollView style={styles.root} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 30, 44) }]}>
       <Text style={styles.title}>Etkinlik yedekleri</Text>
       <Text style={styles.description}>Yedek, soruları ve kişi cevaplarını içerir. Uygulamayı silmeden veya cihaz değiştirmeden önce dosyayı cihaz dışına kaydedin.</Text>
+
+      {Platform.OS === 'web' && <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Bu cihazdaki kayıtlar</Text>
+        <Text style={styles.helper}>{storagePersistence === 'granted'
+          ? 'Tarayıcı ek depolama korumasını açtı. Cihaz değiştirirken veya tarayıcı verileri silinirken yine .ays yedeği gerekir.'
+          : storagePersistence === 'unsupported'
+            ? 'Bu tarayıcı ek depolama korumasını desteklemiyor. Çalışmanızı .ays dosyası olarak düzenli kaydedin.'
+            : storageRequestDenied
+              ? 'Tarayıcı ek koruma vermedi. Çalışmanızı .ays dosyası olarak düzenli kaydedin.'
+              : 'Cevaplar bu cihazda tutuluyor. Tarayıcıdan ek depolama koruması isteyebilirsiniz; .ays yedeğini yine düzenli kaydedin.'}</Text>
+        {storagePersistence === 'temporary' && !storageRequestDenied &&
+          <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton} onPress={protectWebStorage}>
+            <Text style={styles.primaryText}>{busy === 'storage' ? 'İsteniyor…' : 'Ek depolama koruması iste'}</Text>
+          </TouchableOpacity>}
+      </View>}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Yedeği geri yükle</Text>

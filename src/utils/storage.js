@@ -320,6 +320,7 @@ export async function updateProject(projectId, updates) {
       
       // Eğer contacts güncellenmişse, ayrı olarak kaydet
       if (updates.contacts) {
+        const nextContacts = JSON.stringify(updates.contacts);
         if (pMeta.role === 'volunteer') {
           const saved = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
           const previous = saved ? JSON.parse(saved) : [];
@@ -328,11 +329,14 @@ export async function updateProject(projectId, updates) {
             contact.phone !== previous[i].phone)) {
             throw new Error('Görevdeki kişi listesi değiştirilemez.');
           }
+          if (saved !== nextContacts) {
+            pMeta.resultDataEpoch = (pMeta.resultDataEpoch || 0) + 1;
+          }
         }
         pMeta.totalContacts = updates.contacts.length;
         pMeta.completedContacts = updates.contacts.filter((contact) => contact.completed).length;
         if (pMeta.completedContacts > 0) pMeta.formLocked = true;
-        await AsyncStorage.setItem(PROJECT_DATA_PREFIX + projectId, JSON.stringify(updates.contacts));
+        await AsyncStorage.setItem(PROJECT_DATA_PREFIX + projectId, nextContacts);
       }
 
       projects[index] = pMeta;
@@ -515,6 +519,7 @@ export async function importVolunteerAssignment(assignment, digest) {
     const project = {
       id: packet.assignmentId, eventId: packet.eventId, assignmentId: packet.assignmentId,
       role: 'volunteer', importDigest: digest, round: packet.round, resultRevision: 0,
+      resultDataEpoch: 0, resultExportedEpoch: 0,
       name: `${packet.eventName} · ${packet.volunteerName}`,
       createdAt: packet.createdAt, currentIndex: 0, formVersion: packet.formVersion, formLocked: true,
       templateId: null, sourceReview: null, fields: packet.fields,
@@ -551,8 +556,31 @@ export async function createVolunteerResultFile(projectId) {
     project.resultRevision = revision;
     await saveAllProjects(projects);
     return { content, revision, completed: contacts.filter((contact) => contact.completed).length,
-      total: contacts.length };
+      total: contacts.length,
+      epoch: project.resultDataEpoch || (project.completedContacts > 0 ? 1 : 0) };
   });
+}
+
+/** Yalnızca dışa aktarılan görüntü hâlâ güncelse hatırlatmayı kapatır. */
+export async function markVolunteerResultExported(projectId, revision, expectedEpoch) {
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const project = projects.find((item) => item.id === projectId && item.role === 'volunteer');
+    if (!project) throw new Error('Gönüllü görevi bulunamadı.');
+    const currentEpoch = project.resultDataEpoch || (project.completedContacts > 0 ? 1 : 0);
+    if (project.resultRevision !== revision || currentEpoch !== expectedEpoch) return false;
+    project.resultDataEpoch = currentEpoch;
+    project.resultExportedEpoch = currentEpoch;
+    await saveAllProjects(projects);
+    return true;
+  });
+}
+
+/** Eski görevler için güvenli tarafta kalıp tamamlanan cevapları yeniden dışa aktarmayı ister. */
+export function hasUnexportedVolunteerResult(project) {
+  if (project?.role !== 'volunteer') return false;
+  if (!Number.isInteger(project.resultDataEpoch)) return (project.completedContacts || 0) > 0;
+  return project.resultDataEpoch > (project.resultExportedEpoch || 0);
 }
 
 async function projectWithDigests(project) {

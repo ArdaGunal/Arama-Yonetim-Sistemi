@@ -1,6 +1,6 @@
 # Proje durumu ve devir notu
 
-Son gözden geçirme: 8 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Yonetim_Sistemi`; eski GitHub sürümünde proje `Arama Yönetim Sistemi/` altındaydı. Yeni düzenin giriş noktası depo kökündeki `package.json` dosyasıdır. Kodda sabit yerel proje yolu kullanılmamalıdır.
+Son gözden geçirme: 10 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Yonetim_Sistemi`; eski GitHub sürümünde proje `Arama Yönetim Sistemi/` altındaydı. Yeni düzenin giriş noktası depo kökündeki `package.json` dosyasıdır. Kodda sabit yerel proje yolu kullanılmamalıdır.
 
 ## Mevcut uygulama
 
@@ -9,6 +9,7 @@ Son gözden geçirme: 8 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Y
 - Formda sorular zorunlu yapılabilir; görüşülen kişinin zorunlu cevabı boşsa kayıt tamamlanmaz. İlk görevden veya tamamlanan aramadan sonra düzenleme yeni form sürümü açar. Eski görevler ve cevaplar kendi sürümünde kalır. `.ayst` şablon dosyası kaynak sütun görevleri ve zorunlu alanlarla paylaşılır.
 - Projeler ve kişi cevapları AsyncStorage'da cihaz üzerinde saklanır. Anket ekranı değişiklikleri taslağa ve proje kaydına yazar.
 - Sonuçlar `.ays` paketleriyle kısmi veya tam paylaşılır. Daha yeni gönderim sürümü öncekinin yerine işlenir; çakışmalar koordinatöre gösterilir. Excel/CSV ayrıca insan tarafından okunabilen çıktı olarak alınabilir.
+- Gönüllü yeni cevap kaydettiğinde ana ekranda sonuç dosyası hatırlatması görünür. İptal edilen web paylaşımı hatırlatmayı kapatmaz; dosya hazırlanırken yeni cevap gelirse eski sürüm hatırlatmayı kapatamaz. Paylaşım menüsünün kapanması dosyanın koordinatöre ulaştığını kanıtlamaz.
 - Her proje `.ays` sürüm 5 tam yedeği olarak dışa aktarılabilir; sürüm 1–4 de okunur. Form sürümleri, görevler, arama geçmişi ve birleştirme kararları yedeğe girer. Dosya SHA-256 ile doğrulanır; aynı içerik ikinci kez içe alınmaz ve farklı içerikli etkinlik otomatik ezilmez.
 - Görev hazırlanması/gönderilmesi/iptali ve sonuç birleştirmesi sonrasında güncel yedek dosyası oluşturulur. Android'de kullanıcı bir kez yedek klasörü seçer; web dosyayı indirir; iPhone paylaşım menüsünden Dosyalara Kaydet gerekir. Kaydetme başarısızsa ekranda tekrar deneme yolu gösterilir. Birleştirmeden önce dış yedek almak zorunlu kalır.
 - Farklı içerikli aynı etkinlik yedeği, önce mevcut sürüm dışarı kaydedilip açık onay verildikten sonra geri yüklenebilir. İşlem öncesi sürüm yeniden karşılaştırılır; kesintide eski proje, kişiler ve taslak kurtarılır. Bu işlem gelen sonuçları birleştirme yerine kullanılmamalıdır.
@@ -16,6 +17,7 @@ Son gözden geçirme: 8 Ekim 2026. Kaynak kodun bulunduğu dizin artık `Arama_Y
 - `Sonra ara` cevaplarından yeni tur görevi oluşturulur. Önceki arama denemeleri ve anlamlı cevaplar saklanır. Nihai Excel'de Güncel Durum, Arama Geçmişi ve varsa İncelenecek Çakışmalar sayfaları vardır.
 - Android uygulaması `ACTION_VIEW` ile gelen dosyaları açar. Kullanıcı WhatsApp dosyasına dokununca uygulamanın açıldığını gerçek kullanımda doğruladı; Dosyalar'dan seçme yolu da korunur.
 - iPhone için ana ekrana eklenebilen PWA üretim derlemesi, sürümlü çevrimdışı önbellek ve dosya paylaşımı hazırlandı. Yerel tarayıcıda sunucu kapalıyken uygulama yeniden açıldı; sahte görev içe aktarıldı, cevap kaydedildi ve yenilemeden sonra korundu. [GitHub Pages yayını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) 8 Ekim 2026'da açıldı; yayın iş akışı başarılı ve canlı ana ekran, manifest, servis işçisi ile simge HTTP 200 döndü. Gerçek iPhone kabul testi bekliyor.
+- Web yedek ekranında tarayıcının kalıcı depolama izni durumu gösterilir ve destekleniyorsa kullanıcı düğmeyle ek koruma isteyebilir. Tarayıcı izin vermeyebilir; bu özellik `.ays` dış yedeğinin yerini tutmaz.
 - Yeni etkinliklerde ilk sayfanın kaynak sütunları ve hücreleri nihai Excel'in başında korunur; özgün Excel'in ek sayfaları ve görsel biçimi korunmaz. Eski etkinliklerde önceden saklanmamış kaynak hücreleri geri getirilemez.
 - Geliştirici paneli JavaScript hata bilgilerini ve uygulama içindeki son işlem izlerini gösterip paylaşır. Android yerel çökme kaydı sonraki açılışta okunur; yerel bir çökme anında uygulamanın kapanmasını tamamen önlemek teknik olarak mümkün değildir.
 - Android için `localapk.bat` ile yerel APK üretilebilir. Bu çıktı mevcut Android debug anahtarıyla imzalanır; mağaza yayını için ayrı imzalama gerekir.

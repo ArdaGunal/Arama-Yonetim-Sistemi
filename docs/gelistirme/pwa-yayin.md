@@ -6,6 +6,7 @@
 - `app.json` içindeki `experiments.baseUrl` GitHub Pages proje yoludur: `/Arama-Yonetim-Sistemi`. Depo adı veya barındırma yolu değişirse bunu, `public/manifest.json` bağlantılarını ve `scripts/preview-pwa.mjs` içindeki yolu birlikte gözden geçirin.
 - `public/index.html` service worker'ı kaydeder. Her üretim derlemesindeki dosyaların SHA-256 özetinden yeni önbellek adı yapılır. Yeni sürüm tam indirilemezse eski sürüm kalır; etkin sekme kapanana kadar yeni sürüm devreye girmez. Ana ekrandaki uyarı yedek alıp uygulamayı yeniden açmayı söyler.
 - Service worker yalnızca aynı kökendeki uygulama dosyalarını önbelleğe alır. Kişi ve cevaplar sunucuya gönderilmez; uygulama tarayıcı depolamasında saklar. Bu depolama silinebilir. `.ays` sonuç ve yedek dosyaları zorunlu kullanımın parçasıdır.
+- Web yedek ekranı `navigator.storage.persisted()` ile ek depolama korumasını kontrol eder. Kullanıcı düğmeye bastığında `persist()` çağrılır; desteklenmiyorsa veya tarayıcı reddederse dosya yedeği akışı aynen sürer. Bu izin tarayıcı verilerinin kullanıcı tarafından silinmesini veya cihaz değişimini önlemez.
 - `public/pwa-icon.png` Android APK'daki görsel simgenin kopyasıdır. Görsel değiştiğinde iki kopyayı birlikte güncelleyin.
 
 ## Yerel kontrol
@@ -29,7 +30,9 @@ GitHub hesabı bireysel olduğu için topluluğa devredilecekse depo ve Pages y�
 - WhatsApp'taki görev dosyasını Dosyalar'a kaydet, PWA'da dosya seçerek aç. Aynı dosyayı tekrar açıp önceki cevabın kaldığını gör.
 - Uçak modunda uygulamayı kapatıp aç; kişi ve cevapları gör; yeni cevap kaydet.
 - Sonuç `.ays` dosyasını WhatsApp'a gönder, koordinatörün Android uygulamasında önizleyip birleştir.
+- Yeni cevap kaydedilince ana ekranda sonuç hatırlatmasının çıktığını, web paylaşımı iptal edilince kaldığını ve güncel dosya indirildikten/paylaşıldıktan sonra kapandığını doğrula. Paylaşım menüsünden gerçek gönderimi ayrıca kontrol et.
 - Etkinlik yedeğini Dosyalar'a kaydet; temiz tarayıcı/profil veya başka cihazda geri yükle.
+- Yedek ekranındaki ek depolama koruması durumunu gör. Tarayıcı destekliyorsa düğmeyi dene; reddederse `.ays` yedeğini yine dışarı kaydet.
 - Yeni sürüm yayınlandığında eski açık oturumda uyarıyı gör; yedek alıp uygulamayı kapat/aç; verilerin kaldığını doğrula.
 - 5.000 kişi ve 100 görev paketi için koordinatör tarafında gerçek cihaz performansını ayrıca ölç. iPhone gönüllü cihazına yalnızca kendi görevi gönderilmeli.
 

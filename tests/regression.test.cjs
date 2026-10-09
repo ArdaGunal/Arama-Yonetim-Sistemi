@@ -416,6 +416,46 @@ test('assignment packet is stable, private and idempotent on volunteer import', 
   await assert.rejects(storage.updateProject('task-one', { contacts: [...progressed, progressed[0]] }), /değiştirilemez/);
 });
 
+test('volunteer result reminder survives a stale export and clears only for current answers', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject(distributionProject(2));
+  const assignment = await storage.createAssignment('large-event', {
+    assignmentId: 'result-reminder', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const parsed = await assignmentFormat.readAssignmentFile(await assignmentFormat.createAssignmentFile(assignment));
+  await storage.importVolunteerAssignment(parsed.assignment, parsed.sha256);
+  const initial = await storage.getProject('result-reminder');
+  assert.equal(storage.hasUnexportedVolunteerResult(initial), false);
+  await storage.updateProject(initial.id, { currentIndex: 0, contacts: initial.contacts });
+  assert.equal(storage.hasUnexportedVolunteerResult(await storage.getProject(initial.id)), false);
+
+  const firstContacts = [{ ...initial.contacts[0], completed: true, callStatus: 'contacted',
+    data: { ...initial.contacts[0].data, answer: 'Evet' } }];
+  await storage.updateProject(initial.id, { contacts: firstContacts });
+  assert.equal(storage.hasUnexportedVolunteerResult(await storage.getProject(initial.id)), true);
+  const oldFile = await storage.createVolunteerResultFile(initial.id);
+  await storage.updateProject(initial.id, { contacts: [{ ...firstContacts[0],
+    data: { ...firstContacts[0].data, answer: 'Hayır' } }] });
+  assert.equal(await storage.markVolunteerResultExported(initial.id, oldFile.revision, oldFile.epoch), false);
+  assert.equal(storage.hasUnexportedVolunteerResult(await storage.getProject(initial.id)), true);
+
+  const currentFile = await storage.createVolunteerResultFile(initial.id);
+  assert.equal(await storage.markVolunteerResultExported(initial.id, currentFile.revision, currentFile.epoch), true);
+  assert.equal(storage.hasUnexportedVolunteerResult(await storage.getProject(initial.id)), false);
+  await storage.updateProject(initial.id, { contacts: firstContacts });
+  assert.equal(storage.hasUnexportedVolunteerResult(await storage.getProject(initial.id)), true);
+});
+
+test('web storage protection reports browser support and permission result', async () => {
+  const persistence = loadSource('src/utils/webStoragePersistence.js');
+  assert.equal(await persistence.getWebStoragePersistence(null), 'unsupported');
+  assert.equal(await persistence.requestWebStoragePersistence(null), 'unsupported');
+  assert.equal(await persistence.getWebStoragePersistence({ persisted: async () => false }), 'temporary');
+  assert.equal(await persistence.requestWebStoragePersistence({ persist: async () => true }), 'granted');
+  assert.equal(await persistence.requestWebStoragePersistence({ persist: async () => false }), 'temporary');
+  assert.equal(await persistence.getWebStoragePersistence({ persisted: async () => { throw new Error('blocked'); } }), 'unsupported');
+});
+
 test('new form version keeps old task answers and backup history', async () => {
   const coordinator = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
   const volunteer = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
