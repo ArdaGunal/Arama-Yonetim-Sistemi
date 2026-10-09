@@ -60,6 +60,8 @@ Koordinatör bir veya çok sonuç dosyası seçer. Uygulama önce etkinlik, form
 
 **Hiçbir cihazın uygulama içi depolaması tek gerçek kopya olmayacak.** Orijinal Excel, son etkinlik yedeği ve gelen sonuç dosyaları ayrı saklanır. Paket dağıtımı veya sonuç birleştirmesi gibi önemli işlemlerden sonra uygulama yeni yedek üretir. Geri yükleme ekranı bir yedeğin etkinlik kimliğini, sürümünü ve içeriğini önce gösterir; mevcut veriyi habersizce ezmez.
 
+Etkinlik veya görev silinmeden önce dışarı güncel `.ays` yedeği çıkarılır ve kullanıcı dosyayı kontrol eder. Yedek alınırken veri değişmişse eski görüntüye dayanarak silme yapılmaz.
+
 iPhone PWA'da tarayıcı depolaması silinebilir veya cihaz değişebilir. Bu nedenle sonuçları dışa aktarma/yedekleme akışı zorunlu kullanımın parçası olmalı; yalnızca tarayıcı içinde duran gönderilmemiş cevaplar güvenli kabul edilmemeli. İmkân varsa kalıcı depolama istenir, fakat **dosya yedeğinin yerine geçmez**. Statik siteye kullanıcı verisi yüklenmez. Gönüllülere yalnızca kendi paketleri verilir.
 
 Proje topluluktan bir başkasına devredilebilmeli: kaynak kodu, statik site hesabı, APK üretimi, dosya biçimi, son etkinlik yedeği ve kısa kullanım yönergesi topluluk kontrolünde tutulur. Kişisel hesaba veya tek telefona bağımlı bir düzen kurulmaz.

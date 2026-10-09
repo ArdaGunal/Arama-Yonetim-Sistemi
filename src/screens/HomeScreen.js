@@ -4,7 +4,7 @@
  * Her projede tarih ve ilerleme (aranan/toplam) gösterilir.
  * "Yeni Proje Oluştur" butonu ile proje oluşturma ekranına geçiş yapılır.
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,13 +22,30 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../theme/colors';
 import { getProjectSummaries, deleteProject, hasUnexportedVolunteerResult } from '../utils/storage';
+import { saveEventBackup } from '../utils/automaticBackup';
 import { reportError } from '../utils/diagnostics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const confirmAction = (title, message, confirmText) => new Promise((resolve) => {
+  if (Platform.OS === 'web') {
+    resolve(window.confirm(message));
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Vazgeç', style: 'cancel', onPress: () => resolve(false) },
+      { text: confirmText, style: 'destructive', onPress: () => resolve(true) },
+    ], { cancelable: false });
+  }
+});
+
+const inform = (title, message) => Platform.OS === 'web'
+  ? window.alert(`${title}\n${message}`) : Alert.alert(title, message);
 
 export default function HomeScreen({ navigation, onDeveloperPanel }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+  const deletingRef = useRef(false);
   const [offline, setOffline] = useState(Platform.OS === 'web' && !navigator.onLine);
   const [updateReady, setUpdateReady] = useState(Platform.OS === 'web' && !!window.__aysUpdateReady);
   const insets = useSafeAreaInsets();
@@ -68,30 +85,32 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
     }
   };
 
-  const handleDeleteProject = (projectId, projectName) => {
-    if (Platform.OS === 'web') {
-      const ok = window.confirm(
-        `"${projectName}" projesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`
-      );
-      if (ok) {
-        deleteProject(projectId).then(loadProjects);
+  const handleDeleteProject = async (projectId, projectName) => {
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+    setDeletingId(projectId);
+    try {
+      const proceed = await confirmAction('Projeyi sil',
+        `"${projectName}" silinmeden önce .ays yedeği kaydedilecek. Devam edilsin mi?`, 'Yedek al');
+      if (!proceed) return;
+      const backup = await saveEventBackup(projectId, 'Silmeden-once');
+      if (!backup.saved) {
+        inform('Silme durduruldu', 'Yedek kaydedilemedi. Proje ve cevaplar cihazda duruyor.');
+        return;
       }
-    } else {
-      Alert.alert(
-        'Projeyi Sil',
-        `"${projectName}" projesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`,
-        [
-          { text: 'İptal', style: 'cancel' },
-          {
-            text: 'Sil',
-            style: 'destructive',
-            onPress: async () => {
-              await deleteProject(projectId);
-              loadProjects();
-            },
-          },
-        ]
-      );
+      const confirmed = await confirmAction('Yedeği kontrol edin',
+        `${backup.name} dosyasını Dosyalar/İndirilenler içinde gördünüz mü? Dosya yoksa silmeyin. Bu işlem geri alınamaz.`,
+        'Yedeği kontrol ettim, sil');
+      if (!confirmed) return;
+      await deleteProject(projectId, backup.snapshot);
+      await loadProjects();
+      inform('Proje silindi', 'Yedek dosyasını saklayın; gerektiğinde Yedekler ekranından geri yükleyebilirsiniz.');
+    } catch (error) {
+      reportError(error, 'Proje silinmeden önce yedek alınırken');
+      inform('Silme durduruldu', error.message || 'Proje silinemedi; mevcut veriler korunuyor.');
+    } finally {
+      deletingRef.current = false;
+      setDeletingId(null);
     }
   };
 
@@ -179,10 +198,13 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
         {/* Sil butonu */}
         <TouchableOpacity
           style={styles.deleteBtn}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.name} projesini yedekleyip sil`}
+          disabled={deletingId !== null}
           onPress={() => handleDeleteProject(item.id, item.name)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.deleteBtnText}>✕</Text>
+          <Text style={styles.deleteBtnText}>{deletingId === item.id ? '…' : '✕'}</Text>
         </TouchableOpacity>
       </View>
     );

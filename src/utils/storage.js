@@ -719,12 +719,23 @@ export async function updateProjectForm(projectId, fields) {
   });
 }
 
-/**
- * Projeyi siler
- */
-export async function deleteProject(projectId) {
+/** Dışarı kaydedilen yedekten sonra yalnızca aynı proje görüntüsünü siler. */
+export async function deleteProject(projectId, expectedBackup) {
   return enqueueWrite(async () => {
+    if (!expectedBackup) throw new Error('Silmeden önce proje yedeği alın.');
     const projects = await getAllProjects();
+    const project = await getProject(projectId);
+    if (!project) throw new Error('Silinecek proje bulunamadı.');
+    const draft = await loadDraft(projectId);
+    if (draft && Number.isInteger(draft.contactIndex) &&
+        draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
+        draft.formData && typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {
+      project.contacts = project.contacts.map((contact, index) =>
+        index === draft.contactIndex ? { ...contact, data: { ...draft.formData } } : contact);
+    }
+    if (!sameBackupProject(project, expectedBackup)) {
+      throw new Error('Proje yedekten sonra değişti. Yeni yedek alıp tekrar deneyin.');
+    }
     const filtered = projects.filter((p) => p.id !== projectId);
     await saveAllProjects(filtered);
     

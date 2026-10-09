@@ -10,6 +10,7 @@
 6. Gönüllüden gelen `.ays` sonuçlarını **Gelen sonuçları topla** ekranında seçin. Önizlemedeki çakışmalar için karar verin, önce yedeği cihaz dışına saklayın, sonra **Sonuçları birleştir** düğmesine basın. Birleştirme sonrasında güncel yedek de oluşturulur; uyarı çıkarsa ekrandaki düğmeyle tekrar kaydedin.
 7. Sorular değişirse etkinlik kartındaki **Soruları düzenle / Yeni sürüm** yolunu açın. Eski görevler kendi sorularında kalır; yeni görevler yeni formu alır. Yeni görev dosyalarını açacak Android kullanıcılarına güncel APK'yı verin.
 8. **Sonra ara** sekmesinde geri aranacak kişi sayısını görün. Yeni gönüllü ve kişi sayısını seçerek ikinci tur görevi hazırlayın. İlk görev tamamlanmadan kişi yeni tura verilmez.
+9. Etkinliği silmeniz gerekirse ana ekrandaki **×** düğmesine basın. Uygulama önce `.ays` yedeği çıkarır. İndirilenler/Dosyalar içinde dosyayı gerçekten gördükten sonra son silme onayını verin. Dosya yoksa **Vazgeç** seçin.
 
 ## Gönüllü
 

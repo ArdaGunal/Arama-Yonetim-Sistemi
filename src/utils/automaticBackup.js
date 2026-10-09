@@ -24,7 +24,7 @@ export async function saveEventBackup(projectId, reason = 'Yedek') {
   if (Platform.OS === 'web') {
     downloadWebFile(content, name, MIME);
     const current = await markProjectBackupSaved(projectId, project.backupEpoch || 0);
-    return { saved: current, name, destination: 'downloads' };
+    return { saved: current, name, destination: 'downloads', snapshot: project };
   }
   if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
     const saf = FileSystem.StorageAccessFramework;
@@ -43,12 +43,12 @@ export async function saveEventBackup(projectId, reason = 'Yedek') {
       throw new Error(`Yedek klasörüne yazılamadı: ${error.message}`);
     }
     const current = await markProjectBackupSaved(projectId, project.backupEpoch || 0);
-    return { saved: current, name, destination: 'folder' };
+    return { saved: current, name, destination: 'folder', snapshot: project };
   }
   if (!await Sharing.isAvailableAsync()) throw new Error('Bu cihazda yedek paylaşımı kullanılamıyor.');
   const uri = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${name}`;
   await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
   await Sharing.shareAsync(uri, { mimeType: MIME, dialogTitle: 'Etkinlik yedeğini Dosyalar’a kaydet' });
   const current = await markProjectBackupSaved(projectId, project.backupEpoch || 0);
-  return { saved: current, name, destination: 'share' };
+  return { saved: current, name, destination: 'share', snapshot: project };
 }

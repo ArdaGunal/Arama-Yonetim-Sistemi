@@ -72,16 +72,30 @@ test('draft writes and deletion finish in order without deadlock', async () => {
   const storage = loadSource('src/utils/storage.js', {
     '@react-native-async-storage/async-storage': memory,
   });
-  await storage.createProject({ id: 'p', name: 'Deneme', contacts: [] });
-  const draft = storage.saveDraft('p', { contactIndex: 0, formData: { name: 'Ali' } });
-  const clear = storage.clearDraft('p');
+  await storage.createProject(distributionProject(1));
+  const draft = storage.saveDraft('large-event', { contactIndex: 0, formData: { name: 'Ali' } });
+  const clear = storage.clearDraft('large-event');
   await Promise.all([draft, clear, storage.waitForPendingWrites()]);
-  assert.equal(await storage.loadDraft('p'), null);
+  assert.equal(await storage.loadDraft('large-event'), null);
+  const savedSnapshot = await storage.getProjectForBackup('large-event');
   await Promise.race([
-    storage.deleteProject('p'),
+    storage.deleteProject('large-event', savedSnapshot),
     new Promise((_, reject) => setTimeout(() => reject(new Error('deleteProject stuck')), 2000)),
   ]);
   assert.equal((await storage.getAllProjects()).length, 0);
+});
+
+test('project deletion requires a backup snapshot and refuses changes made afterward', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject(distributionProject(1));
+  await assert.rejects(storage.deleteProject('large-event'), /yedeği/);
+  const oldSnapshot = await storage.getProjectForBackup('large-event');
+  await storage.saveDraft('large-event', { contactIndex: 0, formData: { name: 'Yeni cevap' } });
+  await assert.rejects(storage.deleteProject('large-event', oldSnapshot), /değişti/);
+  assert.equal((await storage.getProject('large-event')).contacts.length, 1);
+  const currentSnapshot = await storage.getProjectForBackup('large-event');
+  await storage.deleteProject('large-event', currentSnapshot);
+  assert.equal(await storage.getProject('large-event'), null);
 });
 
 test('headerless spreadsheets find the phone column and preserve the name', () => {
