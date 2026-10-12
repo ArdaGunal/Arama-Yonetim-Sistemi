@@ -85,6 +85,19 @@ test('two-step project review prepares imported questions and updates changed co
   assert.equal(template.fields.length, 3);
 });
 
+test('duplicate review selects the first row by default and keeps a manual choice', () => {
+  const analysis = { duplicates: [
+    { phone: '+905550001001', rows: [{ sourceRow: 2 }, { sourceRow: 3 }] },
+    { phone: '+905550001002', rows: [{ sourceRow: 5 }, { sourceRow: 7 }] },
+  ] };
+  assert.deepEqual(newProjectFields.resolveDuplicateSelections(analysis, {}), {
+    '+905550001001': 2, '+905550001002': 5,
+  });
+  assert.deepEqual(newProjectFields.resolveDuplicateSelections(analysis, { '+905550001001': 3 }), {
+    '+905550001001': 3, '+905550001002': 5,
+  });
+});
+
 test('project summaries survive separated contact storage and update progress', async () => {
   const memory = memoryStorage();
   const storage = loadSource('src/utils/storage.js', {

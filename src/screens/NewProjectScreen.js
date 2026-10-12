@@ -11,7 +11,7 @@ import { analyzeSource, prepareSource, selectSourceRows, setColumnRole, textToRo
 import { normalizeString } from '../utils/phoneUtils';
 import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../utils/templateFormat';
 import { captureSourceWorkbook, MAX_SOURCE_BYTES } from '../utils/sourceWorkbookArchive';
-import { alignSourceFields } from '../utils/newProjectFields';
+import { alignSourceFields, resolveDuplicateSelections } from '../utils/newProjectFields';
 import Step1Info from '../features/new-project/Step1Info';
 import Step2Review from '../features/new-project/Step2Review';
 
@@ -46,12 +46,12 @@ export default function NewProjectScreen({ navigation }) {
   const [templateSourceColumns, setTemplateSourceColumns] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [templateId, setTemplateId] = useState(null);
-  const [expandedField, setExpandedField] = useState(null);
-  const [questionsOpen, setQuestionsOpen] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(false);
   const analysis = useMemo(() => source ? analyzeSource(source) : null, [source]);
 
   useEffect(() => { getTemplates().then(setTemplates).catch((error) => reportError(error, 'Şablonlar yüklenirken')); }, []);
+  useEffect(() => { setSaveError(''); }, [source, selections, fields]);
 
   const useRows = (rows, name, workbookArchive = null) => {
     let prepared = prepareSource(rows, name);
@@ -78,7 +78,6 @@ export default function NewProjectScreen({ navigation }) {
       field.importColumn === undefined), templateSourceColumns, Crypto.randomUUID);
     setFields(aligned.fields);
     setSourceFieldIds(aligned.mapping);
-    setQuestionsOpen(false);
     setStep(2);
   };
 
@@ -95,7 +94,6 @@ export default function NewProjectScreen({ navigation }) {
         field.importColumn === undefined), templateSourceColumns, Crypto.randomUUID);
       setFields(aligned.fields);
       setSourceFieldIds(aligned.mapping);
-      setQuestionsOpen(false);
       setStep(2);
     } catch (error) { notify(error.message); }
   };
@@ -160,7 +158,6 @@ export default function NewProjectScreen({ navigation }) {
   const addField = () => {
     const id = Crypto.randomUUID();
     setFields((previous) => [...previous, { id, label: '', type: 'text', options: [], required: false }]);
-    setExpandedField(id);
   };
   const updateField = (id, key, value) => setFields((previous) => previous.map((field) =>
     field.id === id && !(field.isSystemField && key === 'type') ? { ...field, [key]: value } : field));
@@ -217,15 +214,14 @@ export default function NewProjectScreen({ navigation }) {
 
   const saveProject = async () => {
     if (loading) return;
+    setSaveError('');
     setLoading(true);
     try {
       if (analysis.error) throw new Error(analysis.error);
-      const { selected, excluded } = selectSourceRows(analysis, selections);
+      const { selected, excluded } = selectSourceRows(analysis, resolveDuplicateSelections(analysis, selections));
       if (!selected.length) throw new Error('Geçerli telefonlu en az bir kişi gerekli.');
       const unnamedField = fields.find((field) => field.isSystemField !== 'phone' && !field.label.trim());
       if (unnamedField) {
-        setQuestionsOpen(true);
-        setExpandedField(unnamedField.id);
         throw new Error('Eklenen sorunun adını yazın veya soruyu silin.');
       }
       const saveFields = fields.filter((field) => field.isSystemField !== 'phone' && field.label.trim())
@@ -238,8 +234,6 @@ export default function NewProjectScreen({ navigation }) {
       if (!saveFields.some((field) => field.isSystemField === 'name')) throw new Error('İsim alanı gerekli.');
       for (const field of saveFields) {
         if (field.type === 'select' && (field.options.length < 2 || new Set(field.options).size !== field.options.length)) {
-          setQuestionsOpen(true);
-          setExpandedField(field.id);
           throw new Error(`"${field.label}" için en az iki farklı seçenek girin.`);
         }
       }
@@ -251,8 +245,6 @@ export default function NewProjectScreen({ navigation }) {
           const unknown = selected.map((row) => String(row.cells[column.index] ?? '').trim())
             .find((value) => value && !field.options.includes(value));
           if (unknown) {
-            setQuestionsOpen(true);
-            setExpandedField(field.id);
             throw new Error(`"${column.label}" sütunundaki "${unknown}" değeri şıklarda yok.`);
           }
         }
@@ -287,7 +279,7 @@ export default function NewProjectScreen({ navigation }) {
       navigation.goBack();
     } catch (error) {
       reportError(error, 'Etkinlik oluşturulurken');
-      notify(error.message || 'Etkinlik kaydedilemedi.');
+      setSaveError(error.message || 'Etkinlik kaydedilemedi.');
     } finally { setLoading(false); }
   };
 
@@ -298,8 +290,7 @@ export default function NewProjectScreen({ navigation }) {
   return <Step2Review source={source} analysis={analysis} selections={selections}
     setSelections={setSelections} changeRole={changeRole} changeHeader={changeHeader}
     goBack={() => setStep(1)} handleSave={saveProject} loading={loading}
-    fields={fields} expandedField={expandedField} setExpandedField={setExpandedField}
-    questionsOpen={questionsOpen} setQuestionsOpen={setQuestionsOpen}
+    fields={fields} saveError={saveError}
     updateField={updateField} removeField={removeField} addField={addField}
     addOption={addOption} updateOption={updateOption} removeOption={removeOption}
     saveTemplate={() => makeTemplate(false)} shareTemplate={() => makeTemplate(true)} />;

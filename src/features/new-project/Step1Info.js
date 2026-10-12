@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
@@ -7,7 +7,6 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
   phoneText, setPhoneText, loading, handleParseText, handleImportExcel,
   templates, templateId, applyTemplate, importTemplate }) {
   const insets = useSafeAreaInsets();
-  const [showTemplates, setShowTemplates] = useState(false);
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 24) }]} keyboardShouldPersistTaps="handled">
@@ -51,25 +50,17 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
         </View>
 
         <View style={s.card}>
-          <TouchableOpacity accessibilityRole="button" onPress={() => setShowTemplates(!showTemplates)} style={s.row}>
-            <Text style={s.label}>Hazır soru şablonu</Text>
-            <Text style={s.chevron}>{showTemplates ? '−' : '+'}</Text>
+          <Text style={s.label}>Hazır sorular (isteğe bağlı)</Text>
+          {templates.map((template) => (
+            <TouchableOpacity accessibilityRole="button" key={template.id} style={s.template}
+              onPress={() => applyTemplate(template)}>
+              <Text style={s.templateText}>{template.name}</Text>
+              <Text style={s.templateState}>{templateId === template.id ? 'Seçildi ✓' : 'Seç'}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity accessibilityRole="button" style={s.outline} onPress={importTemplate}>
+            <Text style={s.outlineText}>Şablon dosyası aç</Text>
           </TouchableOpacity>
-          <Text style={s.help}>İsteğe bağlı. Başka etkinlikte kullanılan soruları ve şıkları alabilirsiniz.</Text>
-          {showTemplates && (
-            <>
-              {templates.map((template) => (
-                <TouchableOpacity accessibilityRole="button" key={template.id} style={s.template}
-                  onPress={() => applyTemplate(template)}>
-                  <Text style={s.templateText}>{template.name}</Text>
-                  <Text style={s.templateState}>{templateId === template.id ? 'Seçildi ✓' : 'Seç'}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity accessibilityRole="button" style={s.outline} onPress={importTemplate}>
-                <Text style={s.outlineText}>Şablon dosyası al</Text>
-              </TouchableOpacity>
-            </>
-          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -94,8 +85,6 @@ const s = StyleSheet.create({
   textArea: { color: Colors.textPrimary, backgroundColor: Colors.bgInput, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, padding: 13, fontSize: 15, minHeight: 146, marginBottom: 12 },
   primary: { backgroundColor: Colors.accent, minHeight: 50, borderRadius: 13, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   primaryText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  chevron: { color: Colors.accentLight, fontSize: 24, fontWeight: '700' },
   template: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderTopColor: Colors.border, borderTopWidth: 1 },
   templateText: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700', flex: 1 },
   templateState: { color: Colors.accentLight, fontSize: 13, fontWeight: '700' },

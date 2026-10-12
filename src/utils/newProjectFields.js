@@ -26,3 +26,14 @@ export function alignSourceFields(source, fields, templateColumns, createId) {
   }
   return { fields: nextFields, mapping };
 }
+
+/** Tekrarlarda ilk satırı varsayılan tutar; kullanıcının seçimi önceliklidir. */
+export function resolveDuplicateSelections(analysis, selections = {}) {
+  const resolved = { ...selections };
+  for (const group of analysis.duplicates) {
+    if (!group.rows.some((row) => row.sourceRow === resolved[group.phone])) {
+      resolved[group.phone] = group.rows[0].sourceRow;
+    }
+  }
+  return resolved;
+}
