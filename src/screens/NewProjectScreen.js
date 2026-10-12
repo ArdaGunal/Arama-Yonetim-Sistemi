@@ -11,7 +11,7 @@ import { analyzeSource, prepareSource, selectSourceRows, setColumnRole, textToRo
 import { normalizeString } from '../utils/phoneUtils';
 import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../utils/templateFormat';
 import { captureSourceWorkbook, MAX_SOURCE_BYTES } from '../utils/sourceWorkbookArchive';
-import { alignSourceFields, resolveDuplicateSelections } from '../utils/newProjectFields';
+import { alignSourceFields, resolveDuplicateSelections, withAnswerType } from '../utils/newProjectFields';
 import Step1Info from '../features/new-project/Step1Info';
 import Step2Review from '../features/new-project/Step2Review';
 
@@ -160,7 +160,8 @@ export default function NewProjectScreen({ navigation }) {
     setFields((previous) => [...previous, { id, label: '', type: 'text', options: [], required: false }]);
   };
   const updateField = (id, key, value) => setFields((previous) => previous.map((field) =>
-    field.id === id && !(field.isSystemField && key === 'type') ? { ...field, [key]: value } : field));
+    field.id === id && !(field.isSystemField && key === 'type')
+      ? key === 'type' ? withAnswerType(field, value) : { ...field, [key]: value } : field));
   const removeField = (id) => setFields((previous) => previous.filter((field) => field.id !== id || field.isSystemField));
   const addOption = (id) => setFields((previous) => previous.map((field) =>
     field.id === id ? { ...field, options: [...field.options, ''] } : field));

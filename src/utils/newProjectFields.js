@@ -37,3 +37,10 @@ export function resolveDuplicateSelections(analysis, selections = {}) {
   }
   return resolved;
 }
+
+/** Şıklı soruya ilk geçişte kullanıcıya iki boş şık hazırlar. */
+export function withAnswerType(field, type) {
+  const options = field.options || [];
+  return { ...field, type, options: type === 'select' && options.length < 2
+    ? [...options, ...Array(2 - options.length).fill('')] : options };
+}

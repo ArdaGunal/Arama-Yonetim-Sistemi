@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
+import SurveyPreview from './SurveyPreview';
 
 export function FormFields({ fields, expandedField, setExpandedField, updateField, removeField,
   addField, addOption, updateOption, removeOption, saveTemplate, shareTemplate }) {
@@ -73,11 +74,15 @@ export default function Step2Builder({ fields, expandedField, setExpandedField, 
   updateField, removeField, addField, addOption, updateOption, removeOption,
   setStep, handleSave, saveTemplate, shareTemplate, editing = false, locked = false, onBack }) {
   const insets = useSafeAreaInsets();
+  const [previewOpen, setPreviewOpen] = useState(false);
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.step}>{editing ? 'Form düzenleme' : 'Soruları hazırla'}</Text>
       <Text style={s.title}>Hangi bilgileri soracağız?</Text>
       <Text style={s.intro}>{editing ? 'Soruları düzenleyin. Görev dağıtıldıysa kaydettiğiniz değişiklikler yeni form sürümüne uygulanır.' : 'İsim ve telefon hazır. Gerekli soruları ekleyin, sonra etkinliği oluşturun.'}</Text>
+      <TouchableOpacity accessibilityRole="button" style={s.previewButton} onPress={() => setPreviewOpen(true)}>
+        <Text style={s.previewButtonText}>Anketi önizle →</Text>
+      </TouchableOpacity>
       <View style={s.notice}><Text style={s.noticeText}>{selectedCount} kişi {editing ? 'bu formu kullanıyor.' : 'eklenecek. Soruları aramaya başlamadan önce kontrol edin.'}</Text></View>
       {locked && <View style={s.versionNotice}><Text style={s.versionNoticeText}>Yeni görevler yeni formu kullanır. Eski görevler ve cevapları eski sürümde kalır. Değişen soruların önceki cevapları yeni soruya otomatik taşınmaz.</Text></View>}
       <FormFields fields={fields} expandedField={expandedField} setExpandedField={setExpandedField}
@@ -91,6 +96,7 @@ export default function Step2Builder({ fields, expandedField, setExpandedField, 
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveText}>{editing ? 'Değişiklikleri kaydet' : 'Etkinliği oluştur'}</Text>}
       </TouchableOpacity>
     </View>
+    {previewOpen && <SurveyPreview fields={fields} onClose={() => setPreviewOpen(false)} />}
   </KeyboardAvoidingView>;
 }
 
@@ -99,6 +105,9 @@ const s = StyleSheet.create({
   step: { color: Colors.accentLight, fontSize: 13, fontWeight: '800', marginBottom: 8 },
   title: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: 8 },
   intro: { color: Colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: 17 },
+  previewButton: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.borderAccent,
+    borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  previewButtonText: { color: Colors.accentLight, fontSize: 15, fontWeight: '800' },
   notice: { backgroundColor: Colors.infoBg, padding: 13, borderRadius: 12, marginBottom: 17 },
   noticeText: { color: Colors.textPrimary, fontSize: 13, lineHeight: 19 },
   versionNotice: { backgroundColor: Colors.warningBg, padding: 13, borderRadius: 12, marginBottom: 17 },

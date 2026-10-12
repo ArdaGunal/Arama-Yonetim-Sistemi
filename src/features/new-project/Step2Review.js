@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
 import { formatPhoneDisplay } from '../../utils/phoneUtils';
 import { resolveDuplicateSelections } from '../../utils/newProjectFields';
+import SurveyPreview from './SurveyPreview';
 
 const roles = [['phone', 'Telefon'], ['name', 'İsim'], ['field', 'Diğer bilgi'], ['ignore', 'Kullanma']];
 
@@ -14,6 +15,7 @@ export default function Step2Review({ source, analysis, selections, setSelection
   const insets = useSafeAreaInsets();
   const [visibleGroups, setVisibleGroups] = useState(10);
   const [showColumns, setShowColumns] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const resolved = resolveDuplicateSelections(analysis, selections);
   const selectedCount = analysis.valid.length - analysis.duplicates.reduce((count, group) =>
     count + group.rows.length - 1, 0);
@@ -27,6 +29,10 @@ export default function Step2Review({ source, analysis, selections, setSelection
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.step}>2 / 2 · Son kontrol</Text>
       <Text style={s.title}>Etkinliği oluştur</Text>
+      <TouchableOpacity accessibilityRole="button" style={s.previewButton}
+        onPress={() => setPreviewOpen(true)}>
+        <Text style={s.previewButtonText}>Anketi önizle →</Text>
+      </TouchableOpacity>
 
       <View style={s.card}>
         <Text style={s.sectionTitle}>Kişiler</Text>
@@ -161,6 +167,7 @@ export default function Step2Review({ source, analysis, selections, setSelection
         </TouchableOpacity>
       </View>
     </Modal>
+    {previewOpen && <SurveyPreview fields={fields} onClose={() => setPreviewOpen(false)} />}
   </KeyboardAvoidingView>;
 }
 
@@ -169,6 +176,9 @@ const s = StyleSheet.create({
   content: { padding: 18, paddingTop: 24, paddingBottom: 40 },
   step: { color: Colors.accentLight, fontSize: 13, fontWeight: '800', marginBottom: 7 },
   title: { color: Colors.textPrimary, fontSize: 27, fontWeight: '800', marginBottom: 18 },
+  previewButton: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.borderAccent,
+    borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  previewButtonText: { color: Colors.accentLight, fontSize: 15, fontWeight: '800' },
   card: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border,
     borderRadius: 16, padding: 16, marginBottom: 14 },
   sectionTitle: { color: Colors.textPrimary, fontSize: 17, fontWeight: '800', marginBottom: 8 },

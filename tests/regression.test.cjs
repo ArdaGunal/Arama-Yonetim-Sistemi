@@ -98,6 +98,16 @@ test('duplicate review selects the first row by default and keeps a manual choic
   });
 });
 
+test('select questions start with two empty choices and keep existing choices', () => {
+  const field = { id: 'attendance', label: 'Geliyor musun?', type: 'text', options: [] };
+  const select = newProjectFields.withAnswerType(field, 'select');
+  assert.deepEqual(select.options, ['', '']);
+  assert.deepEqual(field.options, []);
+  const filled = { ...select, options: ['Evet', 'Hayır'] };
+  assert.deepEqual(newProjectFields.withAnswerType(newProjectFields.withAnswerType(filled, 'text'), 'select').options,
+    ['Evet', 'Hayır']);
+});
+
 test('project summaries survive separated contact storage and update progress', async () => {
   const memory = memoryStorage();
   const storage = loadSource('src/utils/storage.js', {

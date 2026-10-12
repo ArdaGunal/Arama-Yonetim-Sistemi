@@ -9,6 +9,7 @@ import { reportError } from '../utils/diagnostics';
 import Step2Builder from '../features/new-project/Step2Builder';
 import { Colors } from '../theme/colors';
 import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
+import { withAnswerType } from '../utils/newProjectFields';
 
 const notify = (message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
 
@@ -28,7 +29,8 @@ export default function EditFormScreen({ navigation, route }) {
   }, [route.params.projectId]);
 
   const updateField = (id, key, value) => setFields((items) => items.map((field) =>
-    field.id === id && !(field.isSystemField && key === 'type') ? { ...field, [key]: value } : field));
+    field.id === id && !(field.isSystemField && key === 'type')
+      ? key === 'type' ? withAnswerType(field, value) : { ...field, [key]: value } : field));
   const addField = () => {
     const id = Crypto.randomUUID();
     setFields((items) => [...items.slice(0, -1), { id, label: '', type: 'text', options: [], required: false }, items[items.length - 1]]);
