@@ -2,7 +2,7 @@
 
 ## Koordinatör
 
-1. Ana listeyi etkinliğe alın, telefon tekrarlarını inceleyin ve soruları hazırlayın. Görüşülen kişide boş bırakılamayacak soruları **Cevap zorunlu** olarak işaretleyin. `.xlsx/.xlsm` içe alındığında orijinal dosya ve ek sayfaları saklanır; yine de ilk dosyayı topluluk arşivinde ayrıca tutun. 8 MB'tan büyük dosya için daha küçük bir kopya hazırlayın.
+1. **Yeni proje oluştur** ekranında etkinlik adını yazıp listeyi yapıştırın veya Excel/CSV dosyası seçin. İkinci adımda eklenecek kişi sayısını kontrol edin. Tekrarlı telefon varsa kullanılacak satıra dokunun; aksi hâlde **Etkinliği oluştur** düğmesine basın. İsim/telefon sütunu yanlışsa **Liste sütunlarını düzelt** bölümünü açın. Yeni soru veya şık gerekiyorsa **Aramada sorulacaklar** bölümünü açın; boş bırakılamayacak cevapları **Cevap zorunlu** işaretleyin. `.xlsx/.xlsm` içe alındığında orijinal dosya ve ek sayfaları saklanır; yine de ilk dosyayı topluluk arşivinde ayrıca tutun. 8 MB'tan büyük dosya için daha küçük bir kopya hazırlayın.
 2. Ana ekrandaki etkinlikte **Görevleri dağıt** seçin. Gönüllünün adını ve kişi sayısını yazıp **Görevi hazırla** düğmesine basın. Kişiler o anda havuzdan ayrılır; başka etkin göreve verilmez.
 3. Görev kartında **Paketi paylaş** ile `.ays` dosyasını WhatsApp, Dosyalar veya başka bir yolla gönderin. Gerçekten gönderince **Gönderildi işaretle** düğmesine basın. Kaybolan dosyayı aynı karttan yeniden paylaşın; yeni görev açmayın.
 4. İlk görevde Android yedek klasörü seçmenizi ister; daha sonra yeni yedekler aynı klasöre yazılır. Web sürümü dosyayı indirir. **Yedek dosyası kaydedilemedi** uyarısı görünürse **Yedek al veya geri yükle** ekranından güncel `.ays` yedeğini ayrıca saklayın. İlk Excel'i de ayrıca saklayın.

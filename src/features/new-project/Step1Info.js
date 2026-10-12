@@ -11,7 +11,7 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 24) }]} keyboardShouldPersistTaps="handled">
-        <Text style={s.step}>1 / 3 · Listeyi ekle</Text>
+        <Text style={s.step}>1 / 2 · Listeyi ekle</Text>
         <Text style={s.title}>Yeni etkinlik</Text>
         <Text style={s.intro}>Önce adını yazın, sonra kişi listesini ekleyin. Kaydetmeden önce her şeyi kontrol edeceksiniz.</Text>
 

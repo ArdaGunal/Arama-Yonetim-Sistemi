@@ -3,17 +3,9 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleShe
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
 
-export default function Step2Builder({ fields, expandedField, setExpandedField, selectedCount, loading,
-  updateField, removeField, addField, addOption, updateOption, removeOption,
-  setStep, handleSave, saveTemplate, shareTemplate, editing = false, locked = false, onBack }) {
-  const insets = useSafeAreaInsets();
-  return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-      <Text style={s.step}>{editing ? 'Form düzenleme' : '3 / 3 · Soruları hazırla'}</Text>
-      <Text style={s.title}>Hangi bilgileri soracağız?</Text>
-      <Text style={s.intro}>{editing ? 'Soruları düzenleyin. Görev dağıtıldıysa kaydettiğiniz değişiklikler yeni form sürümüne uygulanır.' : 'İsim ve telefon hazır. Gerekli soruları ekleyin, sonra etkinliği oluşturun.'}</Text>
-      <View style={s.notice}><Text style={s.noticeText}>{selectedCount} kişi {editing ? 'bu formu kullanıyor.' : 'eklenecek. Soruları aramaya başlamadan önce kontrol edin.'}</Text></View>
-      {locked && <View style={s.versionNotice}><Text style={s.versionNoticeText}>Yeni görevler yeni formu kullanır. Eski görevler ve cevapları eski sürümde kalır. Değişen soruların önceki cevapları yeni soruya otomatik taşınmaz.</Text></View>}
+export function FormFields({ fields, expandedField, setExpandedField, updateField, removeField,
+  addField, addOption, updateOption, removeOption, saveTemplate, shareTemplate }) {
+  return <>
       {fields.map((field, index) => {
         const phone = field.isSystemField === 'phone';
         const open = expandedField === field.id;
@@ -74,6 +66,24 @@ export default function Step2Builder({ fields, expandedField, setExpandedField, 
           <TouchableOpacity accessibilityRole="button" style={[s.secondary, s.flex]} onPress={shareTemplate}><Text style={s.secondaryText}>Paylaş</Text></TouchableOpacity>
         </View>
       </View>
+  </>;
+}
+
+export default function Step2Builder({ fields, expandedField, setExpandedField, selectedCount, loading,
+  updateField, removeField, addField, addOption, updateOption, removeOption,
+  setStep, handleSave, saveTemplate, shareTemplate, editing = false, locked = false, onBack }) {
+  const insets = useSafeAreaInsets();
+  return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <Text style={s.step}>{editing ? 'Form düzenleme' : 'Soruları hazırla'}</Text>
+      <Text style={s.title}>Hangi bilgileri soracağız?</Text>
+      <Text style={s.intro}>{editing ? 'Soruları düzenleyin. Görev dağıtıldıysa kaydettiğiniz değişiklikler yeni form sürümüne uygulanır.' : 'İsim ve telefon hazır. Gerekli soruları ekleyin, sonra etkinliği oluşturun.'}</Text>
+      <View style={s.notice}><Text style={s.noticeText}>{selectedCount} kişi {editing ? 'bu formu kullanıyor.' : 'eklenecek. Soruları aramaya başlamadan önce kontrol edin.'}</Text></View>
+      {locked && <View style={s.versionNotice}><Text style={s.versionNoticeText}>Yeni görevler yeni formu kullanır. Eski görevler ve cevapları eski sürümde kalır. Değişen soruların önceki cevapları yeni soruya otomatik taşınmaz.</Text></View>}
+      <FormFields fields={fields} expandedField={expandedField} setExpandedField={setExpandedField}
+        updateField={updateField} removeField={removeField} addField={addField} addOption={addOption}
+        updateOption={updateOption} removeOption={removeOption} saveTemplate={saveTemplate}
+        shareTemplate={shareTemplate} />
     </ScrollView>
     <View style={[s.bottom, { paddingBottom: Math.max(14, insets.bottom + 8) }]}>
       <TouchableOpacity accessibilityRole="button" style={s.back} onPress={onBack || (() => setStep(2))}><Text style={s.backText}>← Geri</Text></TouchableOpacity>

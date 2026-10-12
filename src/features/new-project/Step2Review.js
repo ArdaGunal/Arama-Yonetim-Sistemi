@@ -1,26 +1,66 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
 import { formatPhoneDisplay } from '../../utils/phoneUtils';
+import { FormFields } from './Step2Builder';
 
 const roles = [
   ['phone', 'Telefon'], ['name', 'İsim'], ['field', 'Diğer bilgi'], ['ignore', 'Kullanma'],
 ];
 
 export default function Step2Review({ source, analysis, selections, setSelections,
-  changeRole, changeHeader, goBack, goNext }) {
+  changeRole, changeHeader, goBack, handleSave, loading, fields,
+  expandedField, setExpandedField, questionsOpen, setQuestionsOpen,
+  updateField, removeField, addField, addOption, updateOption, removeOption,
+  saveTemplate, shareTemplate }) {
   const insets = useSafeAreaInsets();
   const [visibleGroups, setVisibleGroups] = useState(10);
+  const [showColumns, setShowColumns] = useState(false);
   const unresolved = analysis.duplicates.filter((group) =>
     !group.rows.some((row) => row.sourceRow === selections[group.phone])).length;
+  const selectedCount = analysis.valid.length - analysis.duplicates.reduce((count, group) =>
+    count + group.rows.length - 1, 0);
+  const extraFields = fields.filter((field) => !field.isSystemField);
+  const duplicatePhones = new Set(analysis.duplicates.map((group) => group.phone));
+  const example = analysis.valid.find((row) => !duplicatePhones.has(row.phone) ||
+    selections[row.phone] === row.sourceRow);
+  const extraPreview = extraFields.slice(0, 2).map((field) => field.label || 'Adsız soru').join(', ');
   return (
-    <View style={s.root}>
-      <ScrollView contentContainerStyle={s.content}>
-        <Text style={s.step}>2 / 3 · Listeyi kontrol et</Text>
-        <Text style={s.title}>Sütunlar doğru mu?</Text>
-        <Text style={s.intro}>Telefon ve isim sütunlarını kontrol edin. Emin değilseniz aşağıdaki örnek satırlara bakın.</Text>
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+        <Text style={s.step}>2 / 2 · Kontrol et ve oluştur</Text>
+        <Text style={s.title}>Her şey hazır mı?</Text>
+        <Text style={s.intro}>Kişileri kontrol edin. İsterseniz soruları düzenleyin, sonra etkinliği oluşturun.</Text>
+
         <View style={s.card}>
+          <Text style={s.label}>Kişiler</Text>
+          <Text style={s.count}>{selectedCount} kişi eklenecek</Text>
+          {example && <Text style={s.example}>Örnek: {example.name || 'İsim yok'} · {formatPhoneDisplay(example.phone)}</Text>}
+          {analysis.error ? <Text style={s.warning}>{analysis.error}</Text> : null}
+          {analysis.invalid.length ? <Text style={s.warning}>
+            {analysis.invalid.length} satırda telefon okunamadı; bu satırlar eklenmeyecek.
+          </Text> : !analysis.error && <Text style={s.good}>Telefonlar okunabildi.</Text>}
+          {analysis.duplicates.length ? <Text style={s.warning}>
+            {unresolved ? `${unresolved} tekrarlı telefon için kullanılacak satırı seçin.` : 'Tekrarlı telefonlar için satır seçildi.'}
+          </Text> : <Text style={s.good}>Tekrarlı telefon yok.</Text>}
+          {analysis.invalid.slice(0, 5).map((row) => (
+            <Text key={row.sourceRow} style={s.invalid} numberOfLines={2}>
+              Satır {row.sourceRow}: {row.reason} · {row.cells.join(' | ')}
+            </Text>
+          ))}
+          {analysis.invalid.length > 5 ? <Text style={s.muted}>+ {analysis.invalid.length - 5} satır daha</Text> : null}
+        </View>
+
+        <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: showColumns || !!analysis.error }}
+          onPress={() => setShowColumns(!showColumns)} style={s.sectionToggle}>
+          <View style={s.sectionText}>
+            <Text style={s.sectionTitle}>Liste sütunlarını düzelt</Text>
+            <Text style={s.sectionHint}>İsim veya telefon yanlış seçildiyse açın.</Text>
+          </View>
+          <Text style={s.sectionArrow}>{showColumns || analysis.error ? '−' : '+'}</Text>
+        </TouchableOpacity>
+        {(showColumns || !!analysis.error) && <View style={s.card}>
           <Text style={s.label}>{source.sourceName}</Text>
           <TouchableOpacity accessibilityRole="button" onPress={changeHeader} style={s.toggle}>
             <Text style={s.toggleText}>İlk satır başlık: {source.hasHeader ? 'Evet' : 'Hayır'} · Değiştir</Text>
@@ -41,19 +81,7 @@ export default function Step2Review({ source, analysis, selections, setSelection
               </View>
             </View>
           ))}
-        </View>
-
-        <View style={s.card}>
-          <Text style={s.label}>Liste özeti</Text>
-          {analysis.error ? <Text style={s.warning}>{analysis.error}</Text> : null}
-          <Text style={s.summary}>{analysis.valid.length} telefon okunabildi · {analysis.invalid.length} satırda telefon okunamadı</Text>
-          {analysis.duplicates.length ? <Text style={s.warning}>{analysis.duplicates.length} telefon tekrar ediyor. Her biri için tek satır seçin.</Text> :
-            <Text style={s.good}>Tekrar eden telefon yok.</Text>}
-          {analysis.invalid.slice(0, 8).map((row) => (
-            <Text key={row.sourceRow} style={s.invalid}>Satır {row.sourceRow}: {row.reason} · {row.cells.join(' | ')}</Text>
-          ))}
-          {analysis.invalid.length > 8 ? <Text style={s.muted}>+ {analysis.invalid.length - 8} satır daha</Text> : null}
-        </View>
+        </View>}
 
         {analysis.duplicates.slice(0, visibleGroups).map((group) => (
           <View key={group.phone} style={s.card}>
@@ -77,16 +105,31 @@ export default function Step2Review({ source, analysis, selections, setSelection
             <Text style={s.moreText}>Sonraki tekrarları göster</Text>
           </TouchableOpacity>
         ) : null}
-        <Text style={s.footerNote}>Seçilmeyen tekrarlar ve okunamayan satırlar inceleme kaydında saklanır; arama listesine girmez.</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: questionsOpen }}
+          onPress={() => setQuestionsOpen(!questionsOpen)} style={s.sectionToggle}>
+          <View style={s.sectionText}>
+            <Text style={s.sectionTitle}>Aramada sorulacaklar</Text>
+            <Text style={s.sectionHint}>{extraFields.length
+              ? `İsim ve telefon hazır. Ek: ${extraPreview}${extraFields.length > 2 ? ` +${extraFields.length - 2}` : ''}.`
+              : 'İsim ve telefon hazır. Ek soru isteğe bağlı.'}</Text>
+          </View>
+          <Text style={s.sectionArrow}>{questionsOpen ? '−' : '+'}</Text>
+        </TouchableOpacity>
+        {questionsOpen && <FormFields fields={fields} expandedField={expandedField}
+          setExpandedField={setExpandedField} updateField={updateField} removeField={removeField}
+          addField={addField} addOption={addOption} updateOption={updateOption}
+          removeOption={removeOption} saveTemplate={saveTemplate} shareTemplate={shareTemplate} />}
+        <Text style={s.footerNote}>Okunamayan satırlar ve seçilmeyen tekrarlar arama listesine girmez; inceleme kaydında kalır.</Text>
       </ScrollView>
       <View style={[s.bottom, { paddingBottom: Math.max(14, insets.bottom + 8) }]}>
         <TouchableOpacity accessibilityRole="button" style={s.back} onPress={goBack}><Text style={s.backText}>← Geri</Text></TouchableOpacity>
-        <TouchableOpacity accessibilityRole="button" style={[s.next, (analysis.error || unresolved || !analysis.valid.length) && s.disabled]}
-          onPress={goNext} disabled={!!analysis.error || !!unresolved || !analysis.valid.length}>
-          <Text style={s.nextText}>{unresolved ? `${unresolved} tekrar seç` : 'Sorulara geç →'}</Text>
+        <TouchableOpacity accessibilityRole="button" style={[s.next, (analysis.error || unresolved || !selectedCount || loading) && s.disabled]}
+          onPress={handleSave} disabled={!!analysis.error || !!unresolved || !selectedCount || loading}>
+          {loading ? <ActivityIndicator color="#fff" /> :
+            <Text style={s.nextText}>{unresolved ? `${unresolved} tekrar seç` : 'Etkinliği oluştur'}</Text>}
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -108,7 +151,14 @@ const s = StyleSheet.create({
   roleSelected: { backgroundColor: Colors.accent },
   roleText: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
   roleTextSelected: { color: '#fff' },
-  summary: { color: Colors.textPrimary, fontSize: 13, lineHeight: 20 },
+  count: { color: Colors.textPrimary, fontSize: 19, fontWeight: '800', marginBottom: 5 },
+  example: { color: Colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 6 },
+  sectionToggle: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.bgCard,
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 15, padding: 16, marginBottom: 14, minHeight: 68 },
+  sectionText: { flex: 1 },
+  sectionTitle: { color: Colors.textPrimary, fontSize: 15, fontWeight: '800' },
+  sectionHint: { color: Colors.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  sectionArrow: { color: Colors.accentLight, fontSize: 24, fontWeight: '800', marginLeft: 10 },
   warning: { color: Colors.warning, fontSize: 13, lineHeight: 19, marginTop: 8 },
   good: { color: Colors.success, fontSize: 13, marginTop: 8, fontWeight: '700' },
   invalid: { color: Colors.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 6 },

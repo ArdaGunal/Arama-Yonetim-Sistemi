@@ -40,6 +40,7 @@ const sourceWorkbookStore = {
 const sourceWorkbookArchive = loadSource('src/utils/sourceWorkbookArchive.js', { 'expo-crypto': cryptoMock });
 const canonicalModule = loadSource('src/utils/canonicalJson.js');
 const phoneUtils = loadSource('src/utils/phoneUtils.js');
+const newProjectFields = loadSource('src/utils/newProjectFields.js');
 const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-crypto': cryptoMock });
 const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
 const resultMerge = loadSource('src/utils/resultMerge.js');
@@ -54,6 +55,35 @@ function memoryStorage() {
     async removeItem(key) { values.delete(key); },
   };
 }
+
+test('two-step project review prepares imported questions and updates changed column roles', () => {
+  const base = [
+    { id: 'name', label: 'İsim Soyisim', type: 'text', options: [], isSystemField: 'name' },
+    { id: 'phone', label: 'Telefon', type: 'phone', options: [], isSystemField: 'phone' },
+  ];
+  const source = { columns: [
+    { index: 0, label: 'İsim Soyisim', role: 'name' },
+    { index: 1, label: 'Telefon', role: 'phone' },
+    { index: 2, label: 'Okul Numarası', role: 'field' },
+  ] };
+  let nextId = 0;
+  const createId = () => `field-${++nextId}`;
+  const first = newProjectFields.alignSourceFields(source, base, [], createId);
+  assert.equal(first.fields.length, 3);
+  assert.equal(first.fields[2].label, 'Okul Numarası');
+  assert.equal(first.mapping[2], 'field-1');
+  const revised = newProjectFields.alignSourceFields(source, first.fields, [], createId);
+  assert.equal(revised.mapping[2], 'field-1');
+  assert.equal(nextId, 1);
+  const ignored = newProjectFields.alignSourceFields({ columns: source.columns.map((column) =>
+    column.index === 2 ? { ...column, role: 'ignore' } : column) }, revised.fields, [], createId);
+  assert.deepEqual(ignored.fields.map((field) => field.id), ['name', 'phone']);
+  const template = newProjectFields.alignSourceFields(source,
+    [...base, { id: 'school', label: 'Öğrenci No', type: 'text', options: [] }],
+    [{ label: 'Okul Numarası', fieldId: 'school' }], createId);
+  assert.equal(template.mapping[2], 'school');
+  assert.equal(template.fields.length, 3);
+});
 
 test('project summaries survive separated contact storage and update progress', async () => {
   const memory = memoryStorage();
