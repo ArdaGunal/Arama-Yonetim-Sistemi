@@ -86,7 +86,8 @@ export async function saveTemplate(template) {
   return enqueueWrite(async () => {
     const templates = await getTemplates();
     const existing = templates.find((item) => item.id === template.id ||
-      (item.name === template.name && JSON.stringify(item.fields) === JSON.stringify(template.fields) &&
+      (item.name === template.name && (item.pasteMode || 'name-phone') === (template.pasteMode || 'name-phone') &&
+        JSON.stringify(item.fields) === JSON.stringify(template.fields) &&
         JSON.stringify(item.sourceColumns || []) === JSON.stringify(template.sourceColumns || [])));
     if (existing) return existing;
     const next = [template, ...templates];

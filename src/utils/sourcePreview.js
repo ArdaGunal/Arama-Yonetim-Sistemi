@@ -6,11 +6,20 @@ const NAME_HEADERS = new Set(['isim', 'ad', 'adsoyad', 'isimsoyisim', 'adisoyadi
 function cellText(value) { return String(value ?? '').trim(); }
 
 /** Yapıştırılan varsayılan "Ad Soyad<TAB>Telefon" metnini satırlara çevirir. */
-export function textToRows(text) {
+export function textToRows(text, mode = 'name-phone') {
+  if (!['name-phone', 'phone-name', 'phone-only', 'header-table'].includes(mode)) {
+    throw new Error('Kişi listesi biçimi geçersiz.');
+  }
   return String(text || '').split(/\r?\n/).map((line) => {
     const trimmed = line.trim();
     if (!trimmed) return [];
+    if (mode === 'header-table') return trimmed.split(trimmed.includes('\t') ? '\t' : ';').map(cellText);
     if (trimmed.includes('\t')) return trimmed.split('\t').map(cellText);
+    if (mode === 'phone-only') return [trimmed];
+    if (mode === 'phone-name') {
+      const phoneAtStart = trimmed.match(/^(?:\+?90|0090|0)?[2-5](?:[\s().-]*\d){9}/);
+      return phoneAtStart ? [phoneAtStart[0].trim(), trimmed.slice(phoneAtStart[0].length).trim()] : [trimmed, ''];
+    }
     const phoneAtEnd = trimmed.match(/(?:\+?90|0090|0)?[2-5](?:[\s().-]*\d){9}$/);
     if (phoneAtEnd) return [trimmed.slice(0, phoneAtEnd.index).trim(), phoneAtEnd[0].trim()];
     return [trimmed, ''];

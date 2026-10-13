@@ -46,7 +46,7 @@ Gönüllü aynı dosyayı tekrar açarsa ikinci proje oluşmaz ve cevapları sil
 
 ## `.ayst` form şablonu
 
-Şablon UTF-8 JSON'dur; `format: "arama-yonetim-template"`, `schemaVersion: 1`, `kind: "template"`, `templateId`, `createdAt`, `name`, `fields`, `sourceColumns` ve aynı SHA-256 `integrity` zarfını kullanır. Alanlar isim ve telefon sistem alanlarını, soru türlerini, şıkları, zorunlu alan bilgisini ve sıralamayı taşır. `sourceColumns` etiket/görev (`phone`, `name`, `field`, `ignore`) ve varsa alan kimliği eşleştirmesidir. Şablonda kişi, telefon listesi veya cevap bulunmaz. İçe aktarılan şablon cihazda saklanır ve yeni etkinlikte seçilebilir.
+Şablon UTF-8 JSON'dur; `format: "arama-yonetim-template"`, `schemaVersion: 2`, `kind: "template"`, `templateId`, `createdAt`, `name`, `fields`, `sourceColumns`, `pasteMode` ve aynı SHA-256 `integrity` zarfını kullanır. Sürüm 1 şablonları da okunur; eksik `pasteMode` için `name-phone` kabul edilir. `pasteMode` değerleri `name-phone`, `phone-name`, `phone-only`, `header-table` olabilir. Alanlar isim ve telefon sistem alanlarını, soru türlerini, şıkları, zorunlu alan bilgisini ve sıralamayı taşır. `sourceColumns` etiket/görev (`phone`, `name`, `field`, `ignore`) ve varsa alan kimliği eşleştirmesidir. Şablonda kişi, telefon listesi veya cevap bulunmaz. İçe aktarılan şablon cihazda saklanır ve yeni etkinlik için varsayılan seçilir.
 
 Yeni içe alınan Excel'in orijinali tam yedeğe eklenir; daha önce oluşturulmuş etkinliklerde kaynak dosya sonradan üretilemez. Kaynak dosyanın ayrıca topluluk arşivinde saklanması gerekir.
 

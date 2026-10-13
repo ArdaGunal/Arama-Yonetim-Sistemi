@@ -1,5 +1,10 @@
 import { normalizeString } from './phoneUtils';
 
+/** Telefonu olan fakat adı yazılmamış satır da aranabilir bir kişi olarak kalır. */
+export function importedContactName(value) {
+  return String(value || '').trim() || 'İsimsiz kişi';
+}
+
 /** Kaynak sütunlarını sorulara bağlar; kullanıcının eklediği soruları korur. */
 export function alignSourceFields(source, fields, templateColumns, createId) {
   const activeColumns = source.columns.filter((column) => column.role === 'field');
@@ -13,7 +18,7 @@ export function alignSourceFields(source, fields, templateColumns, createId) {
       normalizeString(item.label) === normalizeString(column.label))?.fieldId;
     const match = nextFields.find((field) => field.importColumn === column.index) ||
       nextFields.find((field) => !field.isSystemField && field.id === templateId) ||
-      nextFields.find((field) => !field.isSystemField && field.type === 'text' &&
+      nextFields.find((field) => !field.isSystemField &&
         normalizeString(field.label) === normalizeString(column.label));
     if (match) {
       mapping[column.index] = match.id;

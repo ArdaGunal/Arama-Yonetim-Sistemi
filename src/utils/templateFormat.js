@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { canonicalJson } from './backupFormat';
+import { PASTE_MODES } from './appSettings';
 
 export const TEMPLATE_EXTENSION = '.ayst';
 const FORMAT = 'arama-yonetim-template';
@@ -57,13 +58,15 @@ function normalizeSourceColumns(value, fields) {
   return columns;
 }
 
-export async function createTemplateFile(name, fields, sourceColumns = []) {
+export async function createTemplateFile(name, fields, sourceColumns = [], pasteMode = 'name-phone') {
   if (typeof name !== 'string' || !name.trim()) throw new Error('Şablon adı boş.');
+  if (!PASTE_MODES.includes(pasteMode)) throw new Error('Şablon liste biçimi geçersiz.');
   const normalizedFields = normalizeTemplateFields(fields);
   const body = {
-    format: FORMAT, schemaVersion: 1, kind: 'template',
+    format: FORMAT, schemaVersion: 2, kind: 'template',
     templateId: Crypto.randomUUID(), createdAt: new Date().toISOString(),
     name: name.trim(), fields: normalizedFields, sourceColumns: normalizeSourceColumns(sourceColumns, normalizedFields),
+    pasteMode,
   };
   const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalJson(body));
   return JSON.stringify({ ...body, integrity: { algorithm: 'SHA-256', sha256 } });
@@ -73,7 +76,7 @@ export async function readTemplateFile(text) {
   if (typeof text !== 'string' || text.length > 100000) throw new Error('Şablon dosyası çok büyük.');
   let file;
   try { file = JSON.parse(text); } catch { throw new Error('Şablon dosyası okunamadı.'); }
-  if (file?.format !== FORMAT || file?.kind !== 'template' || file?.schemaVersion !== 1) {
+  if (file?.format !== FORMAT || file?.kind !== 'template' || ![1, 2].includes(file?.schemaVersion)) {
     throw new Error('Bu dosya desteklenen bir şablon değil.');
   }
   const body = {
@@ -81,6 +84,7 @@ export async function readTemplateFile(text) {
     templateId: file.templateId, createdAt: file.createdAt,
     name: file.name, fields: file.fields,
     ...(file.sourceColumns === undefined ? {} : { sourceColumns: file.sourceColumns }),
+    ...(file.schemaVersion === 2 ? { pasteMode: file.pasteMode } : {}),
   };
   if (typeof body.templateId !== 'string' || !body.templateId.trim() ||
       typeof body.name !== 'string' || !body.name.trim() ||
@@ -92,6 +96,10 @@ export async function readTemplateFile(text) {
   const actual = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalJson(body));
   if (actual !== file.integrity.sha256) throw new Error('Şablon dosyası değişmiş veya bozulmuş.');
   const fields = normalizeTemplateFields(body.fields);
+  if (body.schemaVersion === 2 && !PASTE_MODES.includes(body.pasteMode)) {
+    throw new Error('Şablon liste biçimi geçersiz.');
+  }
   return { id: body.templateId, name: body.name, fields,
-    sourceColumns: normalizeSourceColumns(body.sourceColumns || [], fields), createdAt: body.createdAt };
+    sourceColumns: normalizeSourceColumns(body.sourceColumns || [], fields), createdAt: body.createdAt,
+    pasteMode: body.schemaVersion === 2 ? body.pasteMode : 'name-phone' };
 }

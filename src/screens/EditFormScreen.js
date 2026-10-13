@@ -10,6 +10,7 @@ import Step2Builder from '../features/new-project/Step2Builder';
 import { Colors } from '../theme/colors';
 import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
 import { withAnswerType } from '../utils/newProjectFields';
+import { getAppSettings } from '../utils/appSettings';
 
 const notify = (message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
 
@@ -61,8 +62,10 @@ export default function EditFormScreen({ navigation, route }) {
   };
   const template = async (share) => {
     try {
+      const settings = await getAppSettings();
       const content = await createTemplateFile(project.name, fields,
-        project.sourceReview?.columns.map(({ label, role, fieldId }) => ({ label, role, fieldId })) || []);
+        project.sourceReview?.columns.map(({ label, role, fieldId }) => ({ label, role, fieldId })) || [],
+        settings.pasteMode);
       await saveTemplate(await readTemplateFile(content));
       if (!share) { notify('Şablon bu cihazda kaydedildi.'); return; }
       const name = `Etkinlik-Sablonu${TEMPLATE_EXTENSION}`;

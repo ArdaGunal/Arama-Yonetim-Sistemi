@@ -21,6 +21,7 @@ function loadSource(relativePath, mocks = {}) {
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
         name === './resultFormat' ? resultFormat :
+          name === './appSettings' ? appSettingsModule :
           name === './formValidation' ? formValidation :
           name === './resultMerge' ? resultMerge : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
@@ -42,6 +43,9 @@ const sourceWorkbookArchive = loadSource('src/utils/sourceWorkbookArchive.js', {
 const canonicalModule = loadSource('src/utils/canonicalJson.js');
 const phoneUtils = loadSource('src/utils/phoneUtils.js');
 const newProjectFields = loadSource('src/utils/newProjectFields.js');
+const appSettingsModule = loadSource('src/utils/appSettings.js', {
+  '@react-native-async-storage/async-storage': memoryStorage(),
+});
 const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-crypto': cryptoMock });
 const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
 const formValidation = loadSource('src/utils/formValidation.js');
@@ -85,6 +89,11 @@ test('two-step project review prepares imported questions and updates changed co
     [{ label: 'Okul Numarası', fieldId: 'school' }], createId);
   assert.equal(template.mapping[2], 'school');
   assert.equal(template.fields.length, 3);
+  const selectTemplate = newProjectFields.alignSourceFields({ columns: [
+    ...source.columns.slice(0, 2), { index: 2, label: 'Geliyor musun?', role: 'field' },
+  ] }, [...base, { id: 'attendance', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'] }],
+  [], createId);
+  assert.equal(selectTemplate.mapping[2], 'attendance');
 });
 
 test('duplicate review selects the first row by default and keeps a manual choice', () => {
@@ -235,11 +244,40 @@ test('source preview maps a different column order and requires duplicate review
 
 test('default pasted name and phone format keeps distinct rows', () => {
   const sourcePreview = loadSource('src/utils/sourcePreview.js');
-  const rows = sourcePreview.textToRows('Umut Aydın Tosun\t5355519177\nBurakhan Seferoğlu 0542 731 6116');
+  const rows = sourcePreview.textToRows('Deneme Kişi A\t0555 000 10 01\nDeneme Kişi B 0555 000 10 02');
   const source = sourcePreview.prepareSource(rows);
   const analysis = sourcePreview.analyzeSource(source);
-  assert.deepEqual(analysis.valid.map((row) => row.name), ['Umut Aydın Tosun', 'Burakhan Seferoğlu']);
+  assert.deepEqual(analysis.valid.map((row) => row.name), ['Deneme Kişi A', 'Deneme Kişi B']);
   assert.equal(analysis.duplicates.length, 0);
+});
+
+test('personal list format persists and parses phone-first, phone-only and headed tables', async () => {
+  const memory = memoryStorage();
+  const settings = loadSource('src/utils/appSettings.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  assert.deepEqual(await settings.getAppSettings(), { pasteMode: 'name-phone', defaultTemplateId: null });
+  await settings.saveAppSettings({ pasteMode: 'phone-name', defaultTemplateId: 'my-questions' });
+  const restarted = loadSource('src/utils/appSettings.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  assert.deepEqual(await restarted.getAppSettings(), { pasteMode: 'phone-name', defaultTemplateId: 'my-questions' });
+  assert.throws(() => restarted.saveAppSettings({ pasteMode: 'invalid', defaultTemplateId: null }), /okunamadı/);
+  assert.equal((await restarted.getAppSettings()).pasteMode, 'phone-name');
+
+  const preview = loadSource('src/utils/sourcePreview.js');
+  const phoneFirst = preview.analyzeSource(preview.prepareSource(
+    preview.textToRows('0555 000 10 01 Ayşe Örnek', 'phone-name'), 'Telefon önce', false));
+  assert.equal(phoneFirst.valid[0].name, 'Ayşe Örnek');
+  const onlyPhone = preview.analyzeSource(preview.prepareSource(
+    preview.textToRows('0555 000 10 02', 'phone-only'), 'Telefon listesi', false));
+  assert.equal(onlyPhone.valid.length, 1);
+  assert.equal(newProjectFields.importedContactName(onlyPhone.valid[0].name), 'İsimsiz kişi');
+  const headed = preview.prepareSource(preview.textToRows(
+    'İsim Soyisim;Telefon;Okul Numarası\nAyşe Örnek;0555 000 10 03;1234', 'header-table'),
+  'Başlıklı tablo', true);
+  assert.equal(headed.columns.find((column) => column.role === 'phone').label, 'Telefon');
+  assert.equal(headed.columns.find((column) => column.role === 'field').label, 'Okul Numarası');
 });
 
 test('shared template keeps fields and source mapping but no contacts', async () => {
@@ -251,8 +289,9 @@ test('shared template keeps fields and source mapping but no contacts', async ()
   ];
   const content = await templates.createTemplateFile('Bahar etkinliği', fields,
     [{ label: 'İsim Soyisim', role: 'name' }, { label: 'Telefon', role: 'phone' },
-      { label: 'Katılım', role: 'field', fieldId: 'answer' }]);
+      { label: 'Katılım', role: 'field', fieldId: 'answer' }], 'header-table');
   const parsed = await templates.readTemplateFile(content);
+  assert.equal(parsed.pasteMode, 'header-table');
   assert.equal(parsed.fields[2].options[0], 'Evet');
   assert.equal(parsed.sourceColumns[1].role, 'phone');
   assert.equal(parsed.sourceColumns[2].fieldId, 'answer');
@@ -260,6 +299,14 @@ test('shared template keeps fields and source mapping but no contacts', async ()
   const changed = JSON.parse(content);
   changed.fields[2].options[0] = 'Belki';
   await assert.rejects(templates.readTemplateFile(JSON.stringify(changed)), /değişmiş veya bozulmuş/);
+  const legacy = JSON.parse(content);
+  legacy.schemaVersion = 1;
+  delete legacy.pasteMode;
+  delete legacy.integrity;
+  const legacyHash = await cryptoMock.digestStringAsync('SHA-256', backupFormat.canonicalJson(legacy));
+  const oldTemplate = await templates.readTemplateFile(JSON.stringify({ ...legacy,
+    integrity: { algorithm: 'SHA-256', sha256: legacyHash } }));
+  assert.equal(oldTemplate.pasteMode, 'name-phone');
 });
 
 test('version 2 backup preserves source review and reads version 1', async () => {

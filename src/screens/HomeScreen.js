@@ -41,7 +41,7 @@ const confirmAction = (title, message, confirmText) => new Promise((resolve) => 
 const inform = (title, message) => Platform.OS === 'web'
   ? window.alert(`${title}\n${message}`) : Alert.alert(title, message);
 
-export default function HomeScreen({ navigation, onDeveloperPanel }) {
+export default function HomeScreen({ navigation }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -246,19 +246,11 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
             <Text style={styles.headerSubtitle}>SİSTEM PANELİ</Text>
           </View>
         </View>
-        <View style={styles.headerBadge}>
-          <Text style={styles.headerBadgeText}>{projects.length}</Text>
-          <Text style={styles.headerBadgeLabel}>proje</Text>
-        </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Ayarlar"
+          style={styles.settingsButton} onPress={() => navigation.navigate('Settings')}>
+          <Text style={styles.settingsText}>⚙ Ayarlar</Text>
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity accessibilityRole="button" style={styles.diagnosticLink} onPress={onDeveloperPanel}>
-        <Text style={styles.diagnosticText}>Tanılama ve hata raporu  ↗</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity accessibilityRole="button" style={styles.backupLink} onPress={() => navigation.navigate('Backup')}>
-        <Text style={styles.backupText}>Yedek al veya geri yükle  ↗</Text>
-      </TouchableOpacity>
 
       <TouchableOpacity accessibilityRole="button" style={styles.importLink} onPress={() => navigation.navigate('AssignmentImport')}>
         <Text style={styles.importText}>Bana gelen görev dosyasını aç →</Text>
@@ -321,6 +313,9 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerMain: { flex: 1, minWidth: 0, marginRight: 8 },
+  settingsButton: { borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 11,
+    minHeight: 44, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  settingsText: { color: Colors.accentLight, fontWeight: '800', fontSize: 13 },
   headerTitle: {
     fontSize: 26,
     fontWeight: '800',

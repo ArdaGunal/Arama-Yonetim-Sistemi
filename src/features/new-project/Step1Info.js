@@ -5,7 +5,7 @@ import { Colors } from '../../theme/colors';
 
 export default function Step1Info({ projectName, setProjectName, activeTab, setActiveTab,
   phoneText, setPhoneText, loading, handleParseText, handleImportExcel,
-  templates, templateId, applyTemplate, importTemplate }) {
+  templates, templateId, applyTemplate, importTemplate, pasteMode }) {
   const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -22,7 +22,10 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
 
         <View style={s.card}>
           <Text style={s.label}>Kişi listesi</Text>
-          <Text style={s.help}>Varsayılan: her satırda isim ve telefon. Arada Tab veya boşluk olabilir.</Text>
+          <Text style={s.help}>{pasteMode === 'phone-name' ? 'Her satır: telefon, sonra isim.' :
+            pasteMode === 'phone-only' ? 'Her satır: bir telefon numarası.' :
+              pasteMode === 'header-table' ? 'İlk satır başlık; sütunları Tab veya noktalı virgülle ayırın.' :
+                'Her satır: isim, sonra telefon. Arada Tab veya boşluk olabilir.'}</Text>
           <View style={s.tabs}>
             <TouchableOpacity accessibilityRole="button" onPress={() => setActiveTab('text')}
               style={[s.tab, activeTab === 'text' && s.tabActive]}>
@@ -36,7 +39,10 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
           {activeTab === 'text' ? (
             <>
               <TextInput style={s.textArea} value={phoneText} onChangeText={setPhoneText} multiline
-                textAlignVertical="top" placeholder={'Ayşe Örnek\t05xx xxx xx xx\nMehmet Örnek\t05xx xxx xx xx'}
+                textAlignVertical="top" placeholder={pasteMode === 'phone-name' ? '05xx xxx xx xx\tAyşe Örnek' :
+                  pasteMode === 'phone-only' ? '05xx xxx xx xx\n05xx xxx xx xx' :
+                    pasteMode === 'header-table' ? 'İsim Soyisim\tTelefon\tOkul numarası\nAyşe Örnek\t05xx xxx xx xx\t1234' :
+                      'Ayşe Örnek\t05xx xxx xx xx\nMehmet Örnek\t05xx xxx xx xx'}
                 placeholderTextColor={Colors.textPlaceholder} accessibilityLabel="Kişi listesini yapıştır" />
               <TouchableOpacity accessibilityRole="button" style={s.primary} onPress={handleParseText} disabled={loading}>
                 <Text style={s.primaryText}>Listeyi kontrol et →</Text>
@@ -51,6 +57,10 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
 
         <View style={s.card}>
           <Text style={s.label}>Hazır sorular (isteğe bağlı)</Text>
+          <TouchableOpacity accessibilityRole="button" style={s.template} onPress={() => applyTemplate(null)}>
+            <Text style={s.templateText}>Standart · ek soru yok</Text>
+            <Text style={s.templateState}>{templateId === null ? 'Seçildi ✓' : 'Seç'}</Text>
+          </TouchableOpacity>
           {templates.map((template) => (
             <TouchableOpacity accessibilityRole="button" key={template.id} style={s.template}
               onPress={() => applyTemplate(template)}>

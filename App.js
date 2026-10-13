@@ -22,6 +22,8 @@ import ResultsImportScreen from './src/screens/ResultsImportScreen';
 import IncomingFileScreen from './src/screens/IncomingFileScreen';
 import MyAssignmentScreen from './src/screens/MyAssignmentScreen';
 import ResultsInboxScreen from './src/screens/ResultsInboxScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import TemplateEditorScreen from './src/screens/TemplateEditorScreen';
 import DeveloperPanel from './src/screens/DeveloperPanel';
 import { Colors } from './src/theme/colors';
 import { addBreadcrumb, installGlobalErrorHandler, loadLastDiagnostic, reportError, subscribeToDiagnostics } from './src/utils/diagnostics';
@@ -131,12 +133,15 @@ export default function App() {
       <Stack.Navigator screenOptions={screenOptions}>
         <Stack.Screen
           name="Home"
-          children={(props) => <HomeScreen {...props} onDeveloperPanel={() => {
-            setReport(null);
-            setShowPanel(true);
-          }} />}
+          component={HomeScreen}
           options={{ headerShown: false }}
         />
+        <Stack.Screen name="Settings" options={{ title: 'Ayarlar' }}
+          children={(props) => <SettingsScreen {...props} onDeveloperPanel={() => {
+            setReport(null);
+            setShowPanel(true);
+          }} />} />
+        <Stack.Screen name="TemplateEditor" component={TemplateEditorScreen} options={{ title: 'Varsayılan Sorular' }} />
         <Stack.Screen
           name="NewProject"
           component={NewProjectScreen}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { ActivityIndicator, Alert, Platform, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -11,9 +11,11 @@ import { analyzeSource, prepareSource, selectSourceRows, setColumnRole, textToRo
 import { normalizeString } from '../utils/phoneUtils';
 import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../utils/templateFormat';
 import { captureSourceWorkbook, MAX_SOURCE_BYTES } from '../utils/sourceWorkbookArchive';
-import { alignSourceFields, resolveDuplicateSelections, withAnswerType } from '../utils/newProjectFields';
+import { alignSourceFields, importedContactName, resolveDuplicateSelections, withAnswerType } from '../utils/newProjectFields';
+import { getAppSettings, saveAppSettings } from '../utils/appSettings';
 import Step1Info from '../features/new-project/Step1Info';
 import Step2Review from '../features/new-project/Step2Review';
+import { Colors } from '../theme/colors';
 
 const systemFields = [
   { id: 'default_isim', label: 'İsim Soyisim', type: 'text', options: [], required: true, isSystemField: 'name' },
@@ -46,15 +48,36 @@ export default function NewProjectScreen({ navigation }) {
   const [templateSourceColumns, setTemplateSourceColumns] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [templateId, setTemplateId] = useState(null);
+  const [pasteMode, setPasteMode] = useState('name-phone');
+  const [presetReady, setPresetReady] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(false);
   const analysis = useMemo(() => source ? analyzeSource(source) : null, [source]);
 
-  useEffect(() => { getTemplates().then(setTemplates).catch((error) => reportError(error, 'Şablonlar yüklenirken')); }, []);
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([getTemplates(), getAppSettings()]).then(([templatesResult, settingsResult]) => {
+      if (!active) return;
+      if (templatesResult.status === 'rejected') reportError(templatesResult.reason, 'Şablonlar yüklenirken');
+      if (settingsResult.status === 'rejected') reportError(settingsResult.reason, 'Varsayılan ayarlar yüklenirken');
+      const savedTemplates = templatesResult.status === 'fulfilled' ? templatesResult.value : [];
+      const settings = settingsResult.status === 'fulfilled' ? settingsResult.value : null;
+      setTemplates(savedTemplates);
+      if (settings) setPasteMode(settings.pasteMode);
+      const selected = savedTemplates.find((item) => item.id === settings?.defaultTemplateId);
+      if (selected) {
+        setFields(selected.fields.map((field) => ({ ...field, options: [...field.options] })));
+        setTemplateId(selected.id);
+        setTemplateSourceColumns(selected.sourceColumns || []);
+      }
+      setPresetReady(true);
+    });
+    return () => { active = false; };
+  }, []);
   useEffect(() => { setSaveError(''); }, [source, selections, fields]);
 
-  const useRows = (rows, name, workbookArchive = null) => {
-    let prepared = prepareSource(rows, name);
+  const prepareWithTemplate = (rows, name, headerOverride) => {
+    let prepared = prepareSource(rows, name, headerOverride);
     const activeTemplate = templates.find((item) => item.id === templateId);
     if (activeTemplate?.sourceColumns?.length) {
       const used = new Set();
@@ -68,8 +91,15 @@ export default function NewProjectScreen({ navigation }) {
       }) };
       // Farklı başlıklı dosyalarda yanlışlıkla iki telefon/isim seçilmesin.
       if (prepared.columns.filter((column) => column.role === 'phone').length !== 1 ||
-          prepared.columns.filter((column) => column.role === 'name').length > 1) prepared = prepareSource(rows, name);
+          prepared.columns.filter((column) => column.role === 'name').length > 1) {
+        prepared = prepareSource(rows, name, headerOverride);
+      }
     }
+    return prepared;
+  };
+
+  const useRows = (rows, name, workbookArchive = null) => {
+    const prepared = prepareWithTemplate(rows, name);
     setRawRows(rows);
     setOriginalWorkbook(workbookArchive);
     setSource(prepared);
@@ -84,8 +114,8 @@ export default function NewProjectScreen({ navigation }) {
   const parseText = () => {
     try {
       if (!projectName.trim()) throw new Error('Önce etkinliğe bir ad verin.');
-      const rows = textToRows(phoneText);
-      const prepared = prepareSource(rows, 'Yapıştırılan liste', false);
+      const rows = textToRows(phoneText, pasteMode);
+      const prepared = prepareWithTemplate(rows, 'Yapıştırılan liste', pasteMode === 'header-table');
       setRawRows(rows);
       setOriginalWorkbook(null);
       setSource(prepared);
@@ -171,9 +201,10 @@ export default function NewProjectScreen({ navigation }) {
     field.id === id ? { ...field, options: field.options.filter((_, i) => i !== index) } : field));
 
   const applyTemplate = (template) => {
-    setFields(template.fields.map((field) => ({ ...field, options: [...field.options] })));
-    setTemplateId(template.id);
-    setTemplateSourceColumns(template.sourceColumns || []);
+    setFields((template?.fields || systemFields).map((field) => ({ ...field, options: [...field.options] })));
+    setTemplateId(template?.id || null);
+    setTemplateSourceColumns(template?.sourceColumns || []);
+    if (template) setPasteMode(template.pasteMode || 'name-phone');
   };
 
   const importTemplate = async () => {
@@ -189,6 +220,9 @@ export default function NewProjectScreen({ navigation }) {
       const saved = await saveTemplate(template);
       setTemplates(await getTemplates());
       applyTemplate(saved);
+      setPasteMode(saved.pasteMode || 'name-phone');
+      const settings = await getAppSettings();
+      await saveAppSettings({ ...settings, defaultTemplateId: saved.id, pasteMode: saved.pasteMode || 'name-phone' });
       notify('Şablon kaydedildi ve sorulara uygulandı.');
     } catch (error) { reportError(error, 'Şablon içe aktarılırken'); notify(error.message); }
   };
@@ -196,7 +230,7 @@ export default function NewProjectScreen({ navigation }) {
   const makeTemplate = async (share) => {
     try {
       const content = await createTemplateFile(projectName.trim() || 'Etkinlik şablonu', fields,
-        source?.columns.map(({ label, role, index }) => ({ label, role, fieldId: sourceFieldIds[index] || null })) || []);
+        source?.columns.map(({ label, role, index }) => ({ label, role, fieldId: sourceFieldIds[index] || null })) || [], pasteMode);
       const parsed = await readTemplateFile(content);
       const saved = await saveTemplate(parsed);
       setTemplates(await getTemplates());
@@ -253,7 +287,7 @@ export default function NewProjectScreen({ navigation }) {
       const eventId = Crypto.randomUUID();
       const contacts = selected.map((row) => {
         const data = {};
-        if (row.name) data[nameField.id] = row.name;
+        data[nameField.id] = importedContactName(row.name);
         source.columns.filter((column) => column.role === 'field').forEach((column) => {
           const fieldId = sourceFieldIds[column.index];
           const value = String(row.cells[column.index] ?? '').trim();
@@ -284,10 +318,13 @@ export default function NewProjectScreen({ navigation }) {
     } finally { setLoading(false); }
   };
 
+  if (!presetReady) return <View style={{ flex: 1, backgroundColor: Colors.bg, justifyContent: 'center' }}>
+    <ActivityIndicator color={Colors.accentLight} /></View>;
   if (step === 1) return <Step1Info projectName={projectName} setProjectName={setProjectName}
     activeTab={activeTab} setActiveTab={setActiveTab} phoneText={phoneText} setPhoneText={setPhoneText}
     loading={loading} handleParseText={parseText} handleImportExcel={importFile}
-    templates={templates} templateId={templateId} applyTemplate={applyTemplate} importTemplate={importTemplate} />;
+    templates={templates} templateId={templateId} applyTemplate={applyTemplate} importTemplate={importTemplate}
+    pasteMode={pasteMode} />;
   return <Step2Review source={source} analysis={analysis} selections={selections}
     setSelections={setSelections} changeRole={changeRole} changeHeader={changeHeader}
     goBack={() => setStep(1)} handleSave={saveProject} loading={loading}

@@ -80,6 +80,8 @@ Uygulama sırası, kabul ölçütleri ve faz sonu kontrolleri [görev akışı f
 
 **Durum (14 Ekim 2026):** Yedek `.ays` sürüm 6'dır; sürüm 1–5 okunur. Sonuç paketi sürüm 2'dir; sürüm 1 okunur. Zorunlu sorular, form sürümleri, otomatik yedek, güvenli silme, görev iptali/devri, koordinatörün kendi görevi ve kalıcı sonuç kutusu eklendi. Yeni etkinlik iki adımda oluşturulur. Kaynak Excel aynen saklanır. Android emülatöründe koordinatörün sentetik görev cevabı ve yedeği doğrulandı. [GitHub Pages yayını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) açıldı. [Sentetik 5.000 kişi/100 görev ölçümü](../gelistirme/buyuk-veri-performansi.md) yapıldı; gerçek Android telefon ölçümü ve gerçek iPhone testi bekliyor. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
 
+Yeni etkinlik için cihazdaki varsayılan liste düzeni ve sorular [Ayarlar planında](../gelistirme/ayarlar-ve-varsayilan-format.md) açıklanır. Bunlar mevcut etkinlikleri değiştirmez; paylaşılan `.ayst` şablon sürüm 2 soru, şık, sütun ve yapıştırma düzenini taşır.
+
 1. **Dosya sözleşmesi ve güvenlik temeli:** Sürümlü paket/yedek biçimi, kimlikler, bütünlük kontrolü, tekrar içe aktarmaya dayanıklılık, geri yükleme.
 2. **Koordinatör akışı:** Kaynak önizleme ve eşleştirme, telefon tekrar incelemesi, form/şık düzenleme, şablon paylaşımı ve sürüm kilidi.
 3. **Görev akışı:** İstenen sayıda çakışmasız dağıtım, paket durumları, Android ve web üzerinde tek adımlı gönüllü içe aktarımı.
