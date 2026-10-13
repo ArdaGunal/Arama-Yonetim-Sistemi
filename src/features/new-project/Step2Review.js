@@ -11,30 +11,30 @@ const roles = [['phone', 'Telefon'], ['name', 'İsim'], ['field', 'Diğer bilgi'
 export default function Step2Review({ source, analysis, selections, setSelections,
   changeRole, changeHeader, goBack, handleSave, loading, fields, saveError,
   updateField, removeField, addField, addOption, updateOption, removeOption,
-  saveTemplate, shareTemplate }) {
+  saveTemplate, shareTemplate, surveyOnly = false }) {
   const insets = useSafeAreaInsets();
   const [visibleGroups, setVisibleGroups] = useState(10);
   const [showColumns, setShowColumns] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const resolved = resolveDuplicateSelections(analysis, selections);
-  const selectedCount = analysis.valid.length - analysis.duplicates.reduce((count, group) =>
+  const resolved = surveyOnly ? {} : resolveDuplicateSelections(analysis, selections);
+  const selectedCount = surveyOnly ? 0 : analysis.valid.length - analysis.duplicates.reduce((count, group) =>
     count + group.rows.length - 1, 0);
   const extraFields = fields.filter((field) => !field.isSystemField);
-  const example = analysis.valid.find((row) =>
+  const example = analysis?.valid.find((row) =>
     !analysis.duplicates.some((group) => group.phone === row.phone) || resolved[row.phone] === row.sourceRow);
-  const sourceName = source.columns.find((column) => column.role === 'name')?.label;
-  const sourcePhone = source.columns.find((column) => column.role === 'phone')?.label;
+  const sourceName = source?.columns.find((column) => column.role === 'name')?.label;
+  const sourcePhone = source?.columns.find((column) => column.role === 'phone')?.label;
 
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-      <Text style={s.step}>2 / 2 · Son kontrol</Text>
+      <Text style={s.step}>2 / 2 · {surveyOnly ? 'Sorular' : 'Son kontrol'}</Text>
       <Text style={s.title}>Etkinliği oluştur</Text>
       <TouchableOpacity accessibilityRole="button" style={s.previewButton}
         onPress={() => setPreviewOpen(true)}>
         <Text style={s.previewButtonText}>Anketi önizle →</Text>
       </TouchableOpacity>
 
-      <View style={s.card}>
+      {!surveyOnly && <View style={s.card}>
         <Text style={s.sectionTitle}>Kişiler</Text>
         <Text style={s.count}>{selectedCount} kişi eklenecek</Text>
         {example && <Text style={s.help}>Örnek: {example.name || 'İsim yok'} · {formatPhoneDisplay(example.phone)}</Text>}
@@ -43,13 +43,13 @@ export default function Step2Review({ source, analysis, selections, setSelection
         </Text>}
         {analysis.error && <Text style={s.warning}>{analysis.error}</Text>}
         {!selectedCount && !analysis.error && <Text style={s.warning}>Eklenebilecek kişi yok. Geri dönüp listeyi düzeltin.</Text>}
-      </View>
-      <TouchableOpacity accessibilityRole="button" style={s.simpleLink} onPress={() => setShowColumns(true)}>
+      </View>}
+      {!surveyOnly && <TouchableOpacity accessibilityRole="button" style={s.simpleLink} onPress={() => setShowColumns(true)}>
         <Text style={s.linkText}>İsim veya telefon yanlış mı? Listeyi düzelt</Text>
         <Text style={s.smallMuted}>İsim: {sourceName || 'yok'} · Telefon: {sourcePhone || 'yok'}</Text>
-      </TouchableOpacity>
+      </TouchableOpacity>}
 
-      {analysis.duplicates.length > 0 && <View style={s.card}>
+      {!surveyOnly && analysis.duplicates.length > 0 && <View style={s.card}>
         <Text style={s.sectionTitle}>Tekrarlanan numaralar</Text>
         <Text style={s.help}>İlk kayıt seçili. Başka birini kullanmak isterseniz satıra dokunun.</Text>
         {analysis.duplicates.slice(0, visibleGroups).map((group) => <View key={group.phone} style={s.duplicate}>
@@ -72,8 +72,8 @@ export default function Step2Review({ source, analysis, selections, setSelection
       </View>}
 
       <View style={s.card}>
-        <Text style={s.sectionTitle}>Aramada sorulacaklar</Text>
-        <Text style={s.help}>İsim ve telefon hazır. İsterseniz ek soru yazın.</Text>
+        <Text style={s.sectionTitle}>{surveyOnly ? 'Anket soruları' : 'Aramada sorulacaklar'}</Text>
+        <Text style={s.help}>{surveyOnly ? 'En az bir soru ekleyin. Cevaplar bu cihazda saklanır.' : 'İsim ve telefon hazır. İsterseniz ek soru yazın.'}</Text>
         {extraFields.map((field, index) => <View key={field.id} style={s.question}>
           <Text style={s.fieldLabel}>Soru {index + 1}</Text>
           <TextInput accessibilityLabel={`Soru ${index + 1}`} style={s.input} value={field.label}
@@ -140,7 +140,7 @@ export default function Step2Review({ source, analysis, selections, setSelection
       </View>
     </View>
 
-    <Modal visible={showColumns} animationType="slide" onRequestClose={() => setShowColumns(false)}>
+    {!surveyOnly && <Modal visible={showColumns} animationType="slide" onRequestClose={() => setShowColumns(false)}>
       <View style={[s.modalRoot, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
         <Text style={s.title}>Listeyi düzelt</Text>
         <Text style={s.help}>Telefon ve isim için doğru sütuna dokunun.</Text>
@@ -166,8 +166,8 @@ export default function Step2Review({ source, analysis, selections, setSelection
           <Text style={s.nextText}>Tamam</Text>
         </TouchableOpacity>
       </View>
-    </Modal>
-    {previewOpen && <SurveyPreview fields={fields} onClose={() => setPreviewOpen(false)} />}
+    </Modal>}
+    {previewOpen && <SurveyPreview fields={fields} surveyOnly={surveyOnly} onClose={() => setPreviewOpen(false)} />}
   </KeyboardAvoidingView>;
 }
 

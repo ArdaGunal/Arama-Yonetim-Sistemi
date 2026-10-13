@@ -157,9 +157,11 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         <TouchableOpacity style={styles.cardContent} activeOpacity={0.7}
-          onPress={() => item.role !== 'volunteer' && item.assignments?.length
-            ? navigation.navigate('Assignments', { projectId: item.id })
-            : navigation.navigate('Survey', { projectId: item.id, projectName: item.name })}>
+          onPress={() => item.mode === 'survey'
+            ? navigation.navigate('FreeSurvey', { projectId: item.id, projectName: item.name })
+            : item.role !== 'volunteer' && item.assignments?.length
+              ? navigation.navigate('Assignments', { projectId: item.id })
+              : navigation.navigate('Survey', { projectId: item.id, projectName: item.name })}>
           <View style={styles.cardLeft}>
             <Text style={styles.projectName} numberOfLines={1}>
               {item.name}
@@ -174,10 +176,10 @@ export default function HomeScreen({ navigation }) {
               <Text style={[styles.statNumber, { color: progressColor }]}>
                 {calledCount}
               </Text>
-              <Text style={styles.statDivider}>/</Text>
-              <Text style={styles.statTotal}>{totalCount}</Text>
+              {item.mode !== 'survey' && <><Text style={styles.statDivider}>/</Text>
+              <Text style={styles.statTotal}>{totalCount}</Text></>}
             </View>
-            <Text style={styles.statLabel}>kişi arandı</Text>
+            <Text style={styles.statLabel}>{item.mode === 'survey' ? 'anket cevabı' : 'kişi arandı'}</Text>
           </View>
         </TouchableOpacity>
 
@@ -189,10 +191,10 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.resultReminderText}>Yeni cevaplar bekliyor · Sonuç dosyasını paylaş →</Text>
             </TouchableOpacity>}
         </> : <>
-          <TouchableOpacity accessibilityRole="button" style={styles.formLink}
+          {item.mode !== 'survey' && <TouchableOpacity accessibilityRole="button" style={styles.formLink}
             onPress={() => navigation.navigate('Assignments', { projectId: item.id })}>
             <Text style={styles.formLinkText}>Görevleri dağıt →</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>}
           <TouchableOpacity accessibilityRole="button" style={styles.formLink}
             onPress={() => navigation.navigate('EditForm', { projectId: item.id })}>
             <Text style={styles.formLinkText}>{item.formLocked || calledCount > 0 ? 'Soruları düzenle / Yeni sürüm' : 'Soruları düzenle / Şablon'}</Text>

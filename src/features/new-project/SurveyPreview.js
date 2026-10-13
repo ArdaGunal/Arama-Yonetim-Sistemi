@@ -10,7 +10,7 @@ const statuses = [
 const choiceColors = ['#00D2A0', '#FF6B6B', '#FECA57', '#54A0FF', '#A29BFE', '#FD79A8'];
 
 /** Yalnızca yerel bileşen durumu kullanır; hiçbir cevap depoya gönderilmez. */
-export default function SurveyPreview({ fields, onClose }) {
+export default function SurveyPreview({ fields, onClose, surveyOnly = false }) {
   const insets = useSafeAreaInsets();
   const [answers, setAnswers] = useState({});
   const [selectedOptions, setSelectedOptions] = useState({});
@@ -26,14 +26,14 @@ export default function SurveyPreview({ fields, onClose }) {
       </View>
       <Text style={s.notice}>Deneme ekranı · Cevaplar kaydedilmez.</Text>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <View style={s.callCard}>
+        {!surveyOnly && <View style={s.callCard}>
           <Text style={s.callIcon}>📞</Text>
           <Text style={s.callName}>ÖRNEK KİŞİ</Text>
           <Text style={s.callNumber}>05xx xxx xx xx</Text>
           <Text style={s.callHelp}>Önizlemede arama yapılmaz</Text>
-        </View>
+        </View>}
 
-        <View style={s.statusCard}>
+        {!surveyOnly && <View style={s.statusCard}>
           <Text style={s.label}>Arama sonucu</Text>
           <View style={s.choices}>
             {statuses.map(([value, label]) => <TouchableOpacity accessibilityRole="button" key={value}
@@ -47,7 +47,7 @@ export default function SurveyPreview({ fields, onClose }) {
             <TextInput style={[s.input, s.callbackInput]} placeholder="Tekrar arama tarihi: YYYY-AA-GG"
               placeholderTextColor={Colors.textPlaceholder} />
           </>}
-        </View>
+        </View>}
 
         {visibleFields.map((field, index) => <View key={field.id} style={s.field}>
           <Text style={s.label}>{field.label?.trim() || `Soru ${index + 1}`}{field.isSystemField === 'name' || field.required ? ' *' : ''}</Text>

@@ -14,6 +14,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import NewProjectScreen from './src/screens/NewProjectScreen';
 import EditFormScreen from './src/screens/EditFormScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
+import FreeSurveyScreen from './src/screens/FreeSurveyScreen';
 import ExportScreen from './src/screens/ExportScreen';
 import BackupScreen from './src/screens/BackupScreen';
 import AssignmentsScreen from './src/screens/AssignmentsScreen';
@@ -161,6 +162,7 @@ export default function App() {
             title: route.params.projectName || 'Anket',
           })}
         />
+        <Stack.Screen name="FreeSurvey" component={FreeSurveyScreen} options={{ title: 'Anket' }} />
         <Stack.Screen
           name="Export"
           component={ExportScreen}

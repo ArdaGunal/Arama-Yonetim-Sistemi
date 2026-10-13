@@ -13,6 +13,7 @@ Bu klasör, projeyi devralacak kişinin kodu çalıştırması ve önceki kararl
 7. [iPhone'da görev yapma](kullanim/iphone.md): gönüllü için kısa kullanım adımları.
 8. [PWA yayını ve iPhone testi](gelistirme/pwa-yayin.md): çevrimdışı derleme, yayın ve cihaz kabul testi.
 9. [Büyük veri performansı](gelistirme/buyuk-veri-performansi.md): 5.000 kişi/100 görev sentetik ölçümü ve gerçek cihazda kalan kontrol.
+10. [Listesiz anket](gelistirme/listesiz-anket.md): kişi listesi kaldırıldığında yanıt, yedek ve çıktı akışı.
 
 ## Hafıza dosyaları için kural
 

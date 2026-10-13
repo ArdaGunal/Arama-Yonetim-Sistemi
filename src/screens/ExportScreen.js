@@ -113,9 +113,9 @@ export default function ExportScreen({ route, navigation }) {
 
         {/* Genel İlerleme */}
         <View style={s.overviewRow}>
-          <View style={s.overviewCard}><Text style={s.ovNum}>{total}</Text><Text style={s.ovLbl}>Toplam</Text></View>
-          <View style={[s.overviewCard,{borderColor:Colors.success}]}><Text style={[s.ovNum,{color:Colors.success}]}>{completed}</Text><Text style={s.ovLbl}>Tamamlanan</Text></View>
-          <View style={[s.overviewCard,{borderColor:Colors.warning}]}><Text style={[s.ovNum,{color:Colors.warning}]}>{total-completed}</Text><Text style={s.ovLbl}>Kalan</Text></View>
+          <View style={s.overviewCard}><Text style={s.ovNum}>{total}</Text><Text style={s.ovLbl}>{project.mode === 'survey' ? 'Anket yanıtı' : 'Toplam'}</Text></View>
+          {project.mode !== 'survey' && <><View style={[s.overviewCard,{borderColor:Colors.success}]}><Text style={[s.ovNum,{color:Colors.success}]}>{completed}</Text><Text style={s.ovLbl}>Tamamlanan</Text></View>
+          <View style={[s.overviewCard,{borderColor:Colors.warning}]}><Text style={[s.ovNum,{color:Colors.warning}]}>{total-completed}</Text><Text style={s.ovLbl}>Kalan</Text></View></>}
         </View>
 
         {/* Select İstatistikleri */}
@@ -130,7 +130,7 @@ export default function ExportScreen({ route, navigation }) {
           </View>
         ))}
 
-        {(total - completed) > 0 && (
+        {project.mode !== 'survey' && (total - completed) > 0 && (
           <View style={s.warningBox}><Text style={s.warningText}>⚠️ {total-completed} kişi henüz tamamlanmamış</Text></View>
         )}
 
@@ -172,6 +172,7 @@ export default function ExportScreen({ route, navigation }) {
         <View style={s.infoBox}>
           <Text style={s.infoTitle}>📋 Çıktı Formatı</Text>
           <Text style={s.infoText}>{(() => {
+            if (project.mode === 'survey') return ['Yanıt zamanı', 'Yanıt kimliği', ...fields.map((field) => field.label)].join(' | ');
             const nameF = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
             const otherF = fields.filter(f => f !== nameF);
             const parts = [];

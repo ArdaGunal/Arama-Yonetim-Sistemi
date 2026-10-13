@@ -62,7 +62,8 @@ export default function SettingsScreen({ navigation, onDeveloperPanel }) {
     if (busy) return;
     setBusy('share');
     try {
-      const content = await createTemplateFile(template.name, template.fields, template.sourceColumns || [], settings.pasteMode);
+      const content = await createTemplateFile(template.name, template.fields, template.sourceColumns || [], settings.pasteMode,
+        template.mode || 'calls');
       const fileName = `Arama-Sablonu${TEMPLATE_EXTENSION}`;
       if (Platform.OS === 'web') await shareOrDownloadWebFile(content, fileName);
       else {

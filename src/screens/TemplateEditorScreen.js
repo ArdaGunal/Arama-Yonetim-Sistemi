@@ -18,6 +18,7 @@ export default function TemplateEditorScreen({ navigation, route }) {
   const [name, setName] = useState('Benim sorularım');
   const [fields, setFields] = useState([]);
   const [sourceColumns, setSourceColumns] = useState([]);
+  const [mode, setMode] = useState('calls');
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -26,6 +27,7 @@ export default function TemplateEditorScreen({ navigation, route }) {
       const selected = templates.find((item) => item.id === route.params?.templateId);
       if (route.params?.templateId && !selected) throw new Error('Sorular bu cihazda bulunamadı.');
       if (selected) {
+        setMode(selected.mode || 'calls');
         setName(selected.name);
         setFields(selected.fields.filter((field) => !field.isSystemField)
           .map((field) => ({ ...field, options: [...field.options] })));
@@ -52,13 +54,14 @@ export default function TemplateEditorScreen({ navigation, route }) {
           throw new Error(`“${field.label}” için iki farklı şık gerekli.`);
         }
       }
-      const allFields = [identityFields[0], ...questions, identityFields[1]];
+      if (mode === 'survey' && !questions.length) throw new Error('En az bir soru ekleyin.');
+      const allFields = mode === 'survey' ? questions : [identityFields[0], ...questions, identityFields[1]];
       const ids = new Set(allFields.map((field) => field.id));
       const columns = sourceColumns.map((column) => ({ ...column,
         fieldId: ids.has(column.fieldId) ? column.fieldId : null }));
       const settings = await getAppSettings();
       const saved = await saveTemplate(await readTemplateFile(await createTemplateFile(
-        name.trim(), allFields, columns, settings.pasteMode)));
+        name.trim(), allFields, columns, settings.pasteMode, mode)));
       await saveAppSettings({ ...settings, defaultTemplateId: saved.id });
       navigation.goBack();
     } catch (reason) { reportError(reason, 'Varsayılan sorular kaydedilirken'); setError(reason.message); inform(reason.message); }
@@ -67,7 +70,7 @@ export default function TemplateEditorScreen({ navigation, route }) {
   if (!ready) return <View style={[s.root, s.center]}>{error
     ? <Text style={s.error}>{error}</Text> : <ActivityIndicator color={Colors.accentLight} />}</View>;
   return <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-    <Text style={s.help}>İsim ve telefon hazırdır. Ek sorularınızı yazın; yeni etkinliklerde otomatik açılsın.</Text>
+    <Text style={s.help}>{mode === 'survey' ? 'Bu şablonda kişi listesi yok. Sorular yeni anketlerde otomatik açılsın.' : 'İsim ve telefon hazırdır. Ek sorularınızı yazın; yeni etkinliklerde otomatik açılsın.'}</Text>
     <Text style={s.label}>Bu düzene bir ad verin</Text>
     <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Örn. Etkinlik katılımı"
       placeholderTextColor={Colors.textPlaceholder} accessibilityLabel="Şablon adı" />

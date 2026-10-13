@@ -46,6 +46,21 @@ function makeFileName(name, ext) {
 const statusLabel = { contacted: 'Görüşüldü', unreached: 'Ulaşılamadı', later: 'Sonra ara', wrong_number: 'Yanlış numara' };
 
 export function buildWorkbook(project) {
+  if (project.mode === 'survey') {
+    const fields = project.fields || [];
+    const historical = (project.formHistory || []).flatMap((snapshot) => snapshot.fields || [])
+      .filter((field) => !fields.some((current) => current.id === field.id));
+    const outputFields = [...fields, ...new Map(historical.map((field) =>
+      [field.id, { ...field, label: `${field.label} (eski soru)` }])).values()];
+    const header = ['Yanıt zamanı', 'Yanıt kimliği', ...outputFields.map((field) => field.label)];
+    const rows = (project.contacts || []).map((response) => [response.completedAt || '',
+      response.recordId || response.id, ...outputFields.map((field) => response.data?.[field.id] || '')]);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws['!cols'] = header.map(() => ({ wch: 20 }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Anket Yanıtları');
+    return wb;
+  }
   const fields = project.fields || [];
   const currentIds = new Set(fields.map((field) => field.id));
   const historical = new Map();
@@ -140,6 +155,18 @@ export function buildWorkbook(project) {
 }
 
 function buildCSV(project) {
+  if (project.mode === 'survey') {
+    const fields = project.fields || [];
+    const historical = (project.formHistory || []).flatMap((snapshot) => snapshot.fields || [])
+      .filter((field) => !fields.some((current) => current.id === field.id));
+    const outputFields = [...fields, ...new Map(historical.map((field) =>
+      [field.id, { ...field, label: `${field.label} (eski soru)` }])).values()];
+    const esc = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = [ ['Yanıt zamanı', 'Yanıt kimliği', ...outputFields.map((field) => field.label)],
+      ...(project.contacts || []).map((response) => [response.completedAt || '', response.recordId || response.id,
+        ...outputFields.map((field) => response.data?.[field.id] || '')]) ];
+    return '\uFEFF' + rows.map((row) => row.map(esc).join(';')).join('\n');
+  }
   const fields = project.fields || [];
   const nameField = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
   const currentIds = new Set(fields.map((field) => field.id));

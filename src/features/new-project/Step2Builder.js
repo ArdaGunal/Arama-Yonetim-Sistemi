@@ -5,7 +5,7 @@ import { Colors } from '../../theme/colors';
 import SurveyPreview from './SurveyPreview';
 
 export function FormFields({ fields, expandedField, setExpandedField, updateField, removeField,
-  addField, addOption, updateOption, removeOption, saveTemplate, shareTemplate }) {
+  addField, addOption, updateOption, removeOption, saveTemplate, shareTemplate, surveyOnly = false }) {
   return <>
       {fields.map((field, index) => {
         const phone = field.isSystemField === 'phone';
@@ -37,7 +37,7 @@ export function FormFields({ fields, expandedField, setExpandedField, updateFiel
                 style={s.requiredRow} onPress={() => updateField(field.id, 'required', !field.required)}>
                 <Text style={s.requiredMark}>{field.required ? '☑' : '□'}</Text>
                 <View style={s.requiredText}><Text style={s.requiredTitle}>Cevap zorunlu</Text>
-                  <Text style={s.requiredHelp}>Görüşüldü seçilirse boş bırakılamaz.</Text></View>
+                  <Text style={s.requiredHelp}>{surveyOnly ? 'Yanıt kaydedilirken boş bırakılamaz.' : 'Görüşüldü seçilirse boş bırakılamaz.'}</Text></View>
               </TouchableOpacity>
             </>}
             {field.type === 'select' && <>
@@ -72,22 +72,25 @@ export function FormFields({ fields, expandedField, setExpandedField, updateFiel
 
 export default function Step2Builder({ fields, expandedField, setExpandedField, selectedCount, loading,
   updateField, removeField, addField, addOption, updateOption, removeOption,
-  setStep, handleSave, saveTemplate, shareTemplate, editing = false, locked = false, onBack }) {
+  setStep, handleSave, saveTemplate, shareTemplate, editing = false, locked = false, onBack,
+  surveyOnly = false }) {
   const insets = useSafeAreaInsets();
   const [previewOpen, setPreviewOpen] = useState(false);
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.step}>{editing ? 'Form düzenleme' : 'Soruları hazırla'}</Text>
       <Text style={s.title}>Hangi bilgileri soracağız?</Text>
-      <Text style={s.intro}>{editing ? 'Soruları düzenleyin. Görev dağıtıldıysa kaydettiğiniz değişiklikler yeni form sürümüne uygulanır.' : 'İsim ve telefon hazır. Gerekli soruları ekleyin, sonra etkinliği oluşturun.'}</Text>
+      <Text style={s.intro}>{surveyOnly ? 'Soruları düzenleyin. Kaydedilmiş yanıtlar korunur; değişen sorular yeni yanıtlara uygulanır.' : editing ? 'Soruları düzenleyin. Görev dağıtıldıysa kaydettiğiniz değişiklikler yeni form sürümüne uygulanır.' : 'İsim ve telefon hazır. Gerekli soruları ekleyin, sonra etkinliği oluşturun.'}</Text>
       <TouchableOpacity accessibilityRole="button" style={s.previewButton} onPress={() => setPreviewOpen(true)}>
         <Text style={s.previewButtonText}>Anketi önizle →</Text>
       </TouchableOpacity>
-      <View style={s.notice}><Text style={s.noticeText}>{selectedCount} kişi {editing ? 'bu formu kullanıyor.' : 'eklenecek. Soruları aramaya başlamadan önce kontrol edin.'}</Text></View>
-      {locked && <View style={s.versionNotice}><Text style={s.versionNoticeText}>Yeni görevler yeni formu kullanır. Eski görevler ve cevapları eski sürümde kalır. Değişen soruların önceki cevapları yeni soruya otomatik taşınmaz.</Text></View>}
+      <View style={s.notice}><Text style={s.noticeText}>{surveyOnly ? `${selectedCount} yanıt kaydedildi.` : `${selectedCount} kişi ${editing ? 'bu formu kullanıyor.' : 'eklenecek. Soruları aramaya başlamadan önce kontrol edin.'}`}</Text></View>
+      {locked && <View style={s.versionNotice}><Text style={s.versionNoticeText}>{surveyOnly
+        ? 'Eski cevaplar korunur. Değiştirdiğiniz soru yeni bir alan olarak kaydedilir; eski cevaplar bu alana otomatik taşınmaz.'
+        : 'Yeni görevler yeni formu kullanır. Eski görevler ve cevapları eski sürümde kalır. Değişen soruların önceki cevapları yeni soruya otomatik taşınmaz.'}</Text></View>}
       <FormFields fields={fields} expandedField={expandedField} setExpandedField={setExpandedField}
         updateField={updateField} removeField={removeField} addField={addField} addOption={addOption}
-        updateOption={updateOption} removeOption={removeOption} saveTemplate={saveTemplate}
+        updateOption={updateOption} removeOption={removeOption} saveTemplate={saveTemplate} surveyOnly={surveyOnly}
         shareTemplate={shareTemplate} />
     </ScrollView>
     <View style={[s.bottom, { paddingBottom: Math.max(14, insets.bottom + 8) }]}>
@@ -96,7 +99,7 @@ export default function Step2Builder({ fields, expandedField, setExpandedField, 
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveText}>{editing ? 'Değişiklikleri kaydet' : 'Etkinliği oluştur'}</Text>}
       </TouchableOpacity>
     </View>
-    {previewOpen && <SurveyPreview fields={fields} onClose={() => setPreviewOpen(false)} />}
+      {previewOpen && <SurveyPreview fields={fields} surveyOnly={surveyOnly} onClose={() => setPreviewOpen(false)} />}
   </KeyboardAvoidingView>;
 }
 

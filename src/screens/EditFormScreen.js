@@ -25,7 +25,8 @@ export default function EditFormScreen({ navigation, route }) {
       if (!item) throw new Error('Etkinlik bulunamadı.');
       setProject(item);
       setFields([...item.fields.map((field) => ({ ...field, options: [...field.options] })),
-        { id: 'form_editor_phone', label: 'Telefon', type: 'phone', options: [], isSystemField: 'phone' }]);
+        ...(item.mode === 'survey' ? [] :
+          [{ id: 'form_editor_phone', label: 'Telefon', type: 'phone', options: [], isSystemField: 'phone' }])]);
     }).catch((reason) => { reportError(reason, 'Form açılırken'); setError(reason.message); });
   }, [route.params.projectId]);
 
@@ -34,7 +35,9 @@ export default function EditFormScreen({ navigation, route }) {
       ? key === 'type' ? withAnswerType(field, value) : { ...field, [key]: value } : field));
   const addField = () => {
     const id = Crypto.randomUUID();
-    setFields((items) => [...items.slice(0, -1), { id, label: '', type: 'text', options: [], required: false }, items[items.length - 1]]);
+    setFields((items) => project?.mode === 'survey'
+      ? [...items, { id, label: '', type: 'text', options: [], required: false }]
+      : [...items.slice(0, -1), { id, label: '', type: 'text', options: [], required: false }, items[items.length - 1]]);
     setExpandedField(id);
   };
   const removeField = (id) => setFields((items) => items.filter((field) => field.id !== id || field.isSystemField));
@@ -65,7 +68,7 @@ export default function EditFormScreen({ navigation, route }) {
       const settings = await getAppSettings();
       const content = await createTemplateFile(project.name, fields,
         project.sourceReview?.columns.map(({ label, role, fieldId }) => ({ label, role, fieldId })) || [],
-        settings.pasteMode);
+        settings.pasteMode, project.mode === 'survey' ? 'survey' : 'calls');
       await saveTemplate(await readTemplateFile(content));
       if (!share) { notify('Şablon bu cihazda kaydedildi.'); return; }
       const name = `Etkinlik-Sablonu${TEMPLATE_EXTENSION}`;
@@ -86,7 +89,7 @@ export default function EditFormScreen({ navigation, route }) {
     removeField={removeField} addField={addField} addOption={addOption} updateOption={updateOption}
     removeOption={removeOption} handleSave={save} saveTemplate={() => template(false)} shareTemplate={() => template(true)}
     editing locked={project.formLocked || project.contacts.some((contact) => contact.completed)}
-    onBack={() => navigation.goBack()} />;
+    onBack={() => navigation.goBack()} surveyOnly={project.mode === 'survey'} />;
 }
 
 const s = StyleSheet.create({

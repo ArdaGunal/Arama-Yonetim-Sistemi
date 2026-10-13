@@ -7,7 +7,7 @@ import { normalizeSourceWorkbook } from './sourceWorkbookArchive';
 export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 6;
+export const BACKUP_SCHEMA_VERSION = 7;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -136,7 +136,7 @@ function normalizeAnswerSnapshot(raw, fieldIds) {
     callbackNote: raw.callbackNote || '', callbackAt: raw.callbackAt || null };
 }
 
-function normalizeFields(input, label) {
+function normalizeFields(input, label, mode = 'calls') {
   if (!Array.isArray(input) || !input.length || input.length > 100) throw new Error(`${label} geçersiz.`);
   const ids = new Set();
   const fields = input.map((raw, index) => {
@@ -156,8 +156,9 @@ function normalizeFields(input, label) {
       ...(field.required !== undefined ? { required: field.required } : {}),
       ...(field.isSystemField ? { isSystemField: 'name' } : {}) };
   });
-  if (fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1) {
-    throw new Error(`${label} içinde isim alanı eksik.`);
+  if (mode === 'survey' ? fields.some((field) => field.isSystemField) :
+      fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1) {
+    throw new Error(`${label} alanları anket türüyle uyuşmuyor.`);
   }
   return fields;
 }
@@ -167,6 +168,10 @@ export function normalizeBackupProject(input) {
   const id = identifier(project.id, 'Proje kimliği');
   const eventId = identifier(project.eventId || id, 'Etkinlik kimliği');
   const role = project.role || 'coordinator';
+  const mode = project.mode || 'calls';
+  if (!['calls', 'survey'].includes(mode) || (mode === 'survey' && role !== 'coordinator')) {
+    throw new Error('Etkinlik türü geçersiz.');
+  }
   if (!['coordinator', 'volunteer'].includes(role) ||
       (role === 'coordinator' && eventId !== id) ||
       (role === 'volunteer' && project.assignmentId !== id)) {
@@ -176,7 +181,7 @@ export function normalizeBackupProject(input) {
   if (!Array.isArray(project.fields) || !Array.isArray(project.contacts)) {
     throw new Error('Yedekte alanlar veya kişiler eksik.');
   }
-  const fields = normalizeFields(project.fields, 'Form');
+  const fields = normalizeFields(project.fields, 'Form', mode);
   const formVersion = project.formVersion || 1;
   const historyInput = project.formHistory || [
     ...(project.assignments || []).filter((item) => item.formVersion !== formVersion)
@@ -189,7 +194,7 @@ export function normalizeBackupProject(input) {
     if (!Number.isInteger(raw?.version) || raw.version < 1 || raw.version > formVersion) {
       throw new Error('Form geçmişi sürümü geçersiz.');
     }
-    const snapshot = normalizeFields(raw.fields, 'Form geçmişi');
+    const snapshot = normalizeFields(raw.fields, 'Form geçmişi', mode);
     if (historyMap.has(raw.version) && canonicalJson(historyMap.get(raw.version)) !== canonicalJson(snapshot)) {
       throw new Error('Aynı sürüm için farklı form var.');
     }
@@ -210,7 +215,8 @@ export function normalizeBackupProject(input) {
       throw new Error('Yedekte yinelenen veya uyuşmayan kayıt kimliği var.');
     }
     recordIds.add(recordId);
-    if (typeof contact.phone !== 'string' || !contact.phone.trim()) {
+    if (typeof contact.phone !== 'string' || (mode !== 'survey' && !contact.phone.trim()) ||
+        (mode === 'survey' && contact.phone)) {
       throw new Error(`Kişi ${index + 1} için telefon geçersiz.`);
     }
     const rawData = object(contact.data || {}, `Kişi ${index + 1} cevapları`);
@@ -221,7 +227,14 @@ export function normalizeBackupProject(input) {
       }
       data[key] = value;
     }
+    if (mode === 'survey' && !Object.values(data).some((value) => value.trim())) {
+      throw new Error('Anket yanıtı boş olamaz.');
+    }
     if (typeof contact.completed !== 'boolean') throw new Error('Kişi durumu geçersiz.');
+    if (mode === 'survey' && (!contact.completed || !contact.completedAt ||
+        contact.callStatus || contact.attempts?.length || contact.sourceRow || contact.sourceCells)) {
+      throw new Error('Anket yanıtı geçersiz.');
+    }
     if (contact.completedAt !== null && contact.completedAt !== undefined) {
       isoDate(contact.completedAt, 'Tamamlanma tarihi');
     }
@@ -276,6 +289,9 @@ export function normalizeBackupProject(input) {
   }
   const assignments = role === 'coordinator'
     ? normalizeAssignments(project.assignments, eventId, recordIds, formVersion) : [];
+  if (mode === 'survey' && (assignments.length || project.sourceReview || project.sourceWorkbook)) {
+    throw new Error('Listesiz ankette görev veya kaynak dosya olamaz.');
+  }
   for (const assignment of assignments) {
     const snapshot = historyMap.get(assignment.formVersion);
     if (!snapshot || canonicalJson(snapshot) !== canonicalJson(assignment.fields)) {
@@ -296,7 +312,7 @@ export function normalizeBackupProject(input) {
       oldAnswer: raw.oldAnswer, incomingAnswer: raw.incomingAnswer };
   });
   return {
-    id, eventId, name: project.name, createdAt: isoDate(project.createdAt, 'Proje tarihi'),
+    id, eventId, mode, name: project.name, createdAt: isoDate(project.createdAt, 'Proje tarihi'),
     currentIndex, fields, formHistory, contacts, formVersion,
     formLocked: project.formLocked || false, templateId: project.templateId || null,
     sourceReview: sourceReview(project.sourceReview, fieldIds),
@@ -337,7 +353,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, 2, 3, 4, 5, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, 3, 4, 5, 6, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,

@@ -406,6 +406,50 @@ export async function updateProject(projectId, updates) {
   });
 }
 
+/** Listesiz ankette her doldurma yeni bir kayıt oluşturur; yazılar sıraya alınır. */
+export async function appendSurveyResponse(projectId, input) {
+  return enqueueWrite(async () => {
+    const projects = await getAllProjects();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project || project.mode !== 'survey') throw new Error('Anket bulunamadı.');
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Cevaplar geçersiz.');
+    const fieldIds = new Set(project.fields.map((field) => field.id));
+    if (Object.keys(input).some((key) => !fieldIds.has(key))) throw new Error('Anket soruları değişti. Ekranı yeniden açın.');
+    const data = {};
+    for (const field of project.fields) {
+      const value = String(input[field.id] ?? '').trim();
+      if (field.required && !value) throw new Error(`"${field.label}" boş bırakılamaz.`);
+      if (field.type === 'select' && value && !field.options.includes(value)) {
+        throw new Error(`"${field.label}" için geçersiz şık.`);
+      }
+      if (value.length > 10000) throw new Error(`"${field.label}" cevabı çok uzun.`);
+      if (value) data[field.id] = value;
+    }
+    if (!Object.keys(data).length) throw new Error('Kaydetmek için en az bir soruyu cevaplayın.');
+    const key = PROJECT_DATA_PREFIX + projectId;
+    const before = await AsyncStorage.getItem(key);
+    const contacts = before ? JSON.parse(before) : [];
+    if (!Array.isArray(contacts)) throw new Error('Anket cevapları okunamadı.');
+    const id = Crypto.randomUUID();
+    const response = { id, recordId: id, phone: '', data, completed: true,
+      completedAt: new Date().toISOString() };
+    const next = [...contacts, response];
+    const previousMeta = { ...project };
+    project.totalContacts = next.length;
+    project.completedContacts = next.length;
+    project.formLocked = true;
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(next));
+      await saveAllProjects(projects);
+    } catch (error) {
+      await AsyncStorage.setItem(key, before || '[]').catch(() => {});
+      Object.assign(project, previousMeta);
+      throw error;
+    }
+    return response;
+  });
+}
+
 const ACTIVE_ASSIGNMENT_STATUSES = new Set(['prepared', 'sent', 'partial', 'completed']);
 const currentAnswers = (data, fields) => Object.fromEntries(
   (fields || []).filter((field) => typeof data?.[field.id] === 'string')
@@ -903,9 +947,12 @@ export async function updateProjectForm(projectId, fields) {
     if (await AsyncStorage.getItem(DRAFT_KEY + projectId)) {
       throw new Error('Açık bir cevap taslağı var. Önce arama ekranındaki kişiyi kaydedin.');
     }
-    if (!Array.isArray(fields) || fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1 ||
-        fields.some((field) => field.isSystemField && field.isSystemField !== 'name')) {
-      throw new Error('İsim alanı gerekli.');
+    const surveyOnly = project.mode === 'survey';
+    if (!Array.isArray(fields) || !fields.length ||
+        (surveyOnly ? fields.some((field) => field.isSystemField) :
+          fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1 ||
+          fields.some((field) => field.isSystemField && field.isSystemField !== 'name'))) {
+      throw new Error(surveyOnly ? 'En az bir anket sorusu gerekli.' : 'İsim alanı gerekli.');
     }
     const ids = new Set();
     for (const field of fields) {

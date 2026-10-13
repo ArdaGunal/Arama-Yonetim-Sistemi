@@ -5,14 +5,15 @@ import { Colors } from '../../theme/colors';
 
 export default function Step1Info({ projectName, setProjectName, activeTab, setActiveTab,
   phoneText, setPhoneText, loading, handleParseText, handleImportExcel,
-  templates, templateId, applyTemplate, importTemplate, pasteMode }) {
+  templates, templateId, applyTemplate, importTemplate, pasteMode,
+  surveyOnly, removeList, restoreList, continueSurvey }) {
   const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 24) }]} keyboardShouldPersistTaps="handled">
-        <Text style={s.step}>1 / 2 · Listeyi ekle</Text>
+        <Text style={s.step}>1 / 2 · {surveyOnly ? 'Anketi hazırla' : 'Listeyi ekle'}</Text>
         <Text style={s.title}>Yeni etkinlik</Text>
-        <Text style={s.intro}>Önce adını yazın, sonra kişi listesini ekleyin. Kaydetmeden önce her şeyi kontrol edeceksiniz.</Text>
+        <Text style={s.intro}>{surveyOnly ? 'Anketin adını yazın, sonra soruları oluşturun.' : 'Önce adını yazın, sonra kişi listesini ekleyin. Kaydetmeden önce her şeyi kontrol edeceksiniz.'}</Text>
 
         <View style={s.card}>
           <Text style={s.label}>Etkinliğin adı</Text>
@@ -20,8 +21,23 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
             placeholder="Örnek: Bahar buluşması" placeholderTextColor={Colors.textPlaceholder} />
         </View>
 
-        <View style={s.card}>
-          <Text style={s.label}>Kişi listesi</Text>
+        {surveyOnly ? <View style={s.card}>
+          <Text style={s.label}>Kişi listesi kaldırıldı</Text>
+          <Text style={s.help}>Bu anketi liste ve telefon olmadan doldurabilirsiniz. Her doldurma ayrı bir cevap olarak kaydedilir.</Text>
+          <TouchableOpacity accessibilityRole="button" style={s.primary} onPress={continueSurvey}>
+            <Text style={s.primaryText}>Soruları düzenle →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" style={s.restore} onPress={restoreList}>
+            <Text style={s.outlineText}>Kişi listesi ekle</Text>
+          </TouchableOpacity>
+        </View> : <View style={s.card}>
+          <View style={s.listTitleRow}>
+            <Text style={s.label}>Kişi listesi</Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Kişi listesini kaldır"
+              onPress={removeList} style={s.removeList} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.removeListText}>×</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={s.help}>{pasteMode === 'phone-name' ? 'Her satır: telefon, sonra isim.' :
             pasteMode === 'phone-only' ? 'Her satır: bir telefon numarası.' :
               pasteMode === 'header-table' ? 'İlk satır başlık; sütunları Tab veya noktalı virgülle ayırın.' :
@@ -53,7 +69,7 @@ export default function Step1Info({ projectName, setProjectName, activeTab, setA
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>Dosya seç ve kontrol et →</Text>}
             </TouchableOpacity>
           )}
-        </View>
+        </View>}
 
         <View style={s.card}>
           <Text style={s.label}>Hazır sorular (isteğe bağlı)</Text>
@@ -100,4 +116,8 @@ const s = StyleSheet.create({
   templateState: { color: Colors.accentLight, fontSize: 13, fontWeight: '700' },
   outline: { borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 12, padding: 12, alignItems: 'center', marginTop: 8 },
   outlineText: { color: Colors.accentLight, fontWeight: '800' },
+  listTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  removeList: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: Colors.dangerBg },
+  removeListText: { color: Colors.danger, fontSize: 27, lineHeight: 32, fontWeight: '700' },
+  restore: { alignSelf: 'center', padding: 13, marginTop: 6 },
 });

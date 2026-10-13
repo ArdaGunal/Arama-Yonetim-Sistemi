@@ -213,7 +213,7 @@ test('versioned backup restores legacy IDs and detects changed content', async (
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
 
   const unsupported = JSON.parse(file);
-  unsupported.schemaVersion = 7;
+  unsupported.schemaVersion = 8;
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
   const duplicate = sampleProject();
   duplicate.contacts.push({ ...duplicate.contacts[0] });
@@ -1148,4 +1148,56 @@ test('incoming result file remains readable in web IndexedDB after reopening', a
     await reopened.removeIncomingResult(packet.sha256);
     assert.equal((await reopened.listIncomingResults()).length, 0);
   } finally { global.indexedDB = previousIndexedDB; }
+});
+
+test('listless survey saves independent responses and round trips through backup and Excel', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  const fields = [
+    { id: 'school', label: 'Okul numarası', type: 'text', options: [], order: 0, required: true },
+    { id: 'attend', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'], order: 1, required: true },
+  ];
+  await storage.createProject({ id: 'survey-1', eventId: 'survey-1', name: 'Listesiz deneme', mode: 'survey',
+    createdAt: '2026-10-14T12:00:00.000Z', currentIndex: 0, formVersion: 1,
+    fields, formHistory: [{ version: 1, fields }], contacts: [] });
+  await assert.rejects(storage.appendSurveyResponse('survey-1', { attend: 'Evet' }), /boş bırakılamaz/);
+  await assert.rejects(storage.appendSurveyResponse('survey-1', { school: '123', attend: 'Belki' }), /geçersiz şık/);
+  await Promise.all([
+    storage.appendSurveyResponse('survey-1', { school: '123', attend: 'Evet' }),
+    storage.appendSurveyResponse('survey-1', { school: '456', attend: 'Hayır' }),
+  ]);
+  const project = await storage.getProject('survey-1');
+  assert.equal(project.contacts.length, 2);
+  assert.equal(new Set(project.contacts.map((item) => item.recordId)).size, 2);
+  assert.ok(project.contacts.every((item) => item.phone === '' && item.completedAt));
+  const restored = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(project))).project;
+  assert.equal(restored.mode, 'survey');
+  assert.equal(restored.contacts[1].data.attend, 'Hayır');
+  const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
+  const wb = exports.buildWorkbook(restored);
+  assert.deepEqual(wb.SheetNames, ['Anket Yanıtları']);
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets['Anket Yanıtları'], { header: 1 });
+  assert.deepEqual(rows[0], ['Yanıt zamanı', 'Yanıt kimliği', 'Okul numarası', 'Geliyor musun?']);
+  assert.equal(rows[1][2], '123');
+  assert.equal(rows[2][3], 'Hayır');
+  await storage.updateProjectForm('survey-1', [fields[0],
+    { ...fields[1], label: 'Etkinliğe katılıyor musun?' }]);
+  const newAnswerField = (await storage.getProject('survey-1')).fields[1].id;
+  await storage.appendSurveyResponse('survey-1', { school: '789', [newAnswerField]: 'Evet' });
+  const revised = await storage.getProject('survey-1');
+  assert.equal(revised.formVersion, 2);
+  assert.equal(revised.contacts.length, 3);
+  assert.equal(revised.contacts[0].data.attend, 'Evet');
+  const revisedBackup = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(revised))).project;
+  assert.equal(revisedBackup.contacts.length, 3);
+});
+
+test('listless survey template keeps questions without name or phone', async () => {
+  const templates = loadSource('src/utils/templateFormat.js', { 'expo-crypto': cryptoMock });
+  const fields = [{ id: 'q', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'] }];
+  const content = await templates.createTemplateFile('Katılım', fields, [], 'name-phone', 'survey');
+  const imported = await templates.readTemplateFile(content);
+  assert.equal(imported.mode, 'survey');
+  assert.deepEqual(imported.fields.map((field) => field.id), ['q']);
+  await assert.rejects(templates.createTemplateFile('Hatalı', fields, [{ label: 'Telefon', role: 'phone' }],
+    'name-phone', 'survey'), /kaynak sütun/);
 });
