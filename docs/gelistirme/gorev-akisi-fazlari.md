@@ -2,7 +2,7 @@
 
 Bu sıra [görev devri ve sonuç kurallarını](gorev-devri-ve-sonuc-plani.md) uygulamaya geçirmek içindir. Her faz sonunda ilgili senaryolar otomatik testlerle ve mümkün olan platformlarda gerçek dosya akışıyla doğrulanır. Bir sonraki faza geçmeden önce mevcut `.ays` yedeklerinin okunması ve verilerin kaybolmaması kontrol edilir.
 
-**14 Ekim 2026 durumu:** Faz 1–3'ün veri kuralları ve ekranları, Faz 4'ün kalıcı sonuç kutusu, Faz 5'in çakışma kararları uygulandı. 43 otomatik test, web derlemesi, 5.000 kişi/100 görev/100 sonuç sentetik ölçümü ve Android emülatöründe kendi görevi ile gelen sonuç dosyası denendi. Faz 6'nın sade sayaç/ekran son düzeni ve gerçek cihaz kabul testleri açık; gerçek iPhone testi kullanıcı cihaz bulana kadar ertelendi.
+**14 Ekim 2026 durumu:** Faz 1–3'ün veri kuralları ve ekranları, Faz 4'ün kalıcı sonuç kutusu, Faz 5'in çakışma kararları uygulandı. Faz 6'da görev ekranının dört sayacı eklendi ve teknik kimlikler varsayılan görünümden kaldırıldı. 43 otomatik test, web derlemesi, 5.000 kişi/100 görev/100 sonuç sentetik ölçümü ve Android emülatöründe kendi görevi ile gelen sonuç dosyası denendi. Gerçek Android cihaz ve iPhone kabul testleri açık; iPhone testi kullanıcı cihaz bulana kadar ertelendi.
 
 ## Faz 1 — İptal edilen kişiler görünür ve yeniden atanabilir
 

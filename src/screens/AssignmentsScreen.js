@@ -11,6 +11,7 @@ import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
 import { saveEventBackup } from '../utils/automaticBackup';
+import { listIncomingResults } from '../utils/incomingResultStore';
 
 const inform = (message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Bilgi', message);
 const statuses = { prepared: 'Hazırlandı', sent: 'Gönderildi', partial: 'Kısmi sonuç', completed: 'Sonuçlandı', cancelled: 'İptal edildi', transferred: 'Devredildi' };
@@ -34,6 +35,7 @@ export default function AssignmentsScreen({ navigation, route }) {
   const [visibleCount, setVisibleCount] = useState(20);
   const [transferId, setTransferId] = useState(null);
   const [replacementName, setReplacementName] = useState('');
+  const [reviewCount, setReviewCount] = useState(null);
   const available = useMemo(() => project ? getAvailableContacts(project).length : 0, [project]);
   const returned = useMemo(() => project ? getReturnedContacts(project).length : 0, [project]);
   const callbacks = useMemo(() => project ? getCallbackCandidates(project).length : 0, [project]);
@@ -45,6 +47,14 @@ export default function AssignmentsScreen({ navigation, route }) {
       const loaded = await getProject(route.params.projectId);
       if (!loaded || loaded.role === 'volunteer') throw new Error('Koordinatör etkinliği bulunamadı.');
       setProject(loaded); setBackupHint(!!loaded.backupPending); setError('');
+      try {
+        const incoming = await listIncomingResults();
+        setReviewCount(incoming.filter((item) => !item.processed &&
+          (item.projectId === loaded.id || item.eventId === loaded.eventId)).length);
+      } catch (reason) {
+        reportError(reason, 'İncelenecek sonuç sayısı okunurken');
+        setReviewCount(null);
+      }
     } catch (reason) { reportError(reason, 'Görev ekranı açılırken'); setError(reason.message); }
   }, [route.params.projectId]);
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
@@ -124,22 +134,25 @@ export default function AssignmentsScreen({ navigation, route }) {
 
   if (error) return <View style={s.center}><Text style={s.warning}>{error}</Text><TouchableOpacity onPress={refresh}><Text style={s.link}>Tekrar dene</Text></TouchableOpacity></View>;
   if (!project) return <View style={s.center}><ActivityIndicator color={Colors.accentLight} /></View>;
-  const active = (project.assignments || []).filter((item) => !['cancelled', 'transferred'].includes(item.status));
   const finishedCount = (project.assignments || []).length -
     (project.assignments || []).filter((item) => !['completed', 'cancelled', 'transferred'].includes(item.status)).length;
   return <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingBottom: Math.max(40, insets.bottom + 20) }]} keyboardShouldPersistTaps="handled">
     <Text style={s.title}>Görevleri dağıt</Text>
     <Text style={s.intro}>Her kişi tek bir etkin göreve ayrılır. Görev sayısını yazın; kişiler sırayla atanır.</Text>
     <View style={s.summary}>
-      <View style={s.stat}><Text style={s.statNumber}>{available}</Text><Text style={s.statLabel}>Atanabilir</Text></View>
-      <View style={s.stat}><Text style={s.statNumber}>{active.filter((item) => item.round === 1).reduce((sum, item) => sum + item.contacts.length, 0)}</Text><Text style={s.statLabel}>Ayrılmış</Text></View>
-      <View style={s.stat}><Text style={s.statNumber}>{project.contacts.length}</Text><Text style={s.statLabel}>Toplam</Text></View>
+      <View style={s.stat}><Text style={s.statNumber}>{available}</Text><Text style={s.statLabel}>Dağıtılacak</Text></View>
+      <View style={s.stat}><Text style={s.statNumber}>{returned}</Text><Text style={s.statLabel}>Yarım kalan</Text></View>
+      <View style={s.stat}><Text style={s.statNumber}>{callbacks}</Text><Text style={s.statLabel}>Tekrar ara</Text></View>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${reviewCount ?? 'Bilinmeyen'} incelenecek sonuç, gelen kutusunu aç`}
+        style={[s.stat, s.reviewStat]} onPress={() => navigation.navigate('ResultsInbox')}>
+        <Text style={s.statNumber}>{reviewCount ?? '–'}</Text><Text style={s.statLabel}>İncelenecek</Text>
+      </TouchableOpacity>
     </View>
     {mode === 'first' && returned > 0 && <View style={s.returnedBox}>
       <Text style={s.returnedText}>Yarım kalanlar: {returned} kişi. Yeni görevde önce bu kişiler seçilir.</Text>
     </View>}
     <TouchableOpacity accessibilityRole="button" style={s.collect} onPress={() => navigation.navigate('ResultsImport', { projectId: project.id })}>
-      <Text style={s.collectText}>Gelen sonuçları topla →</Text>
+      <Text style={s.collectText}>Dosyadan sonuç ekle →</Text>
     </TouchableOpacity>
     <View style={s.modeRow}>
       <TouchableOpacity accessibilityRole="button" style={[s.modeButton, mode === 'first' && s.modeActive]} onPress={() => setMode('first')}>
@@ -177,8 +190,7 @@ export default function AssignmentsScreen({ navigation, route }) {
     {!listedAssignments.length && <Text style={s.muted}>{project.assignments?.length ? 'Devam eden görev yok.' : 'Henüz görev hazırlanmadı.'}</Text>}
     {listedAssignments.slice(0, visibleCount).map((assignment) => <View key={assignment.assignmentId} style={s.card}>
       <View style={s.heading}><Text style={s.cardTitle}>{assignment.ownerType === 'coordinator' ? 'Kendi görevim' : assignment.volunteerName}</Text><Text style={s.badge}>{statuses[assignment.status]}</Text></View>
-      <Text style={s.detail}>{assignment.contacts.length} kişi · {pendingIds(assignment).length} yapılmamış · Tur {assignment.round} · Form {assignment.formVersion}</Text>
-      <Text style={s.detail}>Görev kimliği: {assignment.assignmentId.slice(0, 8)}</Text>
+      <Text style={s.detail}>{assignment.contacts.length} kişi · {pendingIds(assignment).length} yapılmamış{assignment.round >= 2 ? ' · Tekrar arama' : ''}</Text>
       {assignment.ownerType === 'coordinator' && !['cancelled', 'transferred'].includes(assignment.status) && <TouchableOpacity
         accessibilityRole="button" style={s.primary} onPress={() => navigation.navigate('MyAssignment', {
           projectId: project.id, assignmentId: assignment.assignmentId,
@@ -226,7 +238,9 @@ const s = StyleSheet.create({
   collectText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   root: { flex: 1, backgroundColor: Colors.bg }, content: { padding: 18, paddingTop: 26 }, center: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: Colors.bg },
   title: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: 8 }, intro: { color: Colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: 18 },
-  summary: { flexDirection: 'row', gap: 8, marginBottom: 16 }, stat: { flex: 1, backgroundColor: Colors.bgCard, borderRadius: 13, padding: 12, alignItems: 'center' },
+  summary: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  stat: { width: '48%', minHeight: 72, backgroundColor: Colors.bgCard, borderRadius: 13, padding: 10, alignItems: 'center', justifyContent: 'center' },
+  reviewStat: { borderWidth: 1, borderColor: Colors.borderAccent },
   returnedBox: { backgroundColor: Colors.warningBg, borderRadius: 12, padding: 13, marginBottom: 14 },
   returnedText: { color: Colors.warning, fontSize: 13, fontWeight: '700', lineHeight: 19 },
   statNumber: { color: Colors.accentLight, fontSize: 24, fontWeight: '800' }, statLabel: { color: Colors.textSecondary, fontSize: 11, marginTop: 4 },
