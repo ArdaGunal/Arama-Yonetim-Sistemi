@@ -20,6 +20,8 @@ import AssignmentsScreen from './src/screens/AssignmentsScreen';
 import AssignmentImportScreen from './src/screens/AssignmentImportScreen';
 import ResultsImportScreen from './src/screens/ResultsImportScreen';
 import IncomingFileScreen from './src/screens/IncomingFileScreen';
+import MyAssignmentScreen from './src/screens/MyAssignmentScreen';
+import ResultsInboxScreen from './src/screens/ResultsInboxScreen';
 import DeveloperPanel from './src/screens/DeveloperPanel';
 import { Colors } from './src/theme/colors';
 import { addBreadcrumb, installGlobalErrorHandler, loadLastDiagnostic, reportError, subscribeToDiagnostics } from './src/utils/diagnostics';
@@ -144,7 +146,9 @@ export default function App() {
         <Stack.Screen name="Assignments" component={AssignmentsScreen} options={{ title: 'Görevleri Dağıt' }} />
         <Stack.Screen name="AssignmentImport" component={AssignmentImportScreen} options={{ title: 'Görev Dosyası Aç' }} />
         <Stack.Screen name="ResultsImport" component={ResultsImportScreen} options={{ title: 'Sonuçları Topla' }} />
+        <Stack.Screen name="ResultsInbox" component={ResultsInboxScreen} options={{ title: 'Gelen Sonuçlar' }} />
         <Stack.Screen name="IncomingFile" component={IncomingFileScreen} options={{ title: 'Gelen Dosya' }} />
+        <Stack.Screen name="MyAssignment" component={MyAssignmentScreen} options={{ title: 'Kendi Görevim' }} />
         <Stack.Screen
           name="Survey"
           component={SurveyScreen}

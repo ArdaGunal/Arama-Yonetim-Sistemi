@@ -8,6 +8,8 @@
 
 10 Ekim 2026'da kaynak Excel ekiyle yeniden çalıştırıldığında sonuç Excel'i yaklaşık 0,35 saniyede, `.ays` yedeği 0,09 saniyede üretildi. Yedek 4,35 MB, kaynak ekinin base64 içeriği 0,72 MB oldu. Bu süreler Windows/Node ölçümüdür; Android ve iPhone depolama/ZIP sürelerini göstermez.
 
+14 Ekim 2026'da sürüm 1.0.13 koduyla tekrar ölçüldü: 100 görev ayırma 611 ms, 100 sonucu önizleme 151 ms, birleştirme 155 ms, Excel oluşturma 305 ms sürdü. Yedek 4,36 MB idi. Ölçüm sentetiktir; gerçek cihaz süreleri ayrıca izlenmelidir.
+
 Geri arama adayları artık görevleri kişi başına yeniden taramak yerine bir kez dizinler. Sentetik 5.000 kişi/100 görev koşulunda bu aşama yaklaşık 100 ms'den 3–18 ms aralığına indi. Görev ekranındaki atanabilir ve geri arama sayıları da her klavye girişinde yeniden hesaplanmaz.
 
 Yerel üretim web önizlemesine bu senaryonun `.ays` yedeği yüklendi. 5.000 kişi ve 100 tamamlanmış görev göründü; görev ekranı bitenleri başlangıçta gizledi, ilk 20 görevi ve **20 görev daha göster** düğmesini doğru sundu. Tarayıcı hata kaydı boştu.

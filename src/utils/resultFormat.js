@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { canonicalJson } from './canonicalJson';
 import { cleanPhoneNumber } from './phoneUtils';
 
-export const RESULT_SCHEMA_VERSION = 1;
+export const RESULT_SCHEMA_VERSION = 2;
 export const CALL_STATUSES = ['contacted', 'unreached', 'later', 'wrong_number'];
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_CHARS = 30 * 1024 * 1024;
@@ -42,6 +42,7 @@ export function normalizeResult(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Sonuç içeriği geçersiz.');
   const eventId = identifier(input.eventId, 'Etkinlik kimliği');
   const assignmentId = identifier(input.assignmentId, 'Görev kimliği');
+  const sourceId = input.sourceId == null ? null : identifier(input.sourceId, 'Cihaz kimliği');
   if (!Number.isInteger(input.formVersion) || input.formVersion < 1 ||
       !Number.isInteger(input.round) || input.round < 1 ||
       !Number.isInteger(input.revision) || input.revision < 1 ||
@@ -80,13 +81,13 @@ export function normalizeResult(input) {
       callbackAt: raw.callbackAt || null, attempts: normalizeAttempts(raw.attempts, fieldIds) };
   });
   return { eventId, assignmentId, formVersion: input.formVersion, round: input.round,
-    revision: input.revision, assignmentDigest: input.assignmentDigest,
+    revision: input.revision, sourceId, assignmentDigest: input.assignmentDigest,
     exportedAt: date(input.exportedAt, 'Sonuç tarihi'), fields: input.fields, contacts };
 }
 
 export async function createResultFile(input) {
   const result = normalizeResult(input);
-  const body = { format: FORMAT, schemaVersion: RESULT_SCHEMA_VERSION, kind: 'result',
+  const body = { format: FORMAT, schemaVersion: result.sourceId ? RESULT_SCHEMA_VERSION : 1, kind: 'result',
     eventId: result.eventId, assignmentId: result.assignmentId, exportedAt: result.exportedAt,
     payload: { result } };
   const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalJson(body));
@@ -97,7 +98,7 @@ export async function readResultFile(text) {
   if (typeof text !== 'string' || text.length > MAX_CHARS) throw new Error('Sonuç dosyası çok büyük veya okunamadı.');
   let file;
   try { file = JSON.parse(text); } catch { throw new Error('Sonuç dosyası geçerli JSON değil.'); }
-  if (file?.format !== FORMAT || file.kind !== 'result' || file.schemaVersion !== RESULT_SCHEMA_VERSION) {
+  if (file?.format !== FORMAT || file.kind !== 'result' || ![1, RESULT_SCHEMA_VERSION].includes(file.schemaVersion)) {
     throw new Error('Bu dosya desteklenen bir sonuç paketi değil.');
   }
   const body = { format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
@@ -108,6 +109,7 @@ export async function readResultFile(text) {
   const actual = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalJson(body));
   if (actual !== file.integrity.sha256) throw new Error('Sonuç dosyası değişmiş veya bozulmuş.');
   const result = normalizeResult(body.payload?.result);
+  if (file.schemaVersion === RESULT_SCHEMA_VERSION && !result.sourceId) throw new Error('Sonuç cihaz kimliği eksik.');
   if (result.eventId !== body.eventId || result.assignmentId !== body.assignmentId || result.exportedAt !== body.exportedAt) {
     throw new Error('Sonuç kimlikleri uyuşmuyor.');
   }

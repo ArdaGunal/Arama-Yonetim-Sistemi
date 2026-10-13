@@ -20,7 +20,7 @@ Topluluğun Excel ile yürüttüğü kişi dağıtımı, arama, geri arama ve so
 4. **Formu hazırla:** Soruları, şıkları, alan türlerini ve zorunlu alanları belirle. Arama durumu (`Aranmadı`, `Ulaşılamadı`, `Sonra ara`, `Görüşüldü`, `Yanlış numara`) anket cevaplarından ayrı tutulsun.
 5. **Görevleri dağıt:** Atanmamış havuzdan kişiye özel sayılar seç; örneğin A'ya 10, B'ye 50, C'ye 17. Paket oluşturulunca kişiler ayrılmış sayılır. Gönderilmeyen paket iptal edilip havuza geri alınabilir. Gönderilmiş paket yeniden atanacaksa eski kopyanın hâlâ kullanılabileceği açıkça uyarılır.
 6. **Sonuçları topla:** Gelen dosyaları topluca seç, önizlemeyi ve çakışmaları incele, yedek alıp birleştir.
-7. **Geri arama turu aç:** `Sonra ara` kuyruğundan yeni görev oluştur. İlk görev kapanmadan aynı kişiyi yeni tura vermek varsayılan olarak engellensin.
+7. **Geri arama turu aç:** `Sonra ara` kuyruğundan yeni görev oluştur. Önceki görevde ilgili kişinin çalışması kapanmadan aynı kişiyi yeni tura verme; tüm paketin bitmesini bekletme.
 8. **Nihai Excel'i ve etkinlik yedeğini dışarı al.**
 
 ### Gönüllü
@@ -74,7 +74,11 @@ Proje topluluktan bir başkasına devredilebilmeli: kaynak kodu, statik site hes
 
 ## Geliştirme sırası
 
-**Durum (13 Ekim 2026):** Yedek `.ays` sürüm 5'tir; sürüm 1–4 okunur. Zorunlu sorular, eski cevapları koruyan form sürümleri, otomatik yedek ve güvenli silme eklendi. Yeni etkinlik iki adımda oluşturulur; sorular alt alta görünür, tekrarlı telefonda ilk kayıt varsayılan seçilir ve oluşturma hatası düğmenin üstünde açıklanır. Kaynak inceleme, şablon paylaşımı, görev dağıtımı, sonuç birleştirme, geri arama ve PWA akışları çalışıyor. Yeni `.xlsx/.xlsm` kaynak dosyaları birebir saklanır ve kaynak sayfalarına dokunulmadan sonuç sayfaları eklenir. Android'de WhatsApp dosyasına dokunarak açma gerçek kullanımda doğrulandı; sade iki adımlı oluşturma Android emülatöründe sentetik CSV ve tekrarlı telefonla denendi. [GitHub Pages yayını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) açıldı. [Sentetik 5.000 kişi/100 görev ölçümü](../gelistirme/buyuk-veri-performansi.md) yapıldı; gerçek Android telefon ölçümü ve gerçek iPhone testi bekliyor. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
+**Güncel geliştirme:** İptal ve kısmi devirde kalan kişiler havuza dönüyor; koordinatör kendi görevini çözebiliyor; gelen sonuçlar kalıcı kutuya alınıyor ve geç/çakışan cevaplar karar istiyor. Ayrıntılı kurallar [görev devri ve sonuç planında](../gelistirme/gorev-devri-ve-sonuc-plani.md) bulunur. Gerçek iPhone testi ve saha kullanımı hâlâ doğrulanmalıdır.
+
+Uygulama sırası, kabul ölçütleri ve faz sonu kontrolleri [görev akışı fazlarında](../gelistirme/gorev-akisi-fazlari.md) kayıtlıdır.
+
+**Durum (14 Ekim 2026):** Yedek `.ays` sürüm 6'dır; sürüm 1–5 okunur. Sonuç paketi sürüm 2'dir; sürüm 1 okunur. Zorunlu sorular, form sürümleri, otomatik yedek, güvenli silme, görev iptali/devri, koordinatörün kendi görevi ve kalıcı sonuç kutusu eklendi. Yeni etkinlik iki adımda oluşturulur. Kaynak Excel aynen saklanır. Android emülatöründe koordinatörün sentetik görev cevabı ve yedeği doğrulandı. [GitHub Pages yayını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) açıldı. [Sentetik 5.000 kişi/100 görev ölçümü](../gelistirme/buyuk-veri-performansi.md) yapıldı; gerçek Android telefon ölçümü ve gerçek iPhone testi bekliyor. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
 
 1. **Dosya sözleşmesi ve güvenlik temeli:** Sürümlü paket/yedek biçimi, kimlikler, bütünlük kontrolü, tekrar içe aktarmaya dayanıklılık, geri yükleme.
 2. **Koordinatör akışı:** Kaynak önizleme ve eşleştirme, telefon tekrar incelemesi, form/şık düzenleme, şablon paylaşımı ve sürüm kilidi.

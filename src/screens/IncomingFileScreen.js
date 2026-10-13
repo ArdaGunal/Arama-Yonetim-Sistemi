@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { readAssignmentFile } from '../utils/assignmentFormat';
 import { readResultFile } from '../utils/resultFormat';
 import { getProjectSummaries, importVolunteerAssignment } from '../utils/storage';
+import { saveIncomingResult } from '../utils/incomingResultStore';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 
@@ -34,8 +35,13 @@ export default function IncomingFileScreen({ route, navigation }) {
           const packet = await readResultFile(content);
           const projects = await getProjectSummaries();
           const project = projects.find((item) => item.role !== 'volunteer' && item.eventId === packet.result.eventId);
-          if (!project) throw new Error('Bu sonucun ait olduğu ana etkinlik cihazda bulunamadı.');
-          if (active) setState({ loading: false, kind, packet, project });
+          const stored = await saveIncomingResult(packet, content, project || null);
+          if (active) {
+            if (stored.processed) setState({ loading: false, kind: 'processed' });
+            else if (project) navigation.replace('ResultsImport', { projectId: project.id,
+              initialPacket: packet, inboxDigests: [packet.sha256] });
+            else navigation.replace('ResultsInbox');
+          }
         } else throw new Error('Bu dosya görev veya sonuç paketi değil.');
       } catch (error) {
         reportError(error, 'Gelen dosya açılırken');
@@ -56,6 +62,10 @@ export default function IncomingFileScreen({ route, navigation }) {
       <TouchableOpacity style={s.button} onPress={() => navigation.replace('Survey', {
         projectId: state.assignment.assignmentId, projectName: state.assignment.eventName,
       })}><Text style={s.buttonText}>Aramaya başla →</Text></TouchableOpacity>
+    </> : state.kind === 'processed' ? <>
+      <Text style={s.title}>Bu sonuç daha önce işlendi</Text>
+      <Text style={s.help}>Dosya gelen kutusunda saklanıyor. Tekrar birleştirme yapılmadı.</Text>
+      <TouchableOpacity style={s.button} onPress={() => navigation.replace('ResultsInbox')}><Text style={s.buttonText}>Gelen sonuçları aç →</Text></TouchableOpacity>
     </> : <>
       <Text style={s.title}>Sonuç dosyası geldi</Text>
       <Text style={s.help}>{state.project.name} · Sürüm {state.packet.result.revision}</Text>

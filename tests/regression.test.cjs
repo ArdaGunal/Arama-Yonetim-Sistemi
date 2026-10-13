@@ -21,6 +21,7 @@ function loadSource(relativePath, mocks = {}) {
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
         name === './resultFormat' ? resultFormat :
+          name === './formValidation' ? formValidation :
           name === './resultMerge' ? resultMerge : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
@@ -43,6 +44,7 @@ const phoneUtils = loadSource('src/utils/phoneUtils.js');
 const newProjectFields = loadSource('src/utils/newProjectFields.js');
 const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-crypto': cryptoMock });
 const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
+const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 
@@ -202,7 +204,7 @@ test('versioned backup restores legacy IDs and detects changed content', async (
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
 
   const unsupported = JSON.parse(file);
-  unsupported.schemaVersion = 6;
+  unsupported.schemaVersion = 7;
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
   const duplicate = sampleProject();
   duplicate.contacts.push({ ...duplicate.contacts[0] });
@@ -468,6 +470,93 @@ test('2000-person pool distributes 10, 50 and 17 without overlap', async () => {
   assert.equal(storage.getAvailableContacts(await storage.getProject('large-event')).length, 1933);
 });
 
+test('cancelled work returns to the front of the pool without losing unfinished people', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject(distributionProject(60));
+  const first = await storage.createAssignment('large-event', {
+    assignmentId: 'task-cancelled', volunteerName: 'A', count: 50, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  await storage.setAssignmentStatus('large-event', first.assignmentId, 'sent');
+  await storage.setAssignmentStatus('large-event', first.assignmentId, 'cancelled', true);
+  let project = await storage.getProject('large-event');
+  assert.equal(storage.getReturnedContacts(project).length, 50);
+  assert.equal(storage.getAvailableContacts(project).length, 60);
+  const second = await storage.createAssignment('large-event', {
+    assignmentId: 'task-new', volunteerName: 'B', count: 30, createdAt: '2026-10-08T08:02:00.000Z',
+  });
+  assert.deepEqual(second.contacts.map((row) => row.recordId),
+    first.contacts.slice(0, 30).map((row) => row.recordId));
+  project = await storage.getProject('large-event');
+  assert.equal(storage.getReturnedContacts(project).length, 20);
+  assert.equal(storage.getAvailableContacts(project).length, 30);
+  const restored = await backupFormat.readBackupFile(await backupFormat.createBackupFile(project));
+  assert.equal(storage.getReturnedContacts(restored.project).length, 20);
+  assert.equal(new Set(project.assignments.filter((item) => item.status !== 'cancelled')
+    .flatMap((item) => item.contacts.map((row) => row.phone))).size, 30);
+});
+
+test('unfinished rows of a partial assignment transfer without losing completed answers', async () => {
+  const coordinator = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  const volunteer = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await coordinator.createProject(distributionProject(12));
+  const first = await coordinator.createAssignment('large-event', {
+    assignmentId: 'task-partial', volunteerName: 'A', count: 10, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const opened = await assignmentFormat.readAssignmentFile(await assignmentFormat.createAssignmentFile(first));
+  await volunteer.importVolunteerAssignment(opened.assignment, opened.sha256);
+  const task = await volunteer.getProject(first.assignmentId);
+  await volunteer.updateProject(task.id, { contacts: task.contacts.map((contact, index) => index < 3
+    ? { ...contact, completed: true, callStatus: 'contacted', data: { ...contact.data, answer: 'Evet' },
+      attempts: [{ id: `call-${index}`, at: '2026-10-08T09:00:00.000Z', status: 'contacted',
+        note: '', data: { ...contact.data, answer: 'Evet' } }] }
+    : contact) });
+  const result = await resultFormat.readResultFile((await volunteer.createVolunteerResultFile(task.id)).content);
+  const preview = await coordinator.previewImportedResults('large-event', [result]);
+  await coordinator.applyImportedResults('large-event', [result], {}, preview.snapshot);
+  const pending = first.contacts.slice(3).map((row) => row.recordId);
+  const second = await coordinator.transferAssignmentContacts('large-event', first.assignmentId, pending, {
+    assignmentId: 'task-reassigned', volunteerName: 'B', createdAt: '2026-10-08T10:00:00.000Z',
+  });
+  assert.deepEqual(second.contacts.map((row) => row.recordId), pending);
+  const master = await coordinator.getProject('large-event');
+  assert.equal(master.contacts.filter((row) => row.completed).length, 3);
+  assert.equal(master.assignments[0].status, 'transferred');
+  assert.deepEqual(master.assignments[0].releasedRecordIds, pending);
+  assert.equal(coordinator.getReturnedContacts(master).length, 0);
+  assert.equal(coordinator.getAvailableContacts(master).length, 2);
+  const restored = await backupFormat.readBackupFile(await backupFormat.createBackupFile(master));
+  assert.deepEqual(restored.project.assignments[0].releasedRecordIds, pending);
+  assert.equal(coordinator.getAvailableContacts(restored.project).length, 2);
+});
+
+test('coordinator self assignment reserves people and writes answers into the master event', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject(distributionProject(4));
+  const own = await storage.createAssignment('large-event', {
+    assignmentId: 'task-self', volunteerName: 'Ben', ownerType: 'coordinator', count: 2,
+    createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  assert.equal(own.ownerType, 'coordinator');
+  assert.deepEqual(storage.getAvailableContacts(await storage.getProject('large-event'))
+    .map((row) => row.recordId), ['record-2', 'record-3']);
+  await storage.saveCoordinatorTaskContact('large-event', own.assignmentId, own.contacts[0].recordId, {
+    data: { name: 'Kişi 0', answer: 'Evet' }, callStatus: 'contacted', callbackNote: '', callbackAt: null,
+  });
+  let project = await storage.getProject('large-event');
+  assert.equal(project.contacts[0].completed, true);
+  assert.equal(project.contacts[0].attempts.length, 1);
+  assert.equal(project.assignments[0].status, 'partial');
+  await storage.saveCoordinatorTaskContact('large-event', own.assignmentId, own.contacts[1].recordId, {
+    data: { name: 'Kişi 1', answer: 'Hayır' }, callStatus: 'later', callbackNote: 'Yarın', callbackAt: null,
+  });
+  project = await storage.getProject('large-event');
+  assert.equal(project.assignments[0].status, 'completed');
+  assert.equal(storage.getCallbackCandidates(project).length, 1);
+  const restored = await backupFormat.readBackupFile(await backupFormat.createBackupFile(project));
+  assert.equal(restored.project.assignments[0].ownerType, 'coordinator');
+  assert.equal(restored.project.contacts[1].callbackNote, 'Yarın');
+});
+
 test('assignment packet is stable, private and idempotent on volunteer import', async () => {
   const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
   await storage.createProject(distributionProject(5));
@@ -650,7 +739,7 @@ test('partial result, newer revision and callback round merge without losing the
   assert.equal(preview1.conflicts.length, 0);
   await coordinator.applyImportedResults('large-event', [file1], {}, preview1.snapshot);
   assert.equal((await coordinator.getProject('large-event')).contacts[0].data.answer, 'Evet');
-  assert.equal(coordinator.getCallbackCandidates(await coordinator.getProject('large-event')).length, 0);
+  assert.equal(coordinator.getCallbackCandidates(await coordinator.getProject('large-event')).length, 1);
   const duplicate = await coordinator.previewImportedResults('large-event', [file1]);
   assert.equal(duplicate.skipped.length, 1);
   const changed = contacts.map((contact, index) => index === 1 ? {
@@ -888,4 +977,128 @@ test('interrupted merge journal restores the previous project before reading', a
   const recovered = await storage.getProject('event-1');
   assert.equal(recovered.contacts[0].phone, '+905321234567');
   assert.equal(memory.values.has('@ays_merge_journal'), false);
+});
+
+async function syntheticResult(assignment, sourceId, revision, answer, attemptId) {
+  const at = '2026-10-09T09:00:00.000Z';
+  const content = await resultFormat.createResultFile({
+    eventId: assignment.eventId, assignmentId: assignment.assignmentId,
+    formVersion: assignment.formVersion, round: assignment.round, revision, sourceId,
+    assignmentDigest: assignment.packetDigest, exportedAt: at, fields: assignment.fields,
+    contacts: assignment.contacts.map((row) => ({ recordId: row.recordId, phone: row.phone,
+      data: { ...row.data, answer }, completed: true, completedAt: at,
+      callStatus: 'contacted', attempts: [{ id: attemptId, at, status: 'contacted', note: '',
+        data: { ...row.data, answer } }] })),
+  });
+  return resultFormat.readResultFile(content);
+}
+
+test('cancelled result waits for a decision and keeping the answer still preserves its attempt', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject(distributionProject(1));
+  const oldTask = await storage.createAssignment('large-event', {
+    assignmentId: 'old-task-late', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const packet = await syntheticResult(oldTask, 'device-old', 1, 'Evet', 'attempt-late');
+  await storage.setAssignmentStatus('large-event', oldTask.assignmentId, 'cancelled');
+  const newTask = await storage.createAssignment('large-event', {
+    assignmentId: 'new-task-late', volunteerName: 'B', count: 1, createdAt: '2026-10-08T08:02:00.000Z',
+  });
+  assert.equal(newTask.contacts[0].recordId, oldTask.contacts[0].recordId);
+  const current = await storage.getProject('large-event');
+  await storage.updateProject(current.id, { contacts: current.contacts.map((contact) => ({ ...contact,
+    data: { ...contact.data, answer: 'Hayır' }, completed: true, callStatus: 'contacted' })) });
+  const preview = await storage.previewImportedResults('large-event', [packet]);
+  assert.equal(preview.conflicts[0].reason, 'Görev iptal edilmiş');
+  await storage.applyImportedResults('large-event', [packet], { 'old-task-late:record-0': 'keep' }, preview.snapshot);
+  const merged = await storage.getProject('large-event');
+  assert.equal(merged.contacts[0].data.answer, 'Hayır');
+  assert.equal(merged.contacts[0].attempts[0].id, 'attempt-late');
+  assert.equal(merged.assignments[0].status, 'cancelled');
+  assert.equal((await backupFormat.readBackupFile(await backupFormat.createBackupFile(merged))).project.contacts[0].attempts.length, 1);
+});
+
+test('higher revision from another device cannot replace the answer automatically', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject(distributionProject(1));
+  const assignment = await storage.createAssignment('large-event', {
+    assignmentId: 'two-devices', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const first = await syntheticResult(assignment, 'device-one', 1, 'Evet', 'attempt-one');
+  const firstPreview = await storage.previewImportedResults('large-event', [first]);
+  await storage.applyImportedResults('large-event', [first], {}, firstPreview.snapshot);
+  const second = await syntheticResult(assignment, 'device-two', 999, 'Hayır', 'attempt-two');
+  const review = await storage.previewImportedResults('large-event', [second]);
+  assert.equal(review.conflicts[0].reason, 'Başka cihazdan sonuç');
+  await storage.applyImportedResults('large-event', [second], { 'two-devices:record-0': 'keep' }, review.snapshot);
+  const merged = await storage.getProject('large-event');
+  assert.equal(merged.contacts[0].data.answer, 'Evet');
+  assert.deepEqual(merged.contacts[0].attempts.map((attempt) => attempt.id), ['attempt-one', 'attempt-two']);
+  assert.equal(merged.assignments[0].sourceConflict, true);
+  const restored = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(merged))).project;
+  assert.equal(restored.assignments[0].sourceConflict, true);
+  assert.equal((await storage.previewImportedResults('large-event', [second])).skipped.length, 1);
+});
+
+test('incoming result survives restart and opening the same file twice creates one inbox item', async () => {
+  const memory = memoryStorage();
+  const files = new Map();
+  const mocks = {
+    '@react-native-async-storage/async-storage': memory,
+    'react-native': { Platform: { OS: 'android' } },
+    'expo-file-system/legacy': {
+      documentDirectory: 'file:///docs/', EncodingType: { UTF8: 'utf8' },
+      async writeAsStringAsync(uri, value) { files.set(uri, value); },
+      async getInfoAsync(uri) { return { exists: files.has(uri) }; },
+      async readAsStringAsync(uri) { return files.get(uri); },
+      async deleteAsync(uri) { files.delete(uri); },
+    },
+  };
+  const inbox = loadSource('src/utils/incomingResultStore.js', mocks);
+  const coordinator = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await coordinator.createProject(distributionProject(1));
+  const assignment = await coordinator.createAssignment('large-event', {
+    assignmentId: 'inbox-task', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  const packet = await syntheticResult(assignment, 'inbox-device', 1, 'Evet', 'inbox-attempt');
+  const content = await resultFormat.createResultFile(packet.result);
+  const project = await coordinator.getProject('large-event');
+  assert.equal((await inbox.saveIncomingResult(packet, content, project)).duplicate, undefined);
+  assert.equal((await inbox.saveIncomingResult(packet, content, project)).duplicate, true);
+  const restarted = loadSource('src/utils/incomingResultStore.js', mocks);
+  assert.equal((await restarted.listIncomingResults()).length, 1);
+  assert.equal((await restarted.readIncomingResult(packet.sha256)).packet.sha256, packet.sha256);
+  await restarted.markIncomingResultsProcessed([packet.sha256]);
+  assert.equal((await restarted.listIncomingResults())[0].processed, true);
+  await assert.rejects(restarted.saveIncomingResult(packet, content, { ...project, eventId: 'wrong' }), /eşleşmiyor/);
+  await restarted.removeIncomingResult(packet.sha256);
+  assert.equal((await restarted.listIncomingResults()).length, 0);
+  assert.equal(files.size, 0);
+});
+
+test('incoming result file remains readable in web IndexedDB after reopening', async () => {
+  const previousIndexedDB = global.indexedDB;
+  global.indexedDB = require('fake-indexeddb').indexedDB;
+  try {
+    const memory = memoryStorage();
+    const mocks = {
+      '@react-native-async-storage/async-storage': memory,
+      'react-native': { Platform: { OS: 'web' } },
+      'expo-file-system/legacy': {},
+    };
+    const coordinator = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+    await coordinator.createProject(distributionProject(1));
+    const assignment = await coordinator.createAssignment('large-event', {
+      assignmentId: 'web-inbox-task', volunteerName: 'A', count: 1, createdAt: '2026-10-08T08:01:00.000Z',
+    });
+    const packet = await syntheticResult(assignment, 'web-inbox-device', 1, 'Evet', 'web-inbox-attempt');
+    const content = await resultFormat.createResultFile(packet.result);
+    const inbox = loadSource('src/utils/incomingResultStore.js', mocks);
+    await inbox.saveIncomingResult(packet, content, await coordinator.getProject('large-event'));
+    const reopened = loadSource('src/utils/incomingResultStore.js', mocks);
+    assert.equal((await reopened.readIncomingResult(packet.sha256)).packet.sha256, packet.sha256);
+    assert.equal((await reopened.saveIncomingResult(packet, content)).duplicate, true);
+    await reopened.removeIncomingResult(packet.sha256);
+    assert.equal((await reopened.listIncomingResults()).length, 0);
+  } finally { global.indexedDB = previousIndexedDB; }
 });

@@ -7,7 +7,7 @@ import { normalizeSourceWorkbook } from './sourceWorkbookArchive';
 export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 5;
+export const BACKUP_SCHEMA_VERSION = 6;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -69,15 +69,24 @@ function normalizeAssignments(value, eventId, recordIds, formVersion) {
     const assignment = normalizeAssignment(raw);
     if (assignment.eventId !== eventId || seen.has(assignment.assignmentId) ||
         assignment.formVersion > formVersion || assignment.round > 100 ||
-        !['prepared', 'sent', 'partial', 'completed', 'cancelled'].includes(raw.status)) {
+        !['prepared', 'sent', 'partial', 'completed', 'cancelled', 'transferred'].includes(raw.status)) {
       throw new Error('Yedekte görev kimliği veya durumu geçersiz.');
     }
     seen.add(assignment.assignmentId);
+    const releasedRecordIds = raw.releasedRecordIds || [];
+    if (!Array.isArray(releasedRecordIds) || new Set(releasedRecordIds).size !== releasedRecordIds.length ||
+        releasedRecordIds.some((recordId) => !assignment.contacts.some((contact) => contact.recordId === recordId))) {
+      throw new Error('Yedekte devredilen kişi listesi geçersiz.');
+    }
+    if (raw.ownerType != null && !['volunteer', 'coordinator'].includes(raw.ownerType)) {
+      throw new Error('Görev sahibi türü geçersiz.');
+    }
+    if (raw.reassignedFrom != null) identifier(raw.reassignedFrom, 'Önceki görev kimliği');
     if (raw.sentAt != null) isoDate(raw.sentAt, 'Gönderim tarihi');
     if (raw.cancelledAt != null) isoDate(raw.cancelledAt, 'İptal tarihi');
     for (const contact of assignment.contacts) {
       if (!recordIds.has(contact.recordId)) throw new Error('Görevde ana listede olmayan kayıt var.');
-      if (raw.status !== 'cancelled') {
+      if (!['cancelled', 'transferred'].includes(raw.status) && !releasedRecordIds.includes(contact.recordId)) {
         const roundRecord = `${assignment.round}:${contact.recordId}`;
         const roundPhone = `${assignment.round}:${contact.phone}`;
         if (activeRecords.has(roundRecord) || activePhones.has(roundPhone)) {
@@ -92,6 +101,8 @@ function normalizeAssignments(value, eventId, recordIds, formVersion) {
       throw new Error('Sonuç sürümü geçersiz.');
     }
     if (raw.resultDigest != null && !/^[a-f0-9]{64}$/.test(raw.resultDigest)) throw new Error('Sonuç özeti geçersiz.');
+    if (raw.resultSourceId != null) identifier(raw.resultSourceId, 'Sonuç cihaz kimliği');
+    if (raw.sourceConflict != null && typeof raw.sourceConflict !== 'boolean') throw new Error('Sonuç cihaz çakışması geçersiz.');
     const lastApplied = {};
     for (const [recordId, snapshot] of Object.entries(raw.lastApplied || {})) {
       if (!assignment.contacts.some((contact) => contact.recordId === recordId) ||
@@ -102,7 +113,10 @@ function normalizeAssignments(value, eventId, recordIds, formVersion) {
     }
     return { ...assignment, status: raw.status, sentAt: raw.sentAt || null,
       cancelledAt: raw.cancelledAt || null, packetDigest: raw.packetDigest || null,
-      resultRevision: raw.resultRevision || 0, resultDigest: raw.resultDigest || null, lastApplied };
+      resultRevision: raw.resultRevision || 0, resultDigest: raw.resultDigest || null,
+      resultSourceId: raw.resultSourceId || null, sourceConflict: !!raw.sourceConflict, lastApplied,
+      releasedRecordIds: [...releasedRecordIds], ownerType: raw.ownerType || 'volunteer',
+      reassignedFrom: raw.reassignedFrom || null };
   });
 }
 
@@ -256,6 +270,7 @@ export function normalizeBackupProject(input) {
   if (project.resultRevision != null && (!Number.isInteger(project.resultRevision) || project.resultRevision < 0)) {
     throw new Error('Sonuç sürümü geçersiz.');
   }
+  if (project.resultSourceId != null) identifier(project.resultSourceId, 'Sonuç cihaz kimliği');
   if (project.round != null && (!Number.isInteger(project.round) || project.round < 1 || project.round > 100)) {
     throw new Error('Görev turu geçersiz.');
   }
@@ -290,6 +305,7 @@ export function normalizeBackupProject(input) {
     importDigest: role === 'volunteer' ? project.importDigest : null, assignments,
     round: role === 'volunteer' ? project.round || 1 : null,
     resultRevision: role === 'volunteer' ? project.resultRevision || 0 : 0,
+    resultSourceId: role === 'volunteer' ? project.resultSourceId || null : null,
     mergeConflicts,
   };
 }
@@ -321,7 +337,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, 2, 3, 4, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, 3, 4, 5, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,

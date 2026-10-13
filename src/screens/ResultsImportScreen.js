@@ -7,6 +7,7 @@ import { applyImportedResults, getProject, previewImportedResults } from '../uti
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 import { saveEventBackup } from '../utils/automaticBackup';
+import { markIncomingResultsProcessed, saveIncomingResult } from '../utils/incomingResultStore';
 
 const inform = (title, message) => Platform.OS === 'web' ? window.alert(`${title}\n${message}`) : Alert.alert(title, message);
 
@@ -24,7 +25,12 @@ export default function ResultsImportScreen({ route, navigation }) {
   useEffect(() => {
     if (!route.params?.initialPacket) return;
     previewImportedResults(projectId, [route.params.initialPacket])
-      .then((result) => setPreview({ ...result, fileCount: 1, inputPackets: [route.params.initialPacket] }))
+      .then(async (result) => {
+        setPreview({ ...result, fileCount: 1, inputPackets: [route.params.initialPacket] });
+        if (!result.changes.length && !result.conflicts.length) {
+          await markIncomingResultsProcessed([route.params.initialPacket.sha256]);
+        }
+      })
       .catch((error) => { reportError(error, 'Gelen sonuç önizlemesi'); inform('Sonuç açılamadı', error.message); });
   }, [route.params?.initialPacket, projectId]);
   const choose = async () => {
@@ -35,6 +41,8 @@ export default function ResultsImportScreen({ route, navigation }) {
       if (picked.canceled) return;
       const assets = picked.assets || [];
       if (!assets.length) return;
+      const project = await getProject(projectId);
+      if (!project) throw new Error('Ana etkinlik bulunamadı.');
       const packets = [];
       for (const asset of assets) {
         if (!/\.ays(?:\.json)?$/i.test(asset.name || '') || asset.size > 30 * 1024 * 1024) {
@@ -43,10 +51,15 @@ export default function ResultsImportScreen({ route, navigation }) {
         const content = Platform.OS === 'web'
           ? asset.file ? await asset.file.text() : await (await fetch(asset.uri)).text()
           : await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
-        packets.push(await readResultFile(content));
+        const packet = await readResultFile(content);
+        await saveIncomingResult(packet, content, project);
+        packets.push(packet);
       }
       const result = await previewImportedResults(projectId, packets);
       setPreview({ ...result, fileCount: assets.length, inputPackets: packets });
+      if (!result.changes.length && !result.conflicts.length) {
+        await markIncomingResultsProcessed(packets.map((packet) => packet.sha256));
+      }
     } catch (error) { reportError(error, 'Sonuç dosyaları incelenirken'); inform('Dosyalar açılamadı', error.message); }
     finally { setBusy(''); }
   };
@@ -65,6 +78,8 @@ export default function ResultsImportScreen({ route, navigation }) {
     setBusy('apply');
     try {
       const stats = await applyImportedResults(projectId, preview.inputPackets, decisions, preview.snapshot);
+      try { await markIncomingResultsProcessed(preview.inputPackets.map((packet) => packet.sha256)); }
+      catch (error) { reportError(error, 'Gelen kutusu durumu güncellenirken'); }
       setPreview(null); setBackupReady(false);
       let backedUp = false;
       try {
@@ -102,11 +117,13 @@ export default function ResultsImportScreen({ route, navigation }) {
       <View style={s.card}>
         <Text style={s.cardTitle}>{preview.fileCount} dosya incelendi</Text>
         <Text style={s.detail}>{preview.changes.length} doğrudan işlenebilir · {preview.conflicts.length} karar bekliyor · {preview.skipped.length} eski/tekrar</Text>
+        {!preview.changes.length && !preview.conflicts.length && <Text style={s.detail}>İşlenecek yeni cevap yok.</Text>}
       </View>
       {preview.conflicts.map((item) => {
         const key = `${item.assignmentId}:${item.recordId}`;
         return <View key={key} style={s.card}>
           <Text style={s.cardTitle}>{item.name} · …{item.old.phone.slice(-4)}</Text>
+          {!!item.reason && <Text style={s.warning}>{item.reason}. Güncel cevabı karşılaştırın.</Text>}
           {item.differences.length ? item.differences.map((difference, index) => <View key={`${key}-${index}`}>
             <Text style={s.detail}>{difference.label}</Text>
             <Text style={s.detail}>Mevcut: {difference.old}</Text>
@@ -120,13 +137,13 @@ export default function ResultsImportScreen({ route, navigation }) {
           </View>
         </View>;
       })}
-      <TouchableOpacity accessibilityRole="button" style={s.secondary} disabled={!!busy} onPress={saveBackup}>
+      {!!(preview.changes.length || preview.conflicts.length) && <TouchableOpacity accessibilityRole="button" style={s.secondary} disabled={!!busy} onPress={saveBackup}>
         <Text style={s.secondaryText}>{backupReady ? 'Yedek kaydedildi; yeniden kaydet' : 'Önce etkinlik yedeğini kaydet'}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity accessibilityRole="button" style={[s.primary, (!backupReady || undecided || busy) && s.disabled]}
+      </TouchableOpacity>}
+      {!!(preview.changes.length || preview.conflicts.length) && <TouchableOpacity accessibilityRole="button" style={[s.primary, (!backupReady || undecided || busy) && s.disabled]}
         disabled={!backupReady || !!undecided || !!busy} onPress={apply}>
         <Text style={s.primaryText}>{undecided ? `${undecided} çakışma için karar verin` : 'Sonuçları birleştir'}</Text>
-      </TouchableOpacity>
+      </TouchableOpacity>}
     </>}
   </ScrollView>;
 }
@@ -138,6 +155,7 @@ const s = StyleSheet.create({
   primaryText:{color:'#fff',fontWeight:'800',fontSize:15},disabled:{backgroundColor:Colors.textMuted},
   card:{backgroundColor:Colors.bgCard,borderColor:Colors.border,borderWidth:1,borderRadius:14,padding:16,marginBottom:12},
   cardTitle:{color:Colors.textPrimary,fontSize:17,fontWeight:'800'},detail:{color:Colors.textSecondary,fontSize:13,lineHeight:20,marginTop:8},
+  warning:{color:Colors.warning,fontSize:13,lineHeight:20,marginTop:8,fontWeight:'700'},
   row:{flexDirection:'row',gap:8,marginTop:14},choice:{flex:1,borderColor:Colors.borderAccent,borderWidth:1,borderRadius:9,padding:10},
   chosen:{backgroundColor:Colors.accentDark},choiceText:{color:Colors.textPrimary,fontWeight:'700',textAlign:'center',fontSize:12},
   secondary:{borderColor:Colors.warning,borderWidth:1,borderRadius:12,minHeight:49,alignItems:'center',justifyContent:'center',marginTop:9,marginBottom:12},

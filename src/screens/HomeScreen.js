@@ -24,6 +24,7 @@ import { Colors } from '../theme/colors';
 import { getProjectSummaries, deleteProject, hasUnexportedVolunteerResult } from '../utils/storage';
 import { saveEventBackup } from '../utils/automaticBackup';
 import { reportError } from '../utils/diagnostics';
+import { listIncomingResults } from '../utils/incomingResultStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const confirmAction = (title, message, confirmText) => new Promise((resolve) => {
@@ -48,6 +49,7 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
   const deletingRef = useRef(false);
   const [offline, setOffline] = useState(Platform.OS === 'web' && !navigator.onLine);
   const [updateReady, setUpdateReady] = useState(Platform.OS === 'web' && !!window.__aysUpdateReady);
+  const [incomingCount, setIncomingCount] = useState(0);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -69,6 +71,8 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
   useFocusEffect(
     useCallback(() => {
       loadProjects();
+      listIncomingResults().then((items) => setIncomingCount(items.filter((item) => !item.processed).length))
+        .catch((error) => reportError(error, 'Gelen sonuç sayısı okunurken'));
     }, [])
   );
 
@@ -258,6 +262,10 @@ export default function HomeScreen({ navigation, onDeveloperPanel }) {
 
       <TouchableOpacity accessibilityRole="button" style={styles.importLink} onPress={() => navigation.navigate('AssignmentImport')}>
         <Text style={styles.importText}>Bana gelen görev dosyasını aç →</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity accessibilityRole="button" style={styles.backupLink} onPress={() => navigation.navigate('ResultsInbox')}>
+        <Text style={styles.backupText}>Gelen sonuçlar{incomingCount ? ` (${incomingCount})` : ''} →</Text>
       </TouchableOpacity>
 
       {Platform.OS === 'web' && <View style={styles.webNotice}>

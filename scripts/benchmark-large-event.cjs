@@ -21,6 +21,7 @@ function loadSource(relativePath, mocks = {}) {
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
         name === './resultFormat' ? resultFormat :
+          name === './formValidation' ? formValidation :
           name === './resultMerge' ? resultMerge : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
@@ -30,6 +31,7 @@ const cryptoMock = {
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
   digestStringAsync: async (_algorithm, value) =>
     nodeCrypto.createHash('sha256').update(value, 'utf8').digest('hex'),
+  randomUUID: () => nodeCrypto.randomUUID(),
 };
 const sourceFiles = new Map();
 const sourceWorkbookStore = {
@@ -42,6 +44,7 @@ const canonicalModule = loadSource('src/utils/canonicalJson.js');
 const phoneUtils = loadSource('src/utils/phoneUtils.js');
 const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-crypto': cryptoMock });
 const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
+const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const sourcePreview = loadSource('src/utils/sourcePreview.js');
