@@ -13,6 +13,7 @@ import { missingRequiredField } from './formValidation';
 import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
 import { readProjectMetadata, readProjectSummaries, readProjectContacts } from '../data/projectStore/projectReads';
+import { writeNewProject } from '../data/projectStore/projectWrites';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -159,34 +160,15 @@ export async function getProject(projectId) {
  * Yeni proje oluşturur
  */
 export async function createProject(project) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    if (projects.some((item) => item.id === project.id) ||
-        await AsyncStorage.getItem(PROJECT_DATA_PREFIX + project.id)) {
-      throw new Error('Bu proje kimliği cihazda zaten var. Mevcut veriler korunuyor.');
-    }
-    
-    // Büyük veriyi ayır
-    const contacts = project.contacts || [];
-    const metaProject = { ...project };
-    delete metaProject.contacts; 
-    delete metaProject.sourceWorkbook;
-    metaProject.totalContacts = contacts.length;
-    metaProject.completedContacts = contacts.filter((contact) => contact.completed).length;
-    const sourceMeta = await storeAttachedSource(project.id, project.sourceWorkbook);
-    metaProject.sourceWorkbookMeta = sourceMeta;
-    try {
-      await AsyncStorage.setItem(PROJECT_DATA_PREFIX + project.id, JSON.stringify(contacts));
-      projects.unshift(metaProject);
-      await saveAllProjects(projects);
-    } catch (error) {
-      await AsyncStorage.removeItem(PROJECT_DATA_PREFIX + project.id).catch(() => {});
-      if (sourceMeta) await removeSourceWorkbook(sourceMeta.ref).catch(() => {});
-      throw error;
-    }
-    
-    return project;
-  });
+  return enqueueWrite(() => writeNewProject(project, {
+    loadProjects: getAllProjects,
+    getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+    setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
+    removeContacts: (id) => AsyncStorage.removeItem(PROJECT_DATA_PREFIX + id),
+    saveProjects: saveAllProjects,
+    saveSource: storeAttachedSource,
+    removeSource: removeSourceWorkbook,
+  }));
 }
 
 /** Bekleyen form taslağını da katarak dışa aktarılabilir tam görüntüyü döndürür. */

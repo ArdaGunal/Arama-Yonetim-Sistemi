@@ -13,6 +13,7 @@
 | `src/context/SurveyContext.js` | Aktif anketin durumu ve otomatik kayıt |
 | `src/utils/storage.js` | AsyncStorage okuma/yazma ve taslaklar |
 | `src/data/projectStore/projectReads.js` | Proje metadatası ve kişi yan dosyası okuması; eski proje sayaçlarını tamamlama |
+| `src/data/projectStore/projectWrites.js` | Yeni proje için yan dosya → metadata yazımı ve hata halinde geri alma |
 | `src/utils/phoneUtils.js` | Telefon temizleme ve metin/Excel ayrıştırma |
 | `src/utils/exportUtils.js`, `src/screens/ExportScreen.js` | Excel/CSV çıktısı |
 | `src/utils/sourceWorkbookArchive.js`, `src/utils/sourceWorkbookStore.js` | Orijinal Excel eki, ayrı cihaz depolaması ve OOXML sonuç sayfaları |

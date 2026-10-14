@@ -59,7 +59,7 @@ tests/
 
 Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce mevcut API'yi koruyan bir giriş modülü olarak kalır. İç fonksiyonlar alan bazlı modüllere taşındıkça ekran importları değişmez. Dış dosya sürümleri yalnızca biçim değişirse artırılır; dosya taşıma tek başına şema sürümü artırmaz.
 
-**400 satır kuralı:** `src/features/calls/`, `surveys/`, `forms/` ve `new-project/` altındaki her klasörde **doğrudan duran** `.js`, `.jsx`, `.ts`, `.tsx` dosyalarının fiziksel satır toplamı en fazla 400'dür. Bir alt klasör açılırsa onun da doğrudan kaynak toplamı ayrıca 400'ü geçemez; böylece sınırsız büyüyen tek bir klasör oluşmaz. `npm test` içindeki `scripts/check-feature-size.mjs` bu sınırı CI'da uygular. Ortak soru kodu `forms/`, önizleme/şablon kodu `new-project/` içinde kalır; sırf sayıyı tutturmak için aynı kod iki türe kopyalanmaz. Arama veya Anket'e özgü kod başka yerde kaldığı sürece ayrım tamamlandı sayılmaz.
+**400 satır kuralı:** `src/features/calls/`, `surveys/`, `forms/`, `new-project/` ve `src/data/projectStore/` altındaki her klasörde **doğrudan duran** `.js`, `.jsx`, `.ts`, `.tsx` dosyalarının fiziksel satır toplamı en fazla 400'dür. Bir alt klasör açılırsa onun da doğrudan kaynak toplamı ayrıca 400'ü geçemez; böylece sınırsız büyüyen tek bir klasör oluşmaz. `npm test` içindeki `scripts/check-feature-size.mjs` bu sınırı CI'da uygular. Ortak soru kodu `forms/`, önizleme/şablon kodu `new-project/` içinde kalır; sırf sayıyı tutturmak için aynı kod iki türe kopyalanmaz. Arama veya Anket'e özgü kod başka yerde kaldığı sürece ayrım tamamlandı sayılmaz.
 
 ## 4. Fazlar ve kesin bitiş koşulları
 
@@ -102,7 +102,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 2 — Davranışı değiştirmeden kodu ayırma
 
-**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje metadatası, kişi yan dosyası ve eski proje sayaçlarının okuma mantığı `data/projectStore/projectReads.js` içinde; kesinti kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
+**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje okuma mantığı `data/projectStore/projectReads.js`, yeni proje kaydı ve hata geri alması `data/projectStore/projectWrites.js` içinde. Kesinti kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
 
 1. `NewProjectScreen` içindeki kaynak Excel/metin ayrıştırma ve kaydetme hazırlığını saf fonksiyonlara çıkar. Arama ve anket için ayrı kaydetme komutları oluştur; ortak alan doğrulamasını tek yerde tut.
 2. `Step2Review` içinden kişi/sütun/tekrar incelemesini ayır. Ortak soru editörü, iki türden de aynı davranışı versin; önizleme kayıt yazmasın.

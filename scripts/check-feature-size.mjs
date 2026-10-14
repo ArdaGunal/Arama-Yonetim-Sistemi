@@ -1,7 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const roots = ['src/features/calls', 'src/features/surveys', 'src/features/forms', 'src/features/new-project'];
+const roots = ['src/features/calls', 'src/features/surveys', 'src/features/forms',
+  'src/features/new-project', 'src/data/projectStore'];
 const limit = 400;
 let failed = false;
 
@@ -22,6 +23,6 @@ async function checkDirectory(relative) {
 
 for (const root of roots) await checkDirectory(root);
 if (failed) {
-  console.error('Arama/Anket klasörlerinden biri 400 kaynak satırı sınırını aştı.');
+  console.error('Denetlenen klasörlerden biri 400 kaynak satırı sınırını aştı.');
   process.exitCode = 1;
 }

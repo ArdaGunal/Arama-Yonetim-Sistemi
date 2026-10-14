@@ -24,7 +24,8 @@ function loadSource(relativePath, mocks = {}) {
           name === './appSettings' ? appSettingsModule :
           name === './formValidation' ? formValidation :
           name === './resultMerge' ? resultMerge :
-            name === '../data/projectStore/projectReads' ? projectReads : require(name));
+            name === '../data/projectStore/projectReads' ? projectReads :
+              name === '../data/projectStore/projectWrites' ? projectWrites : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -53,6 +54,7 @@ const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
+const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
 
 function memoryStorage() {
   const values = new Map();
@@ -158,6 +160,24 @@ test('project reading keeps legacy inline contacts but prefers the sidecar when 
   assert.deepEqual((await storage.getProject('old')).contacts, sidecar);
   assert.deepEqual((await storage.getProjectSummaries()).map(({ totalContacts, completedContacts }) =>
     [totalContacts, completedContacts]), [[1, 1]]);
+});
+
+test('failed project metadata write removes the new contacts sidecar', async (t) => {
+  const loggedError = t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_projects') throw new Error('sentetik metadata hatası');
+    return originalSet(key, value);
+  };
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  await assert.rejects(storage.createProject({ id: 'failed', name: 'Deneme', contacts: [{ id: 'one' }] }),
+    /Proje verisi kaydedilemedi/);
+  assert.equal(memory.values.has('@ays_project_data_failed'), false);
+  assert.equal(memory.values.has('@ays_projects'), false);
+  assert.equal(loggedError.mock.callCount(), 1);
 });
 
 test('draft writes and deletion finish in order without deadlock', async () => {
