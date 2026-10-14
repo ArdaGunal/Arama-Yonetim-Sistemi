@@ -147,6 +147,16 @@ test('project summaries survive separated contact storage and update progress', 
     [totalContacts, completedContacts]), [[2, 2]]);
 });
 
+test('projects with the same visible name remain separate by identity', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await storage.createProject({ id: 'event-a', eventId: 'event-a', name: 'Aynı etkinlik', contacts: [{ id: 'a' }] });
+  await storage.createProject({ id: 'event-b', eventId: 'event-b', name: 'Aynı etkinlik', contacts: [{ id: 'b' }] });
+  const projects = await storage.getProjectSummaries();
+  assert.equal(projects.filter((project) => project.name === 'Aynı etkinlik').length, 2);
+  assert.deepEqual((await storage.getProject('event-a')).contacts.map((contact) => contact.id), ['a']);
+  assert.deepEqual((await storage.getProject('event-b')).contacts.map((contact) => contact.id), ['b']);
+});
+
 test('project reading keeps legacy inline contacts but prefers the sidecar when present', async () => {
   const memory = memoryStorage();
   const storage = loadSource('src/utils/storage.js', {
@@ -1226,6 +1236,26 @@ test('listless survey saves independent responses and round trips through backup
   assert.equal(revised.contacts[0].data.attend, 'Evet');
   const revisedBackup = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(revised))).project;
   assert.equal(revisedBackup.contacts.length, 3);
+});
+
+test('survey response metadata failure restores the previous answer list', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject({ id: 'rollback-survey', eventId: 'rollback-survey', name: 'Anket', mode: 'survey',
+    fields: [{ id: 'answer', label: 'Cevap', type: 'text', options: [] }], contacts: [] });
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_projects') throw new Error('sentetik metadata hatası');
+    return originalSet(key, value);
+  };
+  await assert.rejects(storage.appendSurveyResponse('rollback-survey', { answer: 'Evet' }),
+    /Proje verisi kaydedilemedi/);
+  memory.setItem = originalSet;
+  const project = await storage.getProject('rollback-survey');
+  assert.deepEqual(project.contacts, []);
+  assert.equal(project.totalContacts, 0);
+  assert.equal(project.completedContacts, 0);
 });
 
 test('listless survey template keeps questions without name or phone', async () => {

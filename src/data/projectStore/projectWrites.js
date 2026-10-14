@@ -26,3 +26,44 @@ export async function writeNewProject(project, { loadProjects, getContacts, setC
   }
   return project;
 }
+
+/** Listesiz anket yanıtını ve proje sayaçlarını birlikte günceller; metadata hatasında yanıtları geri alır. */
+export async function writeSurveyResponse(projectId, input, { loadProjects, getContacts,
+  setContacts, saveProjects, createId, now }) {
+  const projects = await loadProjects();
+  const project = projects.find((item) => item.id === projectId);
+  if (!project || project.mode !== 'survey') throw new Error('Anket bulunamadı.');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Cevaplar geçersiz.');
+  const fieldIds = new Set(project.fields.map((field) => field.id));
+  if (Object.keys(input).some((key) => !fieldIds.has(key))) throw new Error('Anket soruları değişti. Ekranı yeniden açın.');
+  const data = {};
+  for (const field of project.fields) {
+    const value = String(input[field.id] ?? '').trim();
+    if (field.required && !value) throw new Error(`"${field.label}" boş bırakılamaz.`);
+    if (field.type === 'select' && value && !field.options.includes(value)) {
+      throw new Error(`"${field.label}" için geçersiz şık.`);
+    }
+    if (value.length > 10000) throw new Error(`"${field.label}" cevabı çok uzun.`);
+    if (value) data[field.id] = value;
+  }
+  if (!Object.keys(data).length) throw new Error('Kaydetmek için en az bir soruyu cevaplayın.');
+  const before = await getContacts(projectId);
+  const contacts = before ? JSON.parse(before) : [];
+  if (!Array.isArray(contacts)) throw new Error('Anket cevapları okunamadı.');
+  const id = createId();
+  const response = { id, recordId: id, phone: '', data, completed: true, completedAt: now() };
+  const next = [...contacts, response];
+  const previousMeta = { ...project };
+  project.totalContacts = next.length;
+  project.completedContacts = next.length;
+  project.formLocked = true;
+  try {
+    await setContacts(projectId, JSON.stringify(next));
+    await saveProjects(projects);
+  } catch (error) {
+    await setContacts(projectId, before || '[]').catch(() => {});
+    Object.assign(project, previousMeta);
+    throw error;
+  }
+  return response;
+}

@@ -102,7 +102,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 2 — Davranışı değiştirmeden kodu ayırma
 
-**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje okuma mantığı `data/projectStore/projectReads.js`, yeni proje kaydı ve hata geri alması `data/projectStore/projectWrites.js` içinde. Kesinti kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
+**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje okuma mantığı `data/projectStore/projectReads.js`, yeni proje ve anket yanıtı yazımı ile hata geri alması `data/projectStore/projectWrites.js` içinde. Kesinti kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
 
 1. `NewProjectScreen` içindeki kaynak Excel/metin ayrıştırma ve kaydetme hazırlığını saf fonksiyonlara çıkar. Arama ve anket için ayrı kaydetme komutları oluştur; ortak alan doğrulamasını tek yerde tut.
 2. `Step2Review` içinden kişi/sütun/tekrar incelemesini ayır. Ortak soru editörü, iki türden de aynı davranışı versin; önizleme kayıt yazmasın.
@@ -135,6 +135,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 ### Faz 5 — Saha kullanımını basitleştirme
 
 1. Ana sayfada tür rozeti ve türe özgü birincil eylem: **Aramaya başla** veya **Anketi doldur**. Gönüllü görev dosyası açma önde kalır; koordinatöre ait seçenekler gönüllüde görünmez.
+   Aynı adlı projeler kimlikleriyle ayrı kalır; ana ekranda tarih ve türle ayırt edilir. Yeni proje adı mevcut adla eşleşirse kullanıcıya açık bir uyarı gösterilir, bilinçli ikinci proje oluşturma engellenmez.
 2. Her ekranda tek baskın eylem; teknik kelimeler yardım bölümünde. Hata mesajı neyin yanlış olduğunu ve düzeltme yolunu söyler. Erişilebilir etiket, yeterli kontrast/dokunma alanı, büyük yazı ve klavye kapatma kontrolü yapılır.
 3. Kısa içe alma rehberi, örnek veriyle güvenli deneme, anket önizlemesinde kalıcı kayıt yapılmadığını açık işaretleme.
 4. Gelişmiş form mantığı (şarta göre soru, sayı/tarih doğrulama) **ayrı isteğe bağlı bölümde** ve görsel kurallarla gelir; varsayılan anket basit kalır. Yanıt dışa aktarımında alan kimlikleri sabit tutulur.
