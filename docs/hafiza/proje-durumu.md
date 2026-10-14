@@ -2,6 +2,8 @@
 
 Son gözden geçirme: 14 Ekim 2026. Kaynak kodun bulunduğu dizin `Arama_Yonetim_Sistemi`; giriş noktası depo kökündeki `package.json` dosyasıdır. Kodda sabit yerel proje yolu kullanılmamalıdır.
 
+Güncel yol haritası ve fazların kabul koşulları [master plandadır](masterplan.md). Bu dosya uygulanmış işlevlerin durumunu kaydeder.
+
 ## Mevcut uygulama
 
 - Expo SDK 54, React Native 0.81, React 19. Android ve web hedefleri vardır. iOS için Expo yapılandırması bulunur; gerçek iPhone dağıtım akışı henüz hazırlanmadı.
@@ -10,7 +12,7 @@ Son gözden geçirme: 14 Ekim 2026. Kaynak kodun bulunduğu dizin `Arama_Yonetim
 - Projeler ve kişi cevapları AsyncStorage'da cihaz üzerinde saklanır. Anket ekranı değişiklikleri taslağa ve proje kaydına yazar.
 - Sonuçlar `.ays` paketleriyle kısmi veya tam paylaşılır. Aynı cihazın daha yeni gönderim sürümü öncekinin yerine işlenir; farklı cihaz, iptal veya devir çakışmaları koordinatöre gösterilir. Gelen dosyalar önce kalıcı kutuya alınır. Excel/CSV ayrıca insan tarafından okunabilen çıktı olarak alınabilir.
 - Gönüllü yeni cevap kaydettiğinde ana ekranda sonuç dosyası hatırlatması görünür. İptal edilen web paylaşımı hatırlatmayı kapatmaz; dosya hazırlanırken yeni cevap gelirse eski sürüm hatırlatmayı kapatamaz. Paylaşım menüsünün kapanması dosyanın koordinatöre ulaştığını kanıtlamaz.
-- Her proje `.ays` sürüm 6 tam yedeği olarak dışa aktarılabilir; sürüm 1–5 de okunur. Form sürümleri, görevler, arama geçmişi ve birleştirme kararları yedeğe girer. Dosya SHA-256 ile doğrulanır; aynı içerik ikinci kez içe alınmaz ve farklı içerikli etkinlik otomatik ezilmez.
+- Her proje `.ays` sürüm 7 tam yedeği olarak dışa aktarılabilir; sürüm 1–6 da okunur. Form sürümleri, görevler, arama geçmişi ve birleştirme kararları yedeğe girer. Dosya SHA-256 ile doğrulanır; aynı içerik ikinci kez içe alınmaz ve farklı içerikli etkinlik otomatik ezilmez.
 - Görev hazırlanması/gönderilmesi/iptali ve sonuç birleştirmesi sonrasında güncel yedek dosyası oluşturulur. Android'de kullanıcı bir kez yedek klasörü seçer; web dosyayı indirir; iPhone paylaşım menüsünden Dosyalara Kaydet gerekir. Kaydetme başarısızsa ekranda tekrar deneme yolu gösterilir. Birleştirmeden önce dış yedek almak zorunlu kalır.
 - Farklı içerikli aynı etkinlik yedeği, önce mevcut sürüm dışarı kaydedilip açık onay verildikten sonra geri yüklenebilir. İşlem öncesi sürüm yeniden karşılaştırılır; kesintide eski proje, kişiler ve taslak kurtarılır. Bu işlem gelen sonuçları birleştirme yerine kullanılmamalıdır.
 - Ana ekrandan proje silme önce dışarı `.ays` yedeği kaydeder, dosyanın kontrol edildiğini ayrıca sorar. Yedekten sonra proje veya taslak değişmişse silme durdurulur. Yedek kaydetme iptal edilirse proje yerinde kalır.
@@ -26,7 +28,8 @@ Son gözden geçirme: 14 Ekim 2026. Kaynak kodun bulunduğu dizin `Arama_Yonetim
 - Android için `localapk.bat` ile yerel APK üretilebilir. Sürüm 1.0.14/b15 emülatöre güncelleme olarak kuruldu; mevcut sentetik projeler korundu, görev ekranındaki dört sayaç görüldü ve gelen kutusu kısayolu açıldı. Önceki 1.0.13/b14 Android emülatöründe koordinatörün kendi görevi, sonuç dosyasının Android `ACTION_VIEW` ile gelen kutusuna alınması, yeniden açılışta korunması ve yinelenen dosyanın tek kayıt kalması sentetik verilerle denendi. Web gelen kutusunun IndexedDB kalıcılığı otomatik testte doğrulandı. Çıktı mevcut Android debug anahtarıyla imzalanır; mağaza yayını için ayrı imzalama gerekir.
 - Ana ekranın sağ üstünde Ayarlar bulunur; yedek ve tanılama bağlantıları buraya taşındı. Yeni etkinliklerde varsayılan yapıştırma düzeni ve ek sorular otomatik açılır. `.ayst` sürüm 2 bu düzeni paylaşır; eski sürüm 1 okunur. Kapsam ve sınırlar [ayarlar belgesinde](../gelistirme/ayarlar-ve-varsayilan-format.md) açıklanır.
 - 1.0.15/b16 Android emülatörüne mevcut projeleri koruyarak kuruldu. Ayarlar açıldı; liste biçimi değiştirilip uygulama yeniden açılınca korundu ve yeni etkinlik girişinde uygulandı. Seçim başlangıç değerine geri alındı. Soru düzenleyicisinde şıklı sorunun iki şıkla açılması, yedek ve tanılama bağlantıları kontrol edildi. 5.000 kişi/100 görev/100 sonuç ölçümü ile 44 otomatik test geçti.
-- Yeni etkinlikte kişi listesi `×` ile kaldırılarak listesiz anket oluşturulabilir. Her doldurma ayrı yanıt olur; telefon/görev olmadan Excel/CSV ve `.ays` yedeğine çıkar. Ayrıntı ve sınırlar [listesiz anket belgesinde](../gelistirme/listesiz-anket.md). 46 otomatik test ve web derlemesi geçti. Android 1.0.16/b17 APK emülatöre mevcut projeleri koruyarak kuruldu; liste kaldırma, soru, aramasız önizleme, iki ayrı cevap, yeniden açılışta cevapların korunması ve anket çıktı ekranı kontrol edildi.
+- Ana ekranda yeni proje için **Arama** ve **Anket** seçimi vardır. Arama listesi zorunlu, Anket kişi listesinden bağımsızdır; listeden ankete geçiren `×` kaldırıldı. Her anket doldurması ayrı yanıt olur; telefon/görev olmadan Excel/CSV ve `.ays` yedeğine çıkar. Ayrıntı ve sınırlar [anket belgesinde](../gelistirme/listesiz-anket.md). Önceki 1.0.16/b17 APK emülatöre mevcut projeleri koruyarak kurulmuş, iki cevap ve çıktı ekranı kontrol edilmişti.
+- **1.0.17/b18:** Arama/Anket tür seçimi, ayrı ilk adımlar ve türe göre şablon filtreleme eklendi. Android emülatörüne eski veriyi koruyan güncelleme yapıldı; iki kart, boş anket adı uyarısı, kayıt yapmayan önizleme, anket ve bir kişilik sentetik arama projesi oluşturma denendi. 46 otomatik test, web derlemesi, `git diff --check` ve 5.000 kişi/100 görev sentetik ölçümü geçti. APK `APK/AramaYonetim-v1.0.17-b18-20261014-091656.apk` içinde. [Master plan](masterplan.md) Faz 0–1 tamamlandı; Faz 2 kod ayrıştırması sıradadır.
 - 5.000 kişi/100 görev/100 sonuç için [sentetik ölçüm komutu](../gelistirme/buyuk-veri-performansi.md) vardır. Geri arama adayları görevleri bir kez dizinler; görev ekranı bitenleri gizler ve uzun listeyi 20'şer gösterir. Yerel web önizlemesinde büyük yedek açıldı. Android telefon üzerinde gerçek süreler henüz ölçülmedi.
 
 ## Henüz yapılmadı
@@ -36,7 +39,7 @@ Son gözden geçirme: 14 Ekim 2026. Kaynak kodun bulunduğu dizin `Arama_Yonetim
 - Gerçek iPhone'da uçak modu/dosya akışı/WhatsApp paylaşımı ve temiz cihazda yedekten geri yükleme doğrulaması (kullanıcı uygun cihaz bulana kadar ertelendi).
 - Büyük veri setleri ve 100 gönüllü senaryosu için gerçek Android telefon performans doğrulaması.
 
-Bu gereksinimlerin tasarımı [plan.md](plan.md) içindedir. Kodda varmış gibi kabul etmeyin.
+Bu gereksinimlerin geliştirme sırası [master plandadır](masterplan.md). Kodda varmış gibi kabul etmeyin.
 
 ## Devralan kişinin ilk kontrolü
 

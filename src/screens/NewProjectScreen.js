@@ -14,6 +14,7 @@ import { captureSourceWorkbook, MAX_SOURCE_BYTES } from '../utils/sourceWorkbook
 import { alignSourceFields, importedContactName, resolveDuplicateSelections, withAnswerType } from '../utils/newProjectFields';
 import { getAppSettings, saveAppSettings } from '../utils/appSettings';
 import Step1Info from '../features/new-project/Step1Info';
+import SurveyStart from '../features/new-project/SurveyStart';
 import Step2Review from '../features/new-project/Step2Review';
 import { Colors } from '../theme/colors';
 
@@ -34,17 +35,20 @@ function downloadWeb(content, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function NewProjectScreen({ navigation }) {
+export default function NewProjectScreen({ navigation, route }) {
+  // Eski doğrudan gezinme çağrıları arama akışına düşer; yeni giriş türü başta seçtirir.
+  const surveyOnly = route?.params?.mode === 'survey';
   const [step, setStep] = useState(1);
   const [projectName, setProjectName] = useState('');
   const [activeTab, setActiveTab] = useState('text');
   const [phoneText, setPhoneText] = useState('');
-  const [surveyOnly, setSurveyOnly] = useState(false);
   const [rawRows, setRawRows] = useState([]);
   const [originalWorkbook, setOriginalWorkbook] = useState(null);
   const [source, setSource] = useState(null);
   const [selections, setSelections] = useState({});
-  const [fields, setFields] = useState(systemFields);
+  const [fields, setFields] = useState(() => surveyOnly
+    ? [{ id: Crypto.randomUUID(), label: '', type: 'text', options: [], required: false }]
+    : systemFields);
   const [sourceFieldIds, setSourceFieldIds] = useState({});
   const [templateSourceColumns, setTemplateSourceColumns] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -65,17 +69,17 @@ export default function NewProjectScreen({ navigation }) {
       const settings = settingsResult.status === 'fulfilled' ? settingsResult.value : null;
       setTemplates(savedTemplates);
       if (settings) setPasteMode(settings.pasteMode);
-      const selected = savedTemplates.find((item) => item.id === settings?.defaultTemplateId);
+      const selected = savedTemplates.find((item) => item.id === settings?.defaultTemplateId &&
+        (item.mode || 'calls') === (surveyOnly ? 'survey' : 'calls'));
       if (selected) {
         setFields(selected.fields.map((field) => ({ ...field, options: [...field.options] })));
-        if (selected.mode === 'survey') setSurveyOnly(true);
         setTemplateId(selected.id);
         setTemplateSourceColumns(selected.sourceColumns || []);
       }
       setPresetReady(true);
     });
     return () => { active = false; };
-  }, []);
+  }, [surveyOnly]);
   useEffect(() => { setSaveError(''); }, [source, selections, fields]);
 
   const prepareWithTemplate = (rows, name, headerOverride) => {
@@ -203,50 +207,18 @@ export default function NewProjectScreen({ navigation }) {
     field.id === id ? { ...field, options: field.options.filter((_, i) => i !== index) } : field));
 
   const applyTemplate = (template) => {
-    const nextSurveyOnly = template?.mode === 'survey' || (surveyOnly && !template);
-    if (nextSurveyOnly && !surveyOnly && (phoneText.trim() || source)) {
-      notify('Önce kişi listesi kartındaki × işaretine basıp listeyi kaldırın.');
+    if (template && (template.mode || 'calls') !== (surveyOnly ? 'survey' : 'calls')) {
+      notify('Bu şablon başka proje türüne ait. Geri dönüp o türü seçin.');
       return false;
     }
-    if (nextSurveyOnly && !surveyOnly) {
-      setPhoneText(''); setRawRows([]); setOriginalWorkbook(null); setSource(null);
-      setSelections({}); setSourceFieldIds({});
-    }
-    if (!nextSurveyOnly && surveyOnly) setSurveyOnly(false);
-    if (nextSurveyOnly) setSurveyOnly(true);
-    setFields((template?.fields || (nextSurveyOnly ? [{ id: Crypto.randomUUID(), label: '', type: 'text', options: [], required: false }] : systemFields))
-      .filter((field) => !nextSurveyOnly || !field.isSystemField)
+    setFields((template?.fields || (surveyOnly
+      ? [{ id: Crypto.randomUUID(), label: '', type: 'text', options: [], required: false }]
+      : systemFields))
       .map((field) => ({ ...field, options: [...field.options] })));
     setTemplateId(template?.id || null);
     setTemplateSourceColumns(template?.sourceColumns || []);
     if (template) setPasteMode(template.pasteMode || 'name-phone');
     return true;
-  };
-
-  const removeList = () => {
-    const apply = () => {
-      setPhoneText(''); setRawRows([]); setOriginalWorkbook(null);
-      setSource(null); setSelections({}); setSourceFieldIds({});
-      setTemplateId(null);
-      setFields((items) => {
-        const questions = items.filter((field) => !field.isSystemField)
-          .map(({ importColumn, ...field }) => field);
-        return questions.length ? questions : [{ id: Crypto.randomUUID(), label: '', type: 'text', options: [], required: false }];
-      });
-      setSurveyOnly(true);
-    };
-    if (!phoneText.trim() && !source) { apply(); return; }
-    const message = 'Girilen kişi listesi silinecek. Anket soruları korunacak. Devam edilsin mi?';
-    if (Platform.OS === 'web') { if (window.confirm(message)) apply(); }
-    else Alert.alert('Kişi listesini kaldır', message, [
-      { text: 'Vazgeç', style: 'cancel' }, { text: 'Listeyi kaldır', style: 'destructive', onPress: apply },
-    ]);
-  };
-  const restoreList = () => {
-    setSurveyOnly(false);
-    setTemplateId(null);
-    setTemplateSourceColumns([]);
-    setFields((items) => [...systemFields, ...items.filter((field) => !field.isSystemField)]);
   };
 
   const importTemplate = async () => {
@@ -262,7 +234,6 @@ export default function NewProjectScreen({ navigation }) {
       const saved = await saveTemplate(template);
       setTemplates(await getTemplates());
       if (!applyTemplate(saved)) {
-        notify('Şablon kaydedildi. Uygulamak için önce kişi listesini kaldırın.');
         return;
       }
       setPasteMode(saved.pasteMode || 'name-phone');
@@ -317,7 +288,7 @@ export default function NewProjectScreen({ navigation }) {
           createdAt: new Date().toISOString(), currentIndex: 0, formVersion: 1, formLocked: false,
           templateId, fields: saveFields, formHistory: [{ version: 1, fields: saveFields }],
           contacts: [], sourceWorkbook: null, sourceReview: null });
-        navigation.goBack();
+        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
         return;
       }
       if (analysis.error) throw new Error(analysis.error);
@@ -379,7 +350,7 @@ export default function NewProjectScreen({ navigation }) {
         },
       };
       await createProject(project);
-      navigation.goBack();
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (error) {
       reportError(error, 'Etkinlik oluşturulurken');
       setSaveError(error.message || 'Etkinlik kaydedilemedi.');
@@ -388,12 +359,14 @@ export default function NewProjectScreen({ navigation }) {
 
   if (!presetReady) return <View style={{ flex: 1, backgroundColor: Colors.bg, justifyContent: 'center' }}>
     <ActivityIndicator color={Colors.accentLight} /></View>;
+  if (step === 1 && surveyOnly) return <SurveyStart projectName={projectName} setProjectName={setProjectName}
+    templates={templates} templateId={templateId} applyTemplate={applyTemplate} importTemplate={importTemplate}
+    continueSurvey={() => projectName.trim() ? setStep(2) : notify('Önce ankete bir ad verin.')} />;
   if (step === 1) return <Step1Info projectName={projectName} setProjectName={setProjectName}
     activeTab={activeTab} setActiveTab={setActiveTab} phoneText={phoneText} setPhoneText={setPhoneText}
     loading={loading} handleParseText={parseText} handleImportExcel={importFile}
     templates={templates} templateId={templateId} applyTemplate={applyTemplate} importTemplate={importTemplate}
-    pasteMode={pasteMode} surveyOnly={surveyOnly} removeList={removeList} restoreList={restoreList}
-    continueSurvey={() => projectName.trim() ? setStep(2) : notify('Önce ankete bir ad verin.')} />;
+    pasteMode={pasteMode} />;
   return <Step2Review source={source} analysis={analysis} selections={selections}
     setSelections={setSelections} changeRole={changeRole} changeHeader={changeHeader}
     goBack={() => setStep(1)} handleSave={saveProject} loading={loading}

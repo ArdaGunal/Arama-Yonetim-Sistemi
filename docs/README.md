@@ -4,19 +4,20 @@ Bu klasör, projeyi devralacak kişinin kodu çalıştırması ve önceki kararl
 
 ## Okuma sırası
 
-1. [Proje durumu ve devir notu](hafiza/proje-durumu.md): bugün çalışan işlevler, eksikler ve ilk yapılacaklar.
-2. [Ürün ve geliştirme planı](hafiza/plan.md): koordinatör, gönüllü, dağıtım, birleştirme ve iPhone hedefleri.
-3. [Kurulum, test ve APK](gelistirme/kurulum-ve-yayin.md): yeni bilgisayarda çalıştırma ve sürüm üretme.
-4. [Mimari ve veri](gelistirme/mimari-ve-veri.md): ana dosyalar, kayıt yapısı ve değişiklik yaparken dikkat edilecekler.
-5. [Dosya sözleşmesi](gelistirme/dosya-sozlesmesi.md): yedek, görev, sonuç ve geri yükleme kuralları.
-6. [Görev dağıtımı kısa kılavuzu](kullanim/gorev-dagitimi.md): koordinatör ve gönüllü için dosya akışı.
-7. [iPhone'da görev yapma](kullanim/iphone.md): gönüllü için kısa kullanım adımları.
-8. [PWA yayını ve iPhone testi](gelistirme/pwa-yayin.md): çevrimdışı derleme, yayın ve cihaz kabul testi.
-9. [Büyük veri performansı](gelistirme/buyuk-veri-performansi.md): 5.000 kişi/100 görev sentetik ölçümü ve gerçek cihazda kalan kontrol.
-10. [Listesiz anket](gelistirme/listesiz-anket.md): kişi listesi kaldırıldığında yanıt, yedek ve çıktı akışı.
+1. [Master plan](hafiza/masterplan.md): Arama ve Anket ayrımı, kod düzeni, veri güvenliği, test ve fazların kabul ölçütleri.
+2. [Proje durumu ve devir notu](hafiza/proje-durumu.md): bugün çalışan işlevler, eksikler ve ilk yapılacaklar.
+3. [Önceki ürün planı](hafiza/plan.md): koordinatör, gönüllü, dağıtım, birleştirme ve iPhone kararlarının geçmişi.
+4. [Kurulum, test ve APK](gelistirme/kurulum-ve-yayin.md): yeni bilgisayarda çalıştırma ve sürüm üretme.
+5. [Mimari ve veri](gelistirme/mimari-ve-veri.md): ana dosyalar, kayıt yapısı ve değişiklik yaparken dikkat edilecekler.
+6. [Dosya sözleşmesi](gelistirme/dosya-sozlesmesi.md): yedek, görev, sonuç ve geri yükleme kuralları.
+7. [Görev dağıtımı kısa kılavuzu](kullanim/gorev-dagitimi.md): koordinatör ve gönüllü için dosya akışı.
+8. [iPhone'da görev yapma](kullanim/iphone.md): gönüllü için kısa kullanım adımları.
+9. [PWA yayını ve iPhone testi](gelistirme/pwa-yayin.md): çevrimdışı derleme, yayın ve cihaz kabul testi.
+10. [Büyük veri performansı](gelistirme/buyuk-veri-performansi.md): 5.000 kişi/100 görev sentetik ölçümü ve gerçek cihazda kalan kontrol.
+11. [Anket](gelistirme/listesiz-anket.md): tür seçimi, yanıt, yedek ve çıktı akışı.
 
 ## Hafıza dosyaları için kural
 
-Ürün kararları, açık işler ve devir notları `docs/hafiza/` içinde yaşar. Yeni bir karar alındığında `plan.md`, mevcut durum değiştiğinde `proje-durumu.md` güncellenir. Kişi listeleri, gerçek telefon numaraları, etkinlik yedekleri, hata raporları ve erişim anahtarları bu depoya konmaz.
+Ürün kararları, açık işler ve devir notları `docs/hafiza/` içinde yaşar. Yeni bir karar alındığında `masterplan.md`, mevcut durum değiştiğinde `proje-durumu.md` güncellenir. Kişi listeleri, gerçek telefon numaraları, etkinlik yedekleri, hata raporları ve erişim anahtarları bu depoya konmaz.
 
 Depo kökündeki `README.md` kısa tanıtım ve bu dizine bağlantı olarak tutulur.

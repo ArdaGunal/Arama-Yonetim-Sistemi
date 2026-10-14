@@ -287,7 +287,7 @@ export default function HomeScreen({ navigation }) {
       <TouchableOpacity
         style={[styles.fab, { bottom: Math.max(24, insets.bottom + 16) }]}
         activeOpacity={0.8}
-        onPress={() => navigation.navigate('NewProject')}
+        onPress={() => navigation.navigate('ProjectType')}
       >
         <Text style={styles.fabIcon}>＋</Text>
         <Text style={styles.fabText}>Yeni Proje Oluştur</Text>

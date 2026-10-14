@@ -12,6 +12,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from './src/screens/HomeScreen';
 import NewProjectScreen from './src/screens/NewProjectScreen';
+import ProjectTypeScreen from './src/screens/ProjectTypeScreen';
 import EditFormScreen from './src/screens/EditFormScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import FreeSurveyScreen from './src/screens/FreeSurveyScreen';
@@ -143,6 +144,7 @@ export default function App() {
             setShowPanel(true);
           }} />} />
         <Stack.Screen name="TemplateEditor" component={TemplateEditorScreen} options={{ title: 'Varsayılan Sorular' }} />
+        <Stack.Screen name="ProjectType" component={ProjectTypeScreen} options={{ title: 'Yeni Proje' }} />
         <Stack.Screen
           name="NewProject"
           component={NewProjectScreen}

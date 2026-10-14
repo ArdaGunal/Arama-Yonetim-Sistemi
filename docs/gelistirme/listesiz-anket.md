@@ -2,7 +2,7 @@
 
 ## Kullanım
 
-Yeni etkinlik ekranındaki **Kişi listesi** kartının sağ üstündeki `×`, listeyi kaldırır. Metin veya dosya zaten seçilmişse önce onay ister. İşlem kişi verisini yalnızca henüz kaydedilmemiş yeni etkinlik taslağından siler; kayıtlı etkinliklere dokunmaz. **Kişi listesi ekle** ile arama moduna dönülebilir. Listesiz ankette en az bir soru gereklidir. Önizleme cevapları kaydetmez.
+Ana ekranda **Yeni Proje Oluştur** → **Anket** seçilir. Anketin adı yazılır ve sorular düzenlenir. Kişi listesi alanı bu akışta yoktur. **Arama** seçilirse kişi listesi gerekir. İki tür arasında geçmek için seçim ekranına geri dönülür; doldurulmuş taslak sessizce dönüştürülmez. Ankette en az bir soru gereklidir. Önizleme cevapları kaydetmez.
 
 Oluşturulan anket ana ekrandan açılır. Her **Cevabı kaydet** ayrı bir yanıt üretir; başarılı kayıttan sonra form temizlenir. Zorunlu sorular ve şıklar kayıt sırasında doğrulanır. Boş yanıt kaydedilmez. Yanıtlar Excel/CSV olarak dışa aktarılır; `.ays` tam yedeğine girer. Şablon `.ayst` olarak paylaşılabilir. Bu modda telefon, arama durumu, görev dağıtımı ve sonuç birleştirme yoktur.
 
@@ -20,4 +20,4 @@ Bu anket aynı cihazda veya aynı tarayıcı profilinde doldurulmak içindir. Ay
 
 ## Kontrol
 
-`npm test` listesiz ankette doğrulama, eşzamanlı iki yanıt, form sürümü, yedek ve Excel akışını kapsar. `npm run build:web` ile PWA derlemesi doğrulanır. Android APK'da yeni etkinlik → `×` → soru oluşturma → cevap kaydetme → çıktı akışı elle kontrol edilir.
+`npm test` ankette doğrulama, eşzamanlı iki yanıt, form sürümü, yedek ve Excel akışını kapsar. `npm run build:web` ile PWA derlemesi doğrulanır. Android APK'da yeni proje → Anket → soru oluşturma → cevap kaydetme → çıktı akışı elle kontrol edilir.

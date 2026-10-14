@@ -28,7 +28,7 @@ export default function Step2Review({ source, analysis, selections, setSelection
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.step}>2 / 2 · {surveyOnly ? 'Sorular' : 'Son kontrol'}</Text>
-      <Text style={s.title}>Etkinliği oluştur</Text>
+      <Text style={s.title}>{surveyOnly ? 'Anketi oluştur' : 'Etkinliği oluştur'}</Text>
       <TouchableOpacity accessibilityRole="button" style={s.previewButton}
         onPress={() => setPreviewOpen(true)}>
         <Text style={s.previewButtonText}>Anketi önizle →</Text>
@@ -135,7 +135,7 @@ export default function Step2Review({ source, analysis, selections, setSelection
           <Text style={s.backText}>← Geri</Text>
         </TouchableOpacity>
         <TouchableOpacity accessibilityRole="button" style={s.next} onPress={handleSave} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.nextText}>Etkinliği oluştur</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.nextText}>{surveyOnly ? 'Anketi oluştur' : 'Etkinliği oluştur'}</Text>}
         </TouchableOpacity>
       </View>
     </View>

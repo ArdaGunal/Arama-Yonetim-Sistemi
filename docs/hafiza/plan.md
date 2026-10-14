@@ -1,5 +1,7 @@
 # Arama Yönetim Sistemi — ürün ve geliştirme planı
 
+Bu belge ilk ürün kararlarının geçmişidir. Güncel geliştirme sırası, iki proje türü ve kodu ayırma kabul koşulları için [master planı](masterplan.md) kullanın.
+
 ## Amaç ve temel kararlar
 
 Topluluğun Excel ile yürüttüğü kişi dağıtımı, arama, geri arama ve sonuç birleştirme işlerini kolaylaştırmak. Teknik bilgi gerektiren ayarlar koordinatörde kalacak; gönüllü kendisine gelen dosyayı açıp arama yapacak ve sonucunu geri gönderecek.
@@ -78,9 +80,9 @@ Proje topluluktan bir başkasına devredilebilmeli: kaynak kodu, statik site hes
 
 Uygulama sırası, kabul ölçütleri ve faz sonu kontrolleri [görev akışı fazlarında](../gelistirme/gorev-akisi-fazlari.md) kayıtlıdır.
 
-**Durum (14 Ekim 2026):** Yedek `.ays` sürüm 6'dır; sürüm 1–5 okunur. Sonuç paketi sürüm 2'dir; sürüm 1 okunur. Zorunlu sorular, form sürümleri, otomatik yedek, güvenli silme, görev iptali/devri, koordinatörün kendi görevi ve kalıcı sonuç kutusu eklendi. Yeni etkinlik iki adımda oluşturulur. Kaynak Excel aynen saklanır. Android emülatöründe koordinatörün sentetik görev cevabı ve yedeği doğrulandı. [GitHub Pages yayını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) açıldı. [Sentetik 5.000 kişi/100 görev ölçümü](../gelistirme/buyuk-veri-performansi.md) yapıldı; gerçek Android telefon ölçümü ve gerçek iPhone testi bekliyor. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
+**Durum (14 Ekim 2026):** Tam yedek `.ays` sürüm 7'dir; sürüm 1–6 okunur. Sonuç paketi sürüm 2'dir; sürüm 1 okunur. Zorunlu sorular, form sürümleri, otomatik yedek, güvenli silme, görev iptali/devri, koordinatörün kendi görevi ve kalıcı sonuç kutusu eklendi. Yeni proje Arama ve Anket olarak seçilir; ikisi de iki adımda oluşturulur. Kaynak Excel aynen saklanır. Android emülatöründe koordinatörün sentetik görev cevabı ve yedeği doğrulandı. [GitHub Pages yayını](https://ardagunal.github.io/Arama-Yonetim-Sistemi/) açıldı. [Sentetik 5.000 kişi/100 görev ölçümü](../gelistirme/buyuk-veri-performansi.md) yapıldı; gerçek Android telefon ölçümü ve gerçek iPhone testi bekliyor. Dosya ayrıntıları [sözleşmede](../gelistirme/dosya-sozlesmesi.md).
 
-Yeni etkinlik için cihazdaki varsayılan liste düzeni ve sorular [Ayarlar planında](../gelistirme/ayarlar-ve-varsayilan-format.md) açıklanır. Bunlar mevcut etkinlikleri değiştirmez; paylaşılan `.ayst` şablon sürüm 2 soru, şık, sütun ve yapıştırma düzenini taşır.
+Yeni etkinlik için cihazdaki varsayılan liste düzeni ve sorular [Ayarlar planında](../gelistirme/ayarlar-ve-varsayilan-format.md) açıklanır. Bunlar mevcut etkinlikleri değiştirmez; paylaşılan `.ayst` arama şablonu sürüm 2, anket şablonu sürüm 3'tür.
 
 1. **Dosya sözleşmesi ve güvenlik temeli:** Sürümlü paket/yedek biçimi, kimlikler, bütünlük kontrolü, tekrar içe aktarmaya dayanıklılık, geri yükleme.
 2. **Koordinatör akışı:** Kaynak önizleme ve eşleştirme, telefon tekrar incelemesi, form/şık düzenleme, şablon paylaşımı ve sürüm kilidi.
