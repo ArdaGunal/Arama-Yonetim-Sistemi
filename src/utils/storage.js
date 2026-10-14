@@ -12,7 +12,7 @@ import { applyPreview, previewResultMerge } from './resultMerge';
 import { missingRequiredField } from './formValidation';
 import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
-import { readProjectSummaries } from '../data/projectStore/readSummaries';
+import { readProjectMetadata, readProjectSummaries, readProjectContacts } from '../data/projectStore/projectReads';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -110,8 +110,7 @@ const enqueueWrite = (task) => {
 export async function getAllProjects() {
   try {
     await recoverPendingMerge();
-    const data = await AsyncStorage.getItem(PROJECTS_KEY);
-    return data ? JSON.parse(data) : [];
+    return await readProjectMetadata(() => AsyncStorage.getItem(PROJECTS_KEY));
   } catch (e) {
     console.error('Projeler yüklenemedi:', e);
     throw new Error('Depolama hatası: Projeler yüklenemedi.');
@@ -148,19 +147,12 @@ export async function getProject(projectId) {
   const project = projects.find((p) => p.id === projectId);
   if (!project) return null;
 
-  // Kişi verilerini ayrı anahtardan yükle (eğer eski sürümde metadata içinde değilse)
   try {
-    const contactsData = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-    if (contactsData) {
-      project.contacts = JSON.parse(contactsData);
-    } else if (!project.contacts) {
-      project.contacts = [];
-    }
+    return await readProjectContacts(project, (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id));
   } catch (e) {
     console.error('Proje detayları yüklenemedi:', e);
     throw new Error('Depolama hatası: Kişiler yüklenemedi.');
   }
-  return project;
 }
 
 /**

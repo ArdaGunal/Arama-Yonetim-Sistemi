@@ -102,7 +102,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 2 — Davranışı değiştirmeden kodu ayırma
 
-**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Depolama okuma ayrımının ilk parçası olan proje özetleri `data/projectStore/readSummaries.js` içinde; yazma sırası hâlâ tek `storage.js` kuyruğundadır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
+**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje metadatası, kişi yan dosyası ve eski proje sayaçlarının okuma mantığı `data/projectStore/projectReads.js` içinde; kesinti kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
 
 1. `NewProjectScreen` içindeki kaynak Excel/metin ayrıştırma ve kaydetme hazırlığını saf fonksiyonlara çıkar. Arama ve anket için ayrı kaydetme komutları oluştur; ortak alan doğrulamasını tek yerde tut.
 2. `Step2Review` içinden kişi/sütun/tekrar incelemesini ayır. Ortak soru editörü, iki türden de aynı davranışı versin; önizleme kayıt yazmasın.

@@ -24,7 +24,7 @@ function loadSource(relativePath, mocks = {}) {
           name === './appSettings' ? appSettingsModule :
           name === './formValidation' ? formValidation :
           name === './resultMerge' ? resultMerge :
-            name === '../data/projectStore/readSummaries' ? readSummaries : require(name));
+            name === '../data/projectStore/projectReads' ? projectReads : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -52,7 +52,7 @@ const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cr
 const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
-const readSummaries = loadSource('src/data/projectStore/readSummaries.js');
+const projectReads = loadSource('src/data/projectStore/projectReads.js');
 
 function memoryStorage() {
   const values = new Map();
@@ -143,6 +143,21 @@ test('project summaries survive separated contact storage and update progress', 
   memory.values.set('@ays_projects', JSON.stringify([{ id: 'p', name: 'Eski', currentIndex: 0 }]));
   assert.deepEqual((await storage.getProjectSummaries()).map(({ totalContacts, completedContacts }) =>
     [totalContacts, completedContacts]), [[2, 2]]);
+});
+
+test('project reading keeps legacy inline contacts but prefers the sidecar when present', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  const legacy = [{ id: 'inline', completed: false }];
+  const sidecar = [{ id: 'sidecar', completed: true }];
+  memory.values.set('@ays_projects', JSON.stringify([{ id: 'old', name: 'Eski', contacts: legacy }]));
+  assert.deepEqual((await storage.getProject('old')).contacts, legacy);
+  memory.values.set('@ays_project_data_old', JSON.stringify(sidecar));
+  assert.deepEqual((await storage.getProject('old')).contacts, sidecar);
+  assert.deepEqual((await storage.getProjectSummaries()).map(({ totalContacts, completedContacts }) =>
+    [totalContacts, completedContacts]), [[1, 1]]);
 });
 
 test('draft writes and deletion finish in order without deadlock', async () => {
