@@ -55,6 +55,7 @@ const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
+const projectNames = loadSource('src/domain/projects/projectNames.js');
 
 function memoryStorage() {
   const values = new Map();
@@ -155,6 +156,13 @@ test('projects with the same visible name remain separate by identity', async ()
   assert.equal(projects.filter((project) => project.name === 'Aynı etkinlik').length, 2);
   assert.deepEqual((await storage.getProject('event-a')).contacts.map((contact) => contact.id), ['a']);
   assert.deepEqual((await storage.getProject('event-b')).contacts.map((contact) => contact.id), ['b']);
+});
+
+test('duplicate project names ignore letter case and repeated spaces without matching other names', () => {
+  const projects = [{ id: 'first', name: 'Bahar Etkinliği' }, { id: 'second', name: 'Başka proje' }];
+  assert.equal(projectNames.findSameNameProject('  bahar   etkinliği  ', projects)?.id, 'first');
+  assert.equal(projectNames.findSameNameProject('Bahar Anketi', projects), null);
+  assert.equal(projectNames.findSameNameProject('  ', projects), null);
 });
 
 test('project reading keeps legacy inline contacts but prefers the sidecar when present', async () => {

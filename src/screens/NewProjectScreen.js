@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
-import { createProject, getTemplates, saveTemplate } from '../utils/storage';
+import { createProject, getProjectSummaries, getTemplates, saveTemplate } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { analyzeSource, prepareSource, setColumnRole, textToRows } from '../utils/sourcePreview';
 import { normalizeString } from '../utils/phoneUtils';
@@ -18,6 +18,8 @@ import SurveyStart from '../features/surveys/SurveyStart';
 import { createCallProject } from '../features/calls/createCallProject';
 import { createSurveyProject } from '../features/surveys/createSurveyProject';
 import Step2Review from '../features/new-project/Step2Review';
+import DuplicateProjectPrompt from '../features/new-project/DuplicateProjectPrompt';
+import { comparableProjectName, findSameNameProject } from '../domain/projects/projectNames';
 import { Colors } from '../theme/colors';
 
 const systemFields = [
@@ -58,6 +60,7 @@ export default function NewProjectScreen({ navigation, route }) {
   const [pasteMode, setPasteMode] = useState('name-phone');
   const [presetReady, setPresetReady] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [duplicateName, setDuplicateName] = useState(null);
   const [loading, setLoading] = useState(false);
   const analysis = useMemo(() => source ? analyzeSource(source) : null, [source]);
 
@@ -266,7 +269,7 @@ export default function NewProjectScreen({ navigation, route }) {
     } catch (error) { reportError(error, 'Şablon kaydedilirken'); notify(error.message); }
   };
 
-  const saveProject = async () => {
+  const saveProject = async (confirmedName = null) => {
     if (loading) return;
     setSaveError('');
     setLoading(true);
@@ -276,6 +279,12 @@ export default function NewProjectScreen({ navigation, route }) {
       const project = surveyOnly
         ? createSurveyProject(common)
         : createCallProject({ ...common, analysis, selections, source, sourceFieldIds, originalWorkbook });
+      const sameName = findSameNameProject(project.name, await getProjectSummaries());
+      if (sameName && comparableProjectName(confirmedName) !== comparableProjectName(project.name)) {
+        setDuplicateName(project.name);
+        return;
+      }
+      setDuplicateName(null);
       await createProject(project);
       navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (error) {
@@ -294,11 +303,15 @@ export default function NewProjectScreen({ navigation, route }) {
     loading={loading} handleParseText={parseText} handleImportExcel={importFile}
     templates={templates} templateId={templateId} applyTemplate={applyTemplate} importTemplate={importTemplate}
     pasteMode={pasteMode} />;
-  return <Step2Review source={source} analysis={analysis} selections={selections}
+  return <><Step2Review source={source} analysis={analysis} selections={selections}
     setSelections={setSelections} changeRole={changeRole} changeHeader={changeHeader}
-    goBack={() => setStep(1)} handleSave={saveProject} loading={loading}
+    goBack={() => setStep(1)} handleSave={() => saveProject()} loading={loading}
     fields={fields} saveError={saveError}
     updateField={updateField} removeField={removeField} addField={addField}
     addOption={addOption} updateOption={updateOption} removeOption={removeOption}
-    saveTemplate={() => makeTemplate(false)} shareTemplate={() => makeTemplate(true)} surveyOnly={surveyOnly} />;
+    saveTemplate={() => makeTemplate(false)} shareTemplate={() => makeTemplate(true)} surveyOnly={surveyOnly} />
+    <DuplicateProjectPrompt name={duplicateName} loading={loading}
+      onRename={() => { setDuplicateName(null); setStep(1); }}
+      onCreate={() => saveProject(duplicateName)} />
+  </>;
 }
