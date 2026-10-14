@@ -25,6 +25,8 @@ function loadSource(relativePath, mocks = {}) {
           name === './formValidation' ? formValidation :
           name === './resultMerge' ? resultMerge :
             name === '../data/projectStore/projectReads' ? projectReads :
+              name === '../data/projectStore/projectUpdateJournal' ? projectUpdateJournal :
+                name === '../data/projectStore/projectUpdateJournalStore' ? projectUpdateJournalStore :
               name === '../data/projectStore/projectWrites' ? projectWrites : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
@@ -55,6 +57,31 @@ const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
+const projectUpdateJournal = loadSource('src/data/projectStore/projectUpdateJournal.js');
+const journalFiles = new Map();
+let journalEvents = null;
+const journalFileSystem = {
+  documentDirectory: 'file:///docs/', EncodingType: { UTF8: 'utf8' },
+  async getInfoAsync(uri) { return { exists: journalFiles.has(uri) }; },
+  async readAsStringAsync(uri) { return journalFiles.get(uri); },
+  async writeAsStringAsync(uri, value) {
+    if (journalEvents) journalEvents.push('write:journal-temp');
+    journalFiles.set(uri, value);
+  },
+  async moveAsync({ from, to }) {
+    if (!journalFiles.has(from)) throw new Error('Geçici kurtarma dosyası yok.');
+    if (journalEvents) journalEvents.push('move:journal');
+    journalFiles.set(to, journalFiles.get(from)); journalFiles.delete(from);
+  },
+  async deleteAsync(uri) {
+    if (journalEvents && !uri.endsWith('.tmp')) journalEvents.push('delete:journal');
+    journalFiles.delete(uri);
+  },
+};
+const projectUpdateJournalStore = loadSource('src/data/projectStore/projectUpdateJournalStore.js', {
+  'react-native': { Platform: { OS: 'android' } },
+  'expo-file-system/legacy': journalFileSystem,
+});
 const projectNames = loadSource('src/domain/projects/projectNames.js');
 
 function memoryStorage() {
@@ -235,6 +262,143 @@ test('failed legacy contact update leaves no orphan sidecar', async (t) => {
   ] }), /Proje verisi kaydedilemedi/);
   assert.equal(memory.values.has('@ays_project_data_legacy-update'), false);
   assert.deepEqual((await storage.getProject('legacy-update')).contacts, legacy);
+});
+
+test('interrupted contact update restores metadata and contacts on restart', async () => {
+  const memory = memoryStorage();
+  const first = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await first.createProject({ id: 'interrupted-update', name: 'Deneme', contacts: [
+    { id: 'one', phone: '05000000003', completed: false, data: {} },
+  ], currentIndex: 0 });
+  const projectsRaw = memory.values.get('@ays_projects');
+  const contactsRaw = memory.values.get('@ays_project_data_interrupted-update');
+  await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
+    projectId: 'interrupted-update', projectsRaw, contactsRaw }));
+  memory.values.set('@ays_project_data_interrupted-update', JSON.stringify([
+    { id: 'one', phone: '05000000003', completed: true, data: { answer: 'Evet' } },
+  ]));
+  memory.values.set('@ays_projects', JSON.stringify([{ ...JSON.parse(projectsRaw)[0],
+    currentIndex: 1, completedContacts: 1 }]));
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const project = await reopened.getProject('interrupted-update');
+  assert.equal(memory.values.get('@ays_projects'), projectsRaw);
+  assert.equal(memory.values.get('@ays_project_data_interrupted-update'), contactsRaw);
+  assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+  assert.equal(project.currentIndex, 0);
+  assert.equal(project.contacts[0].completed, false);
+});
+
+test('interrupted legacy update removes a sidecar that did not exist before', async () => {
+  const memory = memoryStorage();
+  const legacy = [{ id: 'old', phone: '05000000004', completed: false, data: {} }];
+  const projectsRaw = JSON.stringify([{ id: 'legacy-interrupted', name: 'Eski', contacts: legacy }]);
+  memory.values.set('@ays_projects', projectsRaw);
+  await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
+    projectId: 'legacy-interrupted', projectsRaw, contactsRaw: null }));
+  memory.values.set('@ays_project_data_legacy-interrupted', JSON.stringify([{ ...legacy[0], completed: true }]));
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  assert.deepEqual((await reopened.getProject('legacy-interrupted')).contacts, legacy);
+  assert.equal(memory.values.has('@ays_project_data_legacy-interrupted'), false);
+  assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+});
+
+test('incomplete temporary journal is ignored before any contact change', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject({ id: 'temporary-only', name: 'Deneme', contacts: [{ id: 'one', completed: false }] });
+  const temporary = 'file:///docs/ays-project-update-journal.json.tmp';
+  journalFiles.set(temporary, '{yarım kalmış kayıt');
+  assert.equal((await storage.getProject('temporary-only')).contacts[0].completed, false);
+  assert.equal(journalFiles.has(temporary), false);
+});
+
+test('contact update writes its recovery journal before data and clears it after metadata', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject({ id: 'ordered-update', name: 'Deneme', contacts: [
+    { id: 'one', phone: '05000000005', completed: false, data: {} },
+  ] });
+  const order = [];
+  const originalSet = memory.setItem;
+  const originalRemove = memory.removeItem;
+  memory.setItem = async (key, value) => { order.push(`set:${key}`); return originalSet(key, value); };
+  memory.removeItem = async (key) => { order.push(`remove:${key}`); return originalRemove(key); };
+  journalEvents = order;
+  try {
+    await storage.updateProject('ordered-update', { contacts: [
+      { id: 'one', phone: '05000000005', completed: true, data: {} },
+    ] });
+  } finally { journalEvents = null; }
+  assert.deepEqual(order, [
+    'write:journal-temp',
+    'move:journal',
+    'set:@ays_project_data_ordered-update',
+    'set:@ays_projects',
+    'delete:journal',
+  ]);
+  assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+});
+
+test('failed recovery keeps the contact update journal for a later retry', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const first = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await first.createProject({ id: 'retry-update', name: 'Deneme', contacts: [
+    { id: 'one', phone: '05000000006', completed: false, data: {} },
+  ] });
+  const projectsRaw = memory.values.get('@ays_projects');
+  const contactsRaw = memory.values.get('@ays_project_data_retry-update');
+  await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
+    projectId: 'retry-update', projectsRaw, contactsRaw }));
+  memory.values.set('@ays_project_data_retry-update', JSON.stringify([
+    { id: 'one', phone: '05000000006', completed: true, data: {} },
+  ]));
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_project_data_retry-update') throw new Error('sentetik geri alma hatası');
+    return originalSet(key, value);
+  };
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await assert.rejects(reopened.getProject('retry-update'), /Projeler yüklenemedi/);
+  assert.notEqual(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+  memory.setItem = originalSet;
+  assert.equal((await reopened.getProject('retry-update')).contacts[0].completed, false);
+  assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+});
+
+test('web keeps the contact recovery journal in IndexedDB and restores an interrupted write', async () => {
+  const previousIndexedDB = global.indexedDB;
+  global.indexedDB = require('fake-indexeddb').indexedDB;
+  try {
+    const webJournalStore = loadSource('src/data/projectStore/projectUpdateJournalStore.js', {
+      'react-native': { Platform: { OS: 'web' } },
+      'expo-file-system/legacy': {},
+    });
+    const memory = memoryStorage();
+    const mocks = { '@react-native-async-storage/async-storage': memory,
+      '../data/projectStore/projectUpdateJournalStore': webJournalStore };
+    const storage = loadSource('src/utils/storage.js', mocks);
+    await storage.createProject({ id: 'web-update', name: 'Web deneme', contacts: [
+      { id: 'one', phone: '05000000007', completed: false, data: {} },
+    ] });
+    await storage.updateProject('web-update', { contacts: [
+      { id: 'one', phone: '05000000007', completed: true, data: {} },
+    ] });
+    assert.equal(await webJournalStore.readProjectUpdateJournal(memory), null);
+    assert.equal(memory.values.has('@ays_project_update_journal'), false);
+
+    const projectsRaw = memory.values.get('@ays_projects');
+    const contactsRaw = memory.values.get('@ays_project_data_web-update');
+    await webJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
+      projectId: 'web-update', projectsRaw, contactsRaw }));
+    memory.values.set('@ays_project_data_web-update', JSON.stringify([
+      { id: 'one', phone: '05000000007', completed: false, data: {} },
+    ]));
+    const reopened = loadSource('src/utils/storage.js', mocks);
+    assert.equal((await reopened.getProject('web-update')).contacts[0].completed, true);
+    assert.equal(await webJournalStore.readProjectUpdateJournal(memory), null);
+    assert.equal(memory.values.has('@ays_project_update_journal'), false);
+  } finally { global.indexedDB = previousIndexedDB; }
 });
 
 test('draft writes and deletion finish in order without deadlock', async () => {

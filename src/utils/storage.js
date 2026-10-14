@@ -14,6 +14,9 @@ import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
 import { readProjectMetadata, readProjectSummaries, readProjectContacts } from '../data/projectStore/projectReads';
 import { writeNewProject, writeSurveyResponse, writeUpdatedProject } from '../data/projectStore/projectWrites';
+import { recoverProjectUpdateJournal } from '../data/projectStore/projectUpdateJournal';
+import { readProjectUpdateJournal, writeProjectUpdateJournal,
+  removeProjectUpdateJournal } from '../data/projectStore/projectUpdateJournalStore';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -24,6 +27,8 @@ const TEMPLATES_KEY = '@ays_templates';
 const MERGE_JOURNAL_KEY = '@ays_merge_journal';
 let mergeInProgress = false;
 let recoveryPromise = null;
+let projectUpdateInProgress = false;
+let projectUpdateRecoveryPromise = null;
 
 async function storeAttachedSource(projectId, source) {
   if (!source) return null;
@@ -64,6 +69,21 @@ async function recoverPendingMerge() {
     await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
   })();
   try { await recoveryPromise; } finally { recoveryPromise = null; }
+}
+
+async function recoverPendingProjectUpdate(force = false) {
+  if (projectUpdateInProgress && !force) return;
+  if (projectUpdateRecoveryPromise) return projectUpdateRecoveryPromise;
+  projectUpdateRecoveryPromise = recoverProjectUpdateJournal({
+    readJournal: () => readProjectUpdateJournal(AsyncStorage),
+    readProjects: () => AsyncStorage.getItem(PROJECTS_KEY),
+    readContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+    setProjects: (raw) => AsyncStorage.setItem(PROJECTS_KEY, raw),
+    setContacts: (id, raw) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, raw),
+    removeContacts: (id) => AsyncStorage.removeItem(PROJECT_DATA_PREFIX + id),
+    removeJournal: () => removeProjectUpdateJournal(AsyncStorage),
+  });
+  try { await projectUpdateRecoveryPromise; } finally { projectUpdateRecoveryPromise = null; }
 }
 
 export async function getLastDiagnostic() {
@@ -111,6 +131,7 @@ const enqueueWrite = (task) => {
 export async function getAllProjects() {
   try {
     await recoverPendingMerge();
+    await recoverPendingProjectUpdate();
     return await readProjectMetadata(() => AsyncStorage.getItem(PROJECTS_KEY));
   } catch (e) {
     console.error('Projeler yüklenemedi:', e);
@@ -329,13 +350,27 @@ export async function replaceProjectBackup(input, expectedCurrent) {
  * Projeyi günceller
  */
 export async function updateProject(projectId, updates) {
-  return enqueueWrite(() => writeUpdatedProject(projectId, updates, {
-    loadProjects: getAllProjects,
-    getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
-    setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
-    removeContacts: (id) => AsyncStorage.removeItem(PROJECT_DATA_PREFIX + id),
-    saveProjects: saveAllProjects,
-  }));
+  return enqueueWrite(async () => {
+    await recoverPendingProjectUpdate();
+    projectUpdateInProgress = true;
+    try {
+      return await writeUpdatedProject(projectId, updates, {
+        loadProjects: getAllProjects,
+        getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+        setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
+        saveProjects: saveAllProjects,
+        beginUpdate: async (id, contactsRaw) => {
+          const projectsRaw = await AsyncStorage.getItem(PROJECTS_KEY);
+          if (projectsRaw == null) throw new Error('Proje bilgileri bulunamadı; kişi kaydı durduruldu.');
+          await writeProjectUpdateJournal(AsyncStorage, JSON.stringify({
+            version: 1, projectId: id, projectsRaw, contactsRaw,
+          }));
+        },
+        finishUpdate: () => removeProjectUpdateJournal(AsyncStorage),
+        recoverUpdate: () => recoverPendingProjectUpdate(true),
+      });
+    } finally { projectUpdateInProgress = false; }
+  });
 }
 
 /** Listesiz ankette her doldurma yeni bir kayıt oluşturur; yazılar sıraya alınır. */

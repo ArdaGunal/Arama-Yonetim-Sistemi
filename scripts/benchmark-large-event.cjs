@@ -22,7 +22,11 @@ function loadSource(relativePath, mocks = {}) {
       name === './assignmentFormat' ? assignmentFormat :
         name === './resultFormat' ? resultFormat :
           name === './formValidation' ? formValidation :
-          name === './resultMerge' ? resultMerge : require(name));
+          name === './resultMerge' ? resultMerge :
+            name === '../data/projectStore/projectReads' ? projectReads :
+              name === '../data/projectStore/projectWrites' ? projectWrites :
+                name === '../data/projectStore/projectUpdateJournal' ? projectUpdateJournal :
+                  name === '../data/projectStore/projectUpdateJournalStore' ? projectUpdateJournalStore : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -46,6 +50,21 @@ const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-cry
 const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
 const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
+const projectReads = loadSource('src/data/projectStore/projectReads.js');
+const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
+const projectUpdateJournal = loadSource('src/data/projectStore/projectUpdateJournal.js');
+const journalFiles = new Map();
+const projectUpdateJournalStore = loadSource('src/data/projectStore/projectUpdateJournalStore.js', {
+  'react-native': { Platform: { OS: 'android' } },
+  'expo-file-system/legacy': {
+    documentDirectory: 'file:///docs/', EncodingType: { UTF8: 'utf8' },
+    async getInfoAsync(uri) { return { exists: journalFiles.has(uri) }; },
+    async readAsStringAsync(uri) { return journalFiles.get(uri); },
+    async writeAsStringAsync(uri, value) { journalFiles.set(uri, value); },
+    async moveAsync({ from, to }) { journalFiles.set(to, journalFiles.get(from)); journalFiles.delete(from); },
+    async deleteAsync(uri) { journalFiles.delete(uri); },
+  },
+});
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const sourcePreview = loadSource('src/utils/sourcePreview.js');
 const workbookUtils = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
@@ -141,6 +160,9 @@ async function main() {
   await measure('sonuclariBirlestir', () => storage.applyImportedResults(project.id, packets, {}, preview.snapshot));
   const merged = await storage.getProject(project.id);
   assert.equal(merged.completedContacts, 5000);
+  await measure('kisiListesiGuncelle', () => storage.updateProject(project.id, {
+    contacts: merged.contacts, currentIndex: merged.currentIndex,
+  }));
   const callbacks = await measure('geriAramaAdaylari', () => storage.getCallbackCandidates(merged));
   assert.equal(callbacks.length, 5000);
   const exportProject = await storage.getProjectForExport(project.id);

@@ -70,7 +70,7 @@ export async function writeSurveyResponse(projectId, input, { loadProjects, getC
 
 /** Kişi listesi ve sayaçları birlikte kaydeder; metadata hatasında önceki yan dosyayı geri yükler. */
 export async function writeUpdatedProject(projectId, updates, { loadProjects, getContacts,
-  setContacts, removeContacts, saveProjects }) {
+  setContacts, saveProjects, beginUpdate, finishUpdate, recoverUpdate }) {
   const projects = await loadProjects();
   const index = projects.findIndex((project) => project.id === projectId);
   if (index < 0) return null;
@@ -98,13 +98,16 @@ export async function writeUpdatedProject(projectId, updates, { loadProjects, ge
 
   projects[index] = project;
   try {
-    if (nextContacts !== undefined) await setContacts(projectId, nextContacts);
+    if (nextContacts !== undefined) {
+      await beginUpdate(projectId, before);
+      await setContacts(projectId, nextContacts);
+    }
     await saveProjects(projects);
+    if (nextContacts !== undefined) await finishUpdate();
   } catch (error) {
     if (nextContacts !== undefined) {
       try {
-        if (before == null) await removeContacts(projectId);
-        else await setContacts(projectId, before);
+        await recoverUpdate();
       } catch (rollbackError) {
         throw new Error(`Kişi kaydı başarısız oldu ve önceki veri geri yüklenemedi: ${rollbackError.message}`);
       }
