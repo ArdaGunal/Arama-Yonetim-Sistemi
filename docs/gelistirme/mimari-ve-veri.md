@@ -12,6 +12,7 @@
 | `src/screens/SurveyScreen.js`, `src/features/active-survey/` | Anket, arama ve istatistik ekranları |
 | `src/context/SurveyContext.js` | Aktif anketin durumu ve otomatik kayıt |
 | `src/utils/storage.js` | AsyncStorage okuma/yazma ve taslaklar |
+| `src/data/projectStore/readSummaries.js` | Eski proje sayaçlarını yan dosyadan okuyup ana ekran özetine tamamlama |
 | `src/utils/phoneUtils.js` | Telefon temizleme ve metin/Excel ayrıştırma |
 | `src/utils/exportUtils.js`, `src/screens/ExportScreen.js` | Excel/CSV çıktısı |
 | `src/utils/sourceWorkbookArchive.js`, `src/utils/sourceWorkbookStore.js` | Orijinal Excel eki, ayrı cihaz depolaması ve OOXML sonuç sayfaları |

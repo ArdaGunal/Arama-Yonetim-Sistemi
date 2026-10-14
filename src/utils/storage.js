@@ -12,6 +12,7 @@ import { applyPreview, previewResultMerge } from './resultMerge';
 import { missingRequiredField } from './formValidation';
 import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
+import { readProjectSummaries } from '../data/projectStore/readSummaries';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -124,20 +125,7 @@ export async function getAllProjects() {
 export async function getProjectSummaries() {
   await waitForPendingWrites();
   const projects = await getAllProjects();
-  return Promise.all(projects.map(async (project) => {
-    if (Number.isInteger(project.totalContacts) && Number.isInteger(project.completedContacts)) {
-      return project;
-    }
-
-    const storedContacts = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + project.id);
-    const contacts = storedContacts ? JSON.parse(storedContacts) : (project.contacts || []);
-    if (!Array.isArray(contacts)) throw new Error('Proje kişi listesi okunamadı.');
-    return {
-      ...project,
-      totalContacts: contacts.length,
-      completedContacts: contacts.filter((contact) => contact.completed).length,
-    };
-  }));
+  return readProjectSummaries(projects, (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id));
 }
 
 /**

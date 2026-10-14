@@ -4,6 +4,8 @@
 
 Ana ekranda **Yeni Proje Oluştur** → **Anket** seçilir. Anketin adı yazılır ve sorular düzenlenir. Kişi listesi alanı bu akışta yoktur. **Arama** seçilirse kişi listesi gerekir. İki tür arasında geçmek için seçim ekranına geri dönülür; doldurulmuş taslak sessizce dönüştürülmez. Ankette en az bir soru gereklidir. Önizleme cevapları kaydetmez.
 
+Tür seçiminde **Anket Platformu'nu aç** bağlantısı da vardır. Geliştiricinin dış sitesi ayrıntılı anket isteyenler için tarayıcıda açılır. Bu uygulamadaki anket, şablon ve yanıtlar siteye gönderilmez veya oradan içe alınmaz.
+
 Oluşturulan anket ana ekrandan açılır. Her **Cevabı kaydet** ayrı bir yanıt üretir; başarılı kayıttan sonra form temizlenir. Zorunlu sorular ve şıklar kayıt sırasında doğrulanır. Boş yanıt kaydedilmez. Yanıtlar Excel/CSV olarak dışa aktarılır; `.ays` tam yedeğine girer. Şablon `.ayst` olarak paylaşılabilir. Bu modda telefon, arama durumu, görev dağıtımı ve sonuç birleştirme yoktur.
 
 ## Veri sözleşmesi

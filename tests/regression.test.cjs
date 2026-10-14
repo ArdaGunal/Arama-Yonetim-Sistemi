@@ -23,7 +23,8 @@ function loadSource(relativePath, mocks = {}) {
         name === './resultFormat' ? resultFormat :
           name === './appSettings' ? appSettingsModule :
           name === './formValidation' ? formValidation :
-          name === './resultMerge' ? resultMerge : require(name));
+          name === './resultMerge' ? resultMerge :
+            name === '../data/projectStore/readSummaries' ? readSummaries : require(name));
   new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -51,6 +52,7 @@ const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cr
 const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
+const readSummaries = loadSource('src/data/projectStore/readSummaries.js');
 
 function memoryStorage() {
   const values = new Map();

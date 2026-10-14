@@ -15,6 +15,8 @@ Ana ekrandaki **Yeni Proje Oluştur** önce **Arama** ve **Anket** seçeneklerin
 
 Anket varsayılan olarak **tek cihazda veri toplama** işidir. İsim/telefon zorunlu değildir. Anonim yanıtların aynı kişiden gelip gelmediği güvenilir biçimde saptanamaz; iki yanıtı otomatik birleştirmek için açıkça seçilmiş bir yanıtlayan anahtarı gerekir. Arama görevlerindeki telefon benzersizliği anketlere uygulanmaz.
 
+**Detaylı anket yolu:** Tür seçimi ekranında geliştiricinin [Anket Platformu](https://anketplatformu.com/) sitesine açık bir bağlantı bulunur. Uygulamadaki Anket temel ve cihazda saklanan akıştır; ayrıntılı anket hazırlamak isteyen kişi siteyi tarayıcıda açar. İki hizmet arasında hesap, form veya cevap aktarımı yoktur. Dış site seçeneği reklâm olarak açıkça etiketlenir; uygulamadaki temel Anket yolunu engellemez.
+
 ## 2. Mevcut kodun risk haritası (başlangıç envanteri)
 
 | Yer | Gözlenen durum | Risk | Hedef |
@@ -100,7 +102,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 2 — Davranışı değiştirmeden kodu ayırma
 
-**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Depolama ve dışa aktarma ayrımı sıradadır.
+**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Depolama okuma ayrımının ilk parçası olan proje özetleri `data/projectStore/readSummaries.js` içinde; yazma sırası hâlâ tek `storage.js` kuyruğundadır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
 
 1. `NewProjectScreen` içindeki kaynak Excel/metin ayrıştırma ve kaydetme hazırlığını saf fonksiyonlara çıkar. Arama ve anket için ayrı kaydetme komutları oluştur; ortak alan doğrulamasını tek yerde tut.
 2. `Step2Review` içinden kişi/sütun/tekrar incelemesini ayır. Ortak soru editörü, iki türden de aynı davranışı versin; önizleme kayıt yazmasın.
@@ -136,6 +138,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 2. Her ekranda tek baskın eylem; teknik kelimeler yardım bölümünde. Hata mesajı neyin yanlış olduğunu ve düzeltme yolunu söyler. Erişilebilir etiket, yeterli kontrast/dokunma alanı, büyük yazı ve klavye kapatma kontrolü yapılır.
 3. Kısa içe alma rehberi, örnek veriyle güvenli deneme, anket önizlemesinde kalıcı kayıt yapılmadığını açık işaretleme.
 4. Gelişmiş form mantığı (şarta göre soru, sayı/tarih doğrulama) **ayrı isteğe bağlı bölümde** ve görsel kurallarla gelir; varsayılan anket basit kalır. Yanıt dışa aktarımında alan kimlikleri sabit tutulur.
+5. Tür seçiminde geliştiricinin Anket Platformu sitesine açıkça etiketlenmiş bağlantı bulunur. Dış site açılmazsa adres gösterilir; cevapların uygulamadan siteye aktarılmadığı anlaşılır kalır.
 
 **Bitiş:** İlk kez kullanan kişi yardım almadan proje türünü seçip ilk cevabı kaydeder; yanlış/eksik adımda neden ve çözüm görünür. Kullanılabilirlik denemesi en az üç teknolojiye uzak gönüllüyle yapılır.
 

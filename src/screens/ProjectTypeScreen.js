@@ -2,6 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
+import DetailedSurveyLink from '../features/surveys/DetailedSurveyLink';
 
 const choices = [
   { mode: 'calls', title: 'Arama', detail: 'Kişi listesini ekle, aramaları ve görevleri yönet.' },
@@ -22,6 +23,7 @@ export default function ProjectTypeScreen({ navigation }) {
         </View>
         <Text style={s.arrow}>→</Text>
       </TouchableOpacity>)}
+    <DetailedSurveyLink />
   </ScrollView>;
 }
 
