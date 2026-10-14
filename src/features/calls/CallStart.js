@@ -2,9 +2,9 @@ import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
-import TemplatePicker from './TemplatePicker';
+import TemplatePicker from '../new-project/TemplatePicker';
 
-export default function Step1Info({ projectName, setProjectName, activeTab, setActiveTab,
+export default function CallStart({ projectName, setProjectName, activeTab, setActiveTab,
   phoneText, setPhoneText, loading, handleParseText, handleImportExcel,
   templates, templateId, applyTemplate, importTemplate, pasteMode }) {
   const insets = useSafeAreaInsets();

@@ -44,10 +44,9 @@ src/
     projectStore/   metadata, kişi/yanıt yan dosyaları, yazma kuyruğu
     files/          .ays/.ayst kodlayıcı ve sürüm adaptörleri
   features/
-    project-creation/calls/
-    project-creation/surveys/
-    calls/
-    surveys/
+    calls/           arama ekranı ve proje hazırlama (başlandı)
+    surveys/         anket ekranı ve proje hazırlama (başlandı)
+    new-project/     iki türün ortak soru/şablon bileşenleri
     backup/
   screens/          yalnızca gezinme ve ekran bileşimi
   theme/            renk, yazı ve dokunma ölçüleri
@@ -56,6 +55,8 @@ tests/
 ```
 
 Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce mevcut API'yi koruyan bir giriş modülü olarak kalır. İç fonksiyonlar alan bazlı modüllere taşındıkça ekran importları değişmez. Dış dosya sürümleri yalnızca biçim değişirse artırılır; dosya taşıma tek başına şema sürümü artırmaz.
+
+**400 satır kuralı:** `src/features/calls/` ve `src/features/surveys/` altındaki her klasörde **doğrudan duran** `.js`, `.jsx`, `.ts`, `.tsx` dosyalarının fiziksel satır toplamı en fazla 400'dür. Bir alt klasör açılırsa onun da doğrudan kaynak toplamı ayrıca 400'ü geçemez; böylece sınırsız büyüyen tek bir klasör oluşmaz. `npm test` içindeki `scripts/check-feature-size.mjs` bu sınırı CI'da uygular. Ortak soru/şablon kodu `new-project/` içinde kalır; sırf sayıyı tutturmak için aynı kod iki türe kopyalanmaz. Arama veya Anket'e özgü kod başka yerde kaldığı sürece ayrım tamamlandı sayılmaz.
 
 ## 4. Fazlar ve kesin bitiş koşulları
 
@@ -97,6 +98,8 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 **Bitiş:** Çarpı yok; her tür kendi ilk adımına gider; varsayılan şablon diğer türü sessizce açmaz; mevcut veri korunur.
 
 ### Faz 2 — Davranışı değiştirmeden kodu ayırma
+
+**Durum:** Başlandı. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; ekran ortak kalırken iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. Yeni testler veri biçimi ayrımını doğruluyor. Depolama, dışa aktarma ve ikinci adımın ayrılması henüz sürüyor.
 
 1. `NewProjectScreen` içindeki kaynak Excel/metin ayrıştırma ve kaydetme hazırlığını saf fonksiyonlara çıkar. Arama ve anket için ayrı kaydetme komutları oluştur; ortak alan doğrulamasını tek yerde tut.
 2. `Step2Review` içinden kişi/sütun/tekrar incelemesini ayır. Ortak soru editörü, iki türden de aynı davranışı versin; önizleme kayıt yazmasın.

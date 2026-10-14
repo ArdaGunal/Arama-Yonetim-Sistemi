@@ -2,7 +2,7 @@ import React from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
-import TemplatePicker from './TemplatePicker';
+import TemplatePicker from '../new-project/TemplatePicker';
 
 export default function SurveyStart({ projectName, setProjectName, templates, templateId,
   applyTemplate, importTemplate, continueSurvey }) {

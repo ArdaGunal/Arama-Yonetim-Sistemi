@@ -7,14 +7,16 @@ import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
 import { createProject, getTemplates, saveTemplate } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
-import { analyzeSource, prepareSource, selectSourceRows, setColumnRole, textToRows } from '../utils/sourcePreview';
+import { analyzeSource, prepareSource, setColumnRole, textToRows } from '../utils/sourcePreview';
 import { normalizeString } from '../utils/phoneUtils';
 import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../utils/templateFormat';
 import { captureSourceWorkbook, MAX_SOURCE_BYTES } from '../utils/sourceWorkbookArchive';
-import { alignSourceFields, importedContactName, resolveDuplicateSelections, withAnswerType } from '../utils/newProjectFields';
+import { alignSourceFields, withAnswerType } from '../utils/newProjectFields';
 import { getAppSettings, saveAppSettings } from '../utils/appSettings';
-import Step1Info from '../features/new-project/Step1Info';
-import SurveyStart from '../features/new-project/SurveyStart';
+import CallStart from '../features/calls/CallStart';
+import SurveyStart from '../features/surveys/SurveyStart';
+import { createCallProject } from '../features/calls/createCallProject';
+import { createSurveyProject } from '../features/surveys/createSurveyProject';
 import Step2Review from '../features/new-project/Step2Review';
 import { Colors } from '../theme/colors';
 
@@ -269,86 +271,11 @@ export default function NewProjectScreen({ navigation, route }) {
     setSaveError('');
     setLoading(true);
     try {
-      if (surveyOnly) {
-        if (!projectName.trim()) throw new Error('Önce ankete bir ad verin.');
-        if (!fields.length || fields.length > 100 || new Set(fields.map((field) => field.id)).size !== fields.length ||
-            fields.some((field) => !field.label.trim() || field.isSystemField)) {
-          throw new Error('En az bir sorunun adını yazın veya boş soruyu silin.');
-        }
-        const saveFields = fields.map((field, index) => ({ id: field.id, label: field.label.trim(),
-          type: field.type, options: field.type === 'select' ? field.options.map((option) => option.trim()) : [],
-          order: index, required: !!field.required }));
-        for (const field of saveFields) if (field.type === 'select' &&
-          (field.options.length < 2 || field.options.some((option) => !option) ||
-            new Set(field.options).size !== field.options.length)) {
-          throw new Error(`"${field.label}" için en az iki farklı seçenek girin.`);
-        }
-        const id = Crypto.randomUUID();
-        await createProject({ id, eventId: id, mode: 'survey', name: projectName.trim(),
-          createdAt: new Date().toISOString(), currentIndex: 0, formVersion: 1, formLocked: false,
-          templateId, fields: saveFields, formHistory: [{ version: 1, fields: saveFields }],
-          contacts: [], sourceWorkbook: null, sourceReview: null });
-        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
-        return;
-      }
-      if (analysis.error) throw new Error(analysis.error);
-      const { selected, excluded } = selectSourceRows(analysis, resolveDuplicateSelections(analysis, selections));
-      if (!selected.length) throw new Error('Geçerli telefonlu en az bir kişi gerekli.');
-      const unnamedField = fields.find((field) => field.isSystemField !== 'phone' && !field.label.trim());
-      if (unnamedField) {
-        throw new Error('Eklenen sorunun adını yazın veya soruyu silin.');
-      }
-      const saveFields = fields.filter((field) => field.isSystemField !== 'phone' && field.label.trim())
-        .map((field, index) => ({
-          id: field.id, label: field.label.trim(), type: field.type,
-          options: field.type === 'select' ? field.options.map((option) => option.trim()).filter(Boolean) : [],
-          order: index, required: field.isSystemField === 'name' || !!field.required,
-          ...(field.isSystemField ? { isSystemField: field.isSystemField } : {}),
-        }));
-      if (!saveFields.some((field) => field.isSystemField === 'name')) throw new Error('İsim alanı gerekli.');
-      for (const field of saveFields) {
-        if (field.type === 'select' && (field.options.length < 2 || new Set(field.options).size !== field.options.length)) {
-          throw new Error(`"${field.label}" için en az iki farklı seçenek girin.`);
-        }
-      }
-      const nameField = saveFields.find((field) => field.isSystemField === 'name');
-      const usableIds = new Set(saveFields.map((field) => field.id));
-      for (const column of source.columns.filter((item) => item.role === 'field')) {
-        const field = saveFields.find((item) => item.id === sourceFieldIds[column.index]);
-        if (field?.type === 'select') {
-          const unknown = selected.map((row) => String(row.cells[column.index] ?? '').trim())
-            .find((value) => value && !field.options.includes(value));
-          if (unknown) {
-            throw new Error(`"${column.label}" sütunundaki "${unknown}" değeri şıklarda yok.`);
-          }
-        }
-      }
-      const eventId = Crypto.randomUUID();
-      const contacts = selected.map((row) => {
-        const data = {};
-        data[nameField.id] = importedContactName(row.name);
-        source.columns.filter((column) => column.role === 'field').forEach((column) => {
-          const fieldId = sourceFieldIds[column.index];
-          const value = String(row.cells[column.index] ?? '').trim();
-          if (fieldId && usableIds.has(fieldId) && value) data[fieldId] = value;
-        });
-        const recordId = Crypto.randomUUID();
-        return { id: recordId, recordId, phone: row.phone, data, completed: false, completedAt: null,
-          sourceRow: row.sourceRow, sourceCells: [...row.cells] };
-      });
-      const project = {
-        id: eventId, eventId, name: projectName.trim(), createdAt: new Date().toISOString(),
-        currentIndex: 0, formVersion: 1, formLocked: false, templateId,
-        fields: saveFields, formHistory: [{ version: 1, fields: saveFields }], contacts,
-        sourceWorkbook: originalWorkbook,
-        sourceReview: {
-          sourceName: source.sourceName, hasHeader: source.hasHeader, totalRows: source.rows.length,
-          columns: source.columns.map((column) => ({ index: column.index, label: column.label,
-            role: column.role, fieldId: column.role === 'field' && usableIds.has(sourceFieldIds[column.index])
-              ? sourceFieldIds[column.index] : null })),
-          excludedRows: excluded,
-        },
-      };
+      const common = { projectName, fields, templateId, randomUUID: Crypto.randomUUID,
+        createdAt: new Date().toISOString() };
+      const project = surveyOnly
+        ? createSurveyProject(common)
+        : createCallProject({ ...common, analysis, selections, source, sourceFieldIds, originalWorkbook });
       await createProject(project);
       navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (error) {
@@ -362,7 +289,7 @@ export default function NewProjectScreen({ navigation, route }) {
   if (step === 1 && surveyOnly) return <SurveyStart projectName={projectName} setProjectName={setProjectName}
     templates={templates} templateId={templateId} applyTemplate={applyTemplate} importTemplate={importTemplate}
     continueSurvey={() => projectName.trim() ? setStep(2) : notify('Önce ankete bir ad verin.')} />;
-  if (step === 1) return <Step1Info projectName={projectName} setProjectName={setProjectName}
+  if (step === 1) return <CallStart projectName={projectName} setProjectName={setProjectName}
     activeTab={activeTab} setActiveTab={setActiveTab} phoneText={phoneText} setPhoneText={setPhoneText}
     loading={loading} handleParseText={parseText} handleImportExcel={importFile}
     templates={templates} templateId={templateId} applyTemplate={applyTemplate} importTemplate={importTemplate}

@@ -6,7 +6,7 @@
 | --- | --- |
 | `App.js`, `index.js` | Uygulama girişi, gezinme ve hata sınırı |
 | `src/screens/HomeScreen.js` | Proje listesi ve geliştirici paneline giriş |
-| `src/screens/NewProjectScreen.js`, `src/features/new-project/` | Liste içe aktarma ve form oluşturma |
+| `src/screens/NewProjectScreen.js`, `src/features/calls/`, `src/features/surveys/`, `src/features/new-project/` | Arama ve Anket başlangıcı/proje hazırlığı; ortak soru ve şablon ekranları |
 | `src/screens/AssignmentsScreen.js`, `src/screens/AssignmentImportScreen.js` | Koordinatörün görev ayırması ve gönüllünün dosya açması |
 | `src/screens/ResultsImportScreen.js`, `src/screens/IncomingFileScreen.js` | Sonuçları inceleyip birleştirme ve Android'de dışarıdan dosya açma |
 | `src/screens/SurveyScreen.js`, `src/features/active-survey/` | Anket, arama ve istatistik ekranları |
