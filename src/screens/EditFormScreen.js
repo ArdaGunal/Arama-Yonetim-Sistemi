@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { getProject, saveTemplate, updateProjectForm } from '../utils/storage';
 import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../utils/templateFormat';
 import { reportError } from '../utils/diagnostics';
-import Step2Builder from '../features/new-project/Step2Builder';
+import EditFormBuilder from '../features/forms/EditFormBuilder';
 import { Colors } from '../theme/colors';
 import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
 import { withAnswerType } from '../utils/newProjectFields';
@@ -17,7 +17,6 @@ const notify = (message) => Platform.OS === 'web' ? window.alert(message) : Aler
 export default function EditFormScreen({ navigation, route }) {
   const [project, setProject] = useState(null);
   const [fields, setFields] = useState([]);
-  const [expandedField, setExpandedField] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -38,7 +37,6 @@ export default function EditFormScreen({ navigation, route }) {
     setFields((items) => project?.mode === 'survey'
       ? [...items, { id, label: '', type: 'text', options: [], required: false }]
       : [...items.slice(0, -1), { id, label: '', type: 'text', options: [], required: false }, items[items.length - 1]]);
-    setExpandedField(id);
   };
   const removeField = (id) => setFields((items) => items.filter((field) => field.id !== id || field.isSystemField));
   const addOption = (id) => setFields((items) => items.map((field) =>
@@ -84,18 +82,15 @@ export default function EditFormScreen({ navigation, route }) {
 
   if (error) return <View style={s.center}><Text style={s.text}>{error}</Text></View>;
   if (!project) return <View style={s.center}><ActivityIndicator color={Colors.accentLight} /></View>;
-  return <Step2Builder fields={fields} expandedField={expandedField} setExpandedField={setExpandedField}
+  return <EditFormBuilder fields={fields} projectName={project.name}
     selectedCount={project.contacts.length} loading={loading} updateField={updateField}
     removeField={removeField} addField={addField} addOption={addOption} updateOption={updateOption}
     removeOption={removeOption} handleSave={save} saveTemplate={() => template(false)} shareTemplate={() => template(true)}
-    editing locked={project.formLocked || project.contacts.some((contact) => contact.completed)}
+    locked={project.formLocked || project.contacts.some((contact) => contact.completed)}
     onBack={() => navigation.goBack()} surveyOnly={project.mode === 'survey'} />;
 }
 
 const s = StyleSheet.create({
   center: { flex: 1, backgroundColor: Colors.bg, padding: 24, justifyContent: 'center' },
-  title: { color: Colors.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 10 },
   text: { color: Colors.textSecondary, fontSize: 15, lineHeight: 23, marginBottom: 18 },
-  button: { backgroundColor: Colors.accent, borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 10 },
-  buttonText: { color: '#fff', fontWeight: '800' },
 });

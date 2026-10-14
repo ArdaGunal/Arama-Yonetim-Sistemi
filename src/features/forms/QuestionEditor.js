@@ -2,14 +2,17 @@ import React from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../theme/colors';
 
-// Yeni Arama ve Anket projeleri aynı soru/şık düzenleyicisini kullanır.
+// Yeni ve mevcut Arama/Anket projeleri aynı soru/şık düzenleyicisini kullanır.
 export default function QuestionEditor({ fields, surveyOnly, updateField, removeField, addField,
-  addOption, updateOption, removeOption, saveTemplate, shareTemplate }) {
+  addOption, updateOption, removeOption, saveTemplate, shareTemplate, editing = false }) {
   const questions = fields.filter((field) => !field.isSystemField);
   return <>
     <View style={s.card}>
       <Text style={s.sectionTitle}>{surveyOnly ? 'Anket soruları' : 'Aramada sorulacaklar'}</Text>
-      <Text style={s.help}>{surveyOnly ? 'En az bir soru ekleyin. Cevaplar bu cihazda saklanır.' : 'İsim ve telefon hazır. İsterseniz ek soru yazın.'}</Text>
+      <Text style={s.help}>{editing
+        ? 'Soruları değiştirince eski cevaplar korunur. Yeni cevaplar güncel soruları kullanır.'
+        : surveyOnly ? 'En az bir soru ekleyin. Cevaplar bu cihazda saklanır.'
+          : 'İsim ve telefon hazır. İsterseniz ek soru yazın.'}</Text>
       {questions.map((field, index) => <View key={field.id} style={s.question}>
         <Text style={s.fieldLabel}>Soru {index + 1}</Text>
         <TextInput accessibilityLabel={`Soru ${index + 1}`} style={s.input} value={field.label}
