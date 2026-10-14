@@ -17,6 +17,7 @@ function loadSource(relativePath, mocks = {}) {
   const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat :
     name === 'expo-crypto' ? cryptoMock :
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
+      name === '../features/surveys/surveyDraft' ? surveyDraft :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
@@ -50,6 +51,7 @@ const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-cry
 const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
 const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
+const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
 const projectUpdateJournal = loadSource('src/data/projectStore/projectUpdateJournal.js');

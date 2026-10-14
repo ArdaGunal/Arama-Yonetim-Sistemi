@@ -17,6 +17,7 @@ import { writeNewProject, writeSurveyResponse, writeUpdatedProject } from '../da
 import { recoverProjectUpdateJournal } from '../data/projectStore/projectUpdateJournal';
 import { readProjectUpdateJournal, writeProjectUpdateJournal,
   removeProjectUpdateJournal } from '../data/projectStore/projectUpdateJournalStore';
+import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -55,6 +56,17 @@ async function recoverPendingMerge() {
     const raw = await AsyncStorage.getItem(MERGE_JOURNAL_KEY);
     if (!raw) return;
     const journal = JSON.parse(raw);
+    if (journal.kind === 'new-restore') {
+      if (!journal.projectId || typeof journal.projectsRaw !== 'string') {
+        throw new Error('Geri yükleme kurtarma kaydı bozuk.');
+      }
+      await AsyncStorage.removeItem(PROJECT_DATA_PREFIX + journal.projectId);
+      await AsyncStorage.removeItem(DRAFT_KEY + journal.projectId);
+      await AsyncStorage.setItem(PROJECTS_KEY, journal.projectsRaw);
+      if (journal.sourceRef) await removeSourceWorkbook(journal.sourceRef);
+      await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
+      return;
+    }
     if (!journal.projectId || typeof journal.projectsRaw !== 'string' ||
         typeof journal.contactsRaw !== 'string') throw new Error('Birleştirme kurtarma kaydı bozuk.');
     await AsyncStorage.setItem(PROJECT_DATA_PREFIX + journal.projectId, journal.contactsRaw);
@@ -78,20 +90,24 @@ async function recoverPendingProjectUpdate(force = false) {
     readJournal: () => readProjectUpdateJournal(AsyncStorage),
     readProjects: () => AsyncStorage.getItem(PROJECTS_KEY),
     readContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+    readDraft: (id) => AsyncStorage.getItem(DRAFT_KEY + id),
     setProjects: (raw) => AsyncStorage.setItem(PROJECTS_KEY, raw),
     setContacts: (id, raw) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, raw),
     removeContacts: (id) => AsyncStorage.removeItem(PROJECT_DATA_PREFIX + id),
+    setDraft: (id, raw) => AsyncStorage.setItem(DRAFT_KEY + id, raw),
+    removeDraft: (id) => AsyncStorage.removeItem(DRAFT_KEY + id),
     removeJournal: () => removeProjectUpdateJournal(AsyncStorage),
   });
   try { await projectUpdateRecoveryPromise; } finally { projectUpdateRecoveryPromise = null; }
 }
 
 const sidecarUpdateJournal = {
-  beginUpdate: async (projectId, contactsRaw) => {
+  beginUpdate: async (projectId, contactsRaw, restoreDraft = false) => {
     const projectsRaw = await AsyncStorage.getItem(PROJECTS_KEY);
     if (projectsRaw == null) throw new Error('Proje bilgileri bulunamadı; kayıt durduruldu.');
+    const draftRaw = restoreDraft ? await AsyncStorage.getItem(DRAFT_KEY + projectId) : undefined;
     await writeProjectUpdateJournal(AsyncStorage, JSON.stringify({
-      version: 1, projectId, projectsRaw, contactsRaw,
+      version: 1, projectId, projectsRaw, contactsRaw, restoreDraft, draftRaw,
     }));
   },
   finishUpdate: () => removeProjectUpdateJournal(AsyncStorage),
@@ -189,6 +205,35 @@ export async function getProject(projectId) {
   }
 }
 
+async function readSurveyDraft(projectId, project) {
+  const raw = await AsyncStorage.getItem(DRAFT_KEY + projectId);
+  return raw ? normalizeSurveyDraft(JSON.parse(raw), project.fields, project.formVersion || 1) : null;
+}
+
+/** Listesiz anketin henüz kaydedilmemiş cevabı ayrı tutulur. Yazma hatası ekrana iletilir. */
+export async function saveSurveyDraft(projectId, data) {
+  return enqueueWrite(async () => {
+    const project = (await getAllProjects()).find((item) => item.id === projectId);
+    if (!project || project.mode !== 'survey') throw new Error('Anket bulunamadı.');
+    const draft = normalizeSurveyDraft({ formVersion: project.formVersion || 1, data },
+      project.fields, project.formVersion || 1);
+    if (draft) await AsyncStorage.setItem(DRAFT_KEY + projectId, JSON.stringify(draft));
+    else await AsyncStorage.removeItem(DRAFT_KEY + projectId);
+    return draft;
+  });
+}
+
+export async function loadSurveyDraft(projectId, project) {
+  await waitForPendingWrites();
+  const current = project || await getProject(projectId);
+  if (!current || current.mode !== 'survey') throw new Error('Anket bulunamadı.');
+  return readSurveyDraft(projectId, current);
+}
+
+export async function clearSurveyDraft(projectId) {
+  return enqueueWrite(() => AsyncStorage.removeItem(DRAFT_KEY + projectId));
+}
+
 /**
  * Yeni proje oluşturur
  */
@@ -209,6 +254,7 @@ export async function getProjectForBackup(projectId, allowMissingSource = false)
   return enqueueWrite(async () => {
     const project = await getProject(projectId);
     if (!project) throw new Error('Yedeklenecek proje bulunamadı.');
+    if (project.mode === 'survey') project.surveyDraft = await readSurveyDraft(projectId, project);
     const draft = await loadDraft(projectId);
     if (draft && Number.isInteger(draft.contactIndex) &&
         draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
@@ -258,6 +304,7 @@ export async function restoreProjectBackup(input) {
       const stored = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + project.id);
       const oldProject = { ...existing, contacts: stored ? JSON.parse(stored) : existing.contacts || [] };
       oldProject.sourceWorkbook = await loadAttachedSource(existing.sourceWorkbookMeta);
+      if (oldProject.mode === 'survey') oldProject.surveyDraft = await readSurveyDraft(project.id, oldProject);
       const draftValue = await AsyncStorage.getItem(DRAFT_KEY + project.id);
       if (draftValue) {
         const draft = JSON.parse(draftValue);
@@ -276,19 +323,26 @@ export async function restoreProjectBackup(input) {
     if (await AsyncStorage.getItem(key)) {
       throw new Error('Bu kimlikte tamamlanmamış bir yerel kayıt var. Geri yükleme durduruldu.');
     }
-    const { contacts, sourceWorkbook, ...meta } = project;
+    const { contacts, sourceWorkbook, surveyDraft, ...meta } = project;
     const sourceMeta = await storeAttachedSource(project.id, sourceWorkbook);
     meta.sourceWorkbookMeta = sourceMeta;
     meta.totalContacts = contacts.length;
     meta.completedContacts = contacts.filter((contact) => contact.completed).length;
+    await AsyncStorage.setItem(MERGE_JOURNAL_KEY, JSON.stringify({
+      kind: 'new-restore', projectId: project.id,
+      projectsRaw: await AsyncStorage.getItem(PROJECTS_KEY) || '[]', sourceRef: sourceMeta?.ref || null,
+    }));
+    mergeInProgress = true;
     try {
+      if (surveyDraft) await AsyncStorage.setItem(DRAFT_KEY + project.id, JSON.stringify(surveyDraft));
       await AsyncStorage.setItem(key, JSON.stringify(contacts));
       await saveAllProjects([meta, ...projects]);
+      await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
-      await AsyncStorage.removeItem(key).catch(() => {});
-      if (sourceMeta) await removeSourceWorkbook(sourceMeta.ref).catch(() => {});
+      mergeInProgress = false;
+      await recoverPendingMerge().catch(() => {});
       throw error;
-    }
+    } finally { mergeInProgress = false; }
     return 'restored';
   });
 }
@@ -315,6 +369,7 @@ export async function replaceProjectBackup(input, expectedCurrent) {
     const draftRaw = await AsyncStorage.getItem(DRAFT_KEY + incoming.id);
     const current = { ...projects[index], contacts: JSON.parse(contactsRaw) };
     current.sourceWorkbook = await loadAttachedSource(projects[index].sourceWorkbookMeta);
+    if (current.mode === 'survey') current.surveyDraft = await readSurveyDraft(incoming.id, current);
     if (draftRaw) {
       const draft = JSON.parse(draftRaw);
       if (Number.isInteger(draft.contactIndex) && draft.contactIndex >= 0 &&
@@ -329,7 +384,7 @@ export async function replaceProjectBackup(input, expectedCurrent) {
       throw new Error('Etkinlik, güvenlik yedeği alındıktan sonra değişti. Yeniden yedek alın.');
     }
     if (sameBackupProject(current, incoming)) return 'already-present';
-    const { contacts, sourceWorkbook, ...meta } = incoming;
+    const { contacts, sourceWorkbook, surveyDraft, ...meta } = incoming;
     const oldSourceMeta = projects[index].sourceWorkbookMeta;
     const sourceMeta = await storeAttachedSource(incoming.id, sourceWorkbook);
     meta.sourceWorkbookMeta = sourceMeta;
@@ -342,7 +397,8 @@ export async function replaceProjectBackup(input, expectedCurrent) {
     try {
       await AsyncStorage.setItem(PROJECT_DATA_PREFIX + incoming.id, JSON.stringify(contacts));
       await AsyncStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
-      await AsyncStorage.removeItem(DRAFT_KEY + incoming.id);
+      if (surveyDraft) await AsyncStorage.setItem(DRAFT_KEY + incoming.id, JSON.stringify(surveyDraft));
+      else await AsyncStorage.removeItem(DRAFT_KEY + incoming.id);
       await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
       await recoverPendingMerge().catch(() => {});
@@ -388,6 +444,7 @@ export async function appendSurveyResponse(projectId, input) {
         getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
         setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
         saveProjects: saveAllProjects,
+        clearDraft: (id) => AsyncStorage.removeItem(DRAFT_KEY + id),
         createId: Crypto.randomUUID,
         now: () => new Date().toISOString(),
         ...sidecarUpdateJournal,
@@ -890,10 +947,12 @@ export async function updateProjectForm(projectId, fields) {
     if (!project || project.role === 'volunteer') throw new Error('Koordinatör etkinliği bulunamadı.');
     const stored = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
     const contacts = stored ? JSON.parse(stored) : project.contacts || [];
-    if (await AsyncStorage.getItem(DRAFT_KEY + projectId)) {
-      throw new Error('Açık bir cevap taslağı var. Önce arama ekranındaki kişiyi kaydedin.');
-    }
     const surveyOnly = project.mode === 'survey';
+    if (await AsyncStorage.getItem(DRAFT_KEY + projectId)) {
+      throw new Error(surveyOnly
+        ? 'Açık bir anket taslağı var. Önce cevabı kaydedin veya taslağı silin.'
+        : 'Açık bir cevap taslağı var. Önce arama ekranındaki kişiyi kaydedin.');
+    }
     if (!Array.isArray(fields) || !fields.length ||
         (surveyOnly ? fields.some((field) => field.isSystemField) :
           fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1 ||
@@ -965,6 +1024,7 @@ export async function deleteProject(projectId, expectedBackup) {
     if (!project) throw new Error('Silinecek proje bulunamadı.');
     project.sourceWorkbook = await loadAttachedSource(project.sourceWorkbookMeta);
     const draft = await loadDraft(projectId);
+    if (project.mode === 'survey') project.surveyDraft = await readSurveyDraft(projectId, project);
     if (draft && Number.isInteger(draft.contactIndex) &&
         draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
         draft.formData && typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {

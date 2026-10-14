@@ -29,7 +29,7 @@ export async function writeNewProject(project, { loadProjects, getContacts, setC
 
 /** Listesiz anket yanıtını ve sayaçlarını kalıcı kurtarma günlüğüyle birlikte günceller. */
 export async function writeSurveyResponse(projectId, input, { loadProjects, getContacts,
-  setContacts, saveProjects, createId, now, beginUpdate, finishUpdate, recoverUpdate }) {
+  setContacts, saveProjects, clearDraft, createId, now, beginUpdate, finishUpdate, recoverUpdate }) {
   const projects = await loadProjects();
   const project = projects.find((item) => item.id === projectId);
   if (!project || project.mode !== 'survey') throw new Error('Anket bulunamadı.');
@@ -57,9 +57,10 @@ export async function writeSurveyResponse(projectId, input, { loadProjects, getC
   project.completedContacts = next.length;
   project.formLocked = true;
   try {
-    await beginUpdate(projectId, before);
+    await beginUpdate(projectId, before, true);
     await setContacts(projectId, JSON.stringify(next));
     await saveProjects(projects);
+    await clearDraft(projectId);
     await finishUpdate();
   } catch (error) {
     try {

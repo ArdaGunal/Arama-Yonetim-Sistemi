@@ -79,14 +79,14 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 | Veri | Yerel sahibi | Paylaşılan biçim | Eski sürüm okuma | Kurtarma yolu |
 | --- | --- | --- | --- | --- |
-| Arama projesi ve kişiler | `storage.js`, metadata + kişi yan dosyası | `.ays` yedek v7 | v1–6 | Dış yedek; tekrarlı içe alma kimliğe göre güvenli |
-| Anket ve yanıtlar | `storage.js`, şimdilik aynı yan dosya | `.ays` yedek v7, `mode: survey` | v7 anket; v1–6 arama | Dış yedek; başka cihazla otomatik yanıt birleşimi henüz yok |
+| Arama projesi ve kişiler | `storage.js`, metadata + kişi yan dosyası | `.ays` yedek v8 | v1–7 | Dış yedek; tekrarlı içe alma kimliğe göre güvenli |
+| Anket ve yanıtlar | `storage.js`, şimdilik aynı yan dosya | `.ays` yedek v8, `mode: survey`, taslak | v7 anket; v1–6 arama | Dış yedek; başka cihazla otomatik yanıt birleşimi henüz yok |
 | Form şablonu | Şablon deposu | `.ayst` arama v2, anket v3 | v1–3 | Şablon tekrar içe aktarılabilir; kişisel cevap taşımaz |
 | Arama görevi | Görev deposu | `.ays` görev v2 | v1–2 | Ana koordinatör projesi ve görev dosyası |
 | Arama sonucu | Gelen kutusu, birleştirme günlüğü | `.ays` sonuç v2 | v1–2 | Birleştirme öncesi dış yedek, kesinti günlüğü |
 | Orijinal Excel | Kaynak çalışma kitabı yan dosyası | Tam yedekte ek, ayrıca aynen dışa aktarım | Kaynak eki olmayan eski projede yok | Topluluk arşivindeki ilk Excel |
 
-**Kayıt akışları:** `Arama seç → listeyi ayrıştır → tekrar/sütun incele → proje ve kişiler → görev ayır → sonuç gelen kutusu → önizleme/çakışma → yedek → birleştir → Excel`. Ayrıştırma/kayıt hatası ekranda kalır; görev ve birleştirme değişikliklerinde yedek ve kurtarma günlüğü devrededir. `Anket seç → soruları hazırla → proje oluştur → cevap formu → cihazdaki yanıt → yedek/Excel`. Cevap kaydı başarısızsa ekranda hata görünmelidir; henüz kaydedilmemiş form cevabının yeniden açılması Faz 3 kapsamındadır.
+**Kayıt akışları:** `Arama seç → listeyi ayrıştır → tekrar/sütun incele → proje ve kişiler → görev ayır → sonuç gelen kutusu → önizleme/çakışma → yedek → birleştir → Excel`. Ayrıştırma/kayıt hatası ekranda kalır; görev ve birleştirme değişikliklerinde yedek ve kurtarma günlüğü devrededir. `Anket seç → soruları hazırla → proje oluştur → cevap formu → cihazdaki yanıt → yedek/Excel`. Kaydedilmemiş anket cevabı ayrı yerel taslaktır; yeniden açılır ve `.ays` yedeğine girer. Cevap kaydı başarısızsa taslak ve hata ekranda kalır.
 
 ### Faz 1 — Tür seçimi ve ilk ekranların ayrılması
 
@@ -115,7 +115,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 ### Faz 3 — Anket verisi ve veri kaybına karşı koruma
 
 1. Şu an `contacts` yan dosyasında tutulan listesiz yanıtları ayrı `responses` modeliyle temsil et. Eski `mode: survey` projeleri yüklemede kayıpsız adaptörle oku; yeni şemaya geçiş için atomik yazma günlüğü ve geri alma testi hazırla.
-2. Kaydedilmemiş anketi yerel taslak olarak sakla. Form açıldığında kaldığı yerden devam, **Taslağı sil** ve **Cevabı kaydet** açık ayrılır. Taslak `.ays` yedeğine nasıl gireceği karara bağlanmadan geçiş yapılmaz.
+2. **Tamamlandı:** Kaydedilmemiş anket ayrı yerel taslaktır. Form açıldığında kaldığı yerden devam eder; **Taslağı sil** ve **Cevabı kaydet** ayrı işlemlerdir. `.ays` v8 taslağı da kapsar; v7 yedekleri taslaksız okunur. Cevap kaydı ve taslak temizleme ortak kurtarma günlüğüne bağlıdır.
 3. Yanıt listesi: zaman, ilk anlamlı cevap, arama, ayrıntı. Düzeltme/silme için önce geri alınabilir işlem veya güncel yedek. Her yanıtın kalıcı kimliği ve düzenleme geçmişi korunur.
 4. Form sürümü değiştiğinde eski yanıtlar eski alanlarla korunur. Yeni zorunlu alan eski yanıtı geriye dönük geçersiz yapmaz. Excel/CSV eski sürüm alanlarını açık etiketlerle verir.
 5. Anket yedeğini dışarı kaydetme hatası ekranda görünür; web depolama temizlenmesi ve uygulama zorla kapanması test edilir.

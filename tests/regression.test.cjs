@@ -17,6 +17,7 @@ function loadSource(relativePath, mocks = {}) {
   const localRequire = (name) => mocks[name] || (name === './backupFormat' ? backupFormat :
     name === 'expo-crypto' ? cryptoMock :
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
+      name === '../features/surveys/surveyDraft' ? surveyDraft :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
@@ -54,6 +55,7 @@ const assignmentFormat = loadSource('src/utils/assignmentFormat.js', { 'expo-cry
 const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cryptoMock });
 const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
+const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
@@ -471,7 +473,7 @@ test('versioned backup restores legacy IDs and detects changed content', async (
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
 
   const unsupported = JSON.parse(file);
-  unsupported.schemaVersion = 8;
+  unsupported.schemaVersion = 9;
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
   const duplicate = sampleProject();
   duplicate.contacts.push({ ...duplicate.contacts[0] });
@@ -1515,6 +1517,110 @@ test('interrupted survey answer restores old responses and allows one clean retr
   const retried = await reopened.getProject('interrupted-survey');
   assert.deepEqual(retried.contacts.map((item) => item.data.answer), ['İlk', 'Yeni']);
   assert.equal(retried.completedContacts, 2);
+});
+
+test('survey draft survives restart and backup restore, then clears only after saving the answer', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const fields = [{ id: 'school', label: 'Okul numarası', type: 'text', options: [], required: true },
+    { id: 'attend', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'] }];
+  await storage.createProject({ id: 'draft-survey', eventId: 'draft-survey', name: 'Taslak deneme', mode: 'survey',
+    createdAt: '2026-10-15T00:00:00.000Z', fields, contacts: [] });
+  await storage.saveSurveyDraft('draft-survey', { school: '00123' });
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  assert.deepEqual((await reopened.loadSurveyDraft('draft-survey')).data, { school: '00123' });
+  await assert.rejects(reopened.updateProjectForm('draft-survey', fields), /Açık bir anket taslağı/);
+
+  const backup = await backupFormat.createBackupFile(await reopened.getProjectForBackup('draft-survey'));
+  assert.equal(JSON.parse(backup).schemaVersion, 8);
+  const parsed = await backupFormat.readBackupFile(backup);
+  assert.deepEqual(parsed.project.surveyDraft.data, { school: '00123' });
+  const restored = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  await restored.restoreProjectBackup(parsed.project);
+  assert.deepEqual((await restored.loadSurveyDraft('draft-survey')).data, { school: '00123' });
+  assert.equal(await restored.restoreProjectBackup(parsed.project), 'already-present');
+  await restored.appendSurveyResponse('draft-survey', { school: '00123', attend: 'Evet' });
+  assert.equal(await restored.loadSurveyDraft('draft-survey'), null);
+  const saved = await restored.getProject('draft-survey');
+  assert.equal(saved.contacts.length, 1);
+  assert.equal(saved.contacts[0].data.school, '00123');
+});
+
+test('a changed survey draft invalidates the older deletion backup', async () => {
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memoryStorage(),
+  });
+  await storage.createProject({ id: 'draft-delete', eventId: 'draft-delete', name: 'Anket', mode: 'survey',
+    createdAt: '2026-10-15T00:00:00.000Z',
+    fields: [{ id: 'q', label: 'Soru', type: 'text', options: [] }], contacts: [] });
+  await storage.saveSurveyDraft('draft-delete', { q: 'Önceki' });
+  const oldBackup = await storage.getProjectForBackup('draft-delete');
+  await storage.saveSurveyDraft('draft-delete', { q: 'Yeni' });
+  await assert.rejects(storage.deleteProject('draft-delete', oldBackup), /değişti/);
+  assert.deepEqual((await storage.loadSurveyDraft('draft-delete')).data, { q: 'Yeni' });
+});
+
+test('failed or interrupted survey answer restores its unsaved draft', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject({ id: 'draft-rollback', eventId: 'draft-rollback', name: 'Anket', mode: 'survey',
+    fields: [{ id: 'q', label: 'Soru', type: 'text', options: [] }], contacts: [] });
+  await storage.saveSurveyDraft('draft-rollback', { q: 'Cevap' });
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_projects') throw new Error('sentetik metadata hatası');
+    return originalSet(key, value);
+  };
+  await assert.rejects(storage.appendSurveyResponse('draft-rollback', { q: 'Cevap' }), /Proje verisi kaydedilemedi/);
+  memory.setItem = originalSet;
+  assert.deepEqual((await storage.loadSurveyDraft('draft-rollback')).data, { q: 'Cevap' });
+  assert.equal((await storage.getProject('draft-rollback')).contacts.length, 0);
+
+  const projectsRaw = memory.values.get('@ays_projects');
+  const contactsRaw = memory.values.get('@ays_project_data_draft-rollback');
+  const draftRaw = memory.values.get('@ays_draft_draft-rollback');
+  await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
+    projectId: 'draft-rollback', projectsRaw, contactsRaw, restoreDraft: true, draftRaw }));
+  memory.values.set('@ays_project_data_draft-rollback', JSON.stringify([
+    { id: 'unfinished', recordId: 'unfinished', phone: '', data: { q: 'Cevap' }, completed: true },
+  ]));
+  memory.values.set('@ays_projects', JSON.stringify([{ ...JSON.parse(projectsRaw)[0],
+    totalContacts: 1, completedContacts: 1 }]));
+  memory.values.delete('@ays_draft_draft-rollback');
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  assert.equal((await reopened.getProject('draft-rollback')).contacts.length, 0);
+  assert.deepEqual((await reopened.loadSurveyDraft('draft-rollback')).data, { q: 'Cevap' });
+  assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+});
+
+test('old survey backups remain readable without a draft and invalid drafts are rejected', async () => {
+  const fields = [{ id: 'q', label: 'Soru', type: 'text', options: [] }];
+  const project = { id: 'old-survey', eventId: 'old-survey', name: 'Eski anket', mode: 'survey',
+    createdAt: '2026-10-15T00:00:00.000Z', fields, contacts: [] };
+  const oldFile = JSON.parse(await backupFormat.createBackupFile(project));
+  oldFile.schemaVersion = 7;
+  delete oldFile.payload.project.surveyDraft;
+  const { integrity, ...body } = oldFile;
+  oldFile.integrity.sha256 = await cryptoMock.digestStringAsync('SHA-256', canonicalModule.canonicalJson(body));
+  assert.equal((await backupFormat.readBackupFile(JSON.stringify(oldFile))).project.surveyDraft, null);
+  await assert.rejects(backupFormat.createBackupFile({ ...project,
+    surveyDraft: { formVersion: 1, data: { unknown: 'Kaybolmasın' } } }), /taslağındaki cevaplar/);
+});
+
+test('interrupted new backup restore removes its orphan sidecar and draft', async () => {
+  const memory = memoryStorage();
+  const projectsRaw = '[]';
+  memory.values.set('@ays_projects', projectsRaw);
+  memory.values.set('@ays_merge_journal', JSON.stringify({ kind: 'new-restore',
+    projectId: 'orphan-survey', projectsRaw, sourceRef: null }));
+  memory.values.set('@ays_project_data_orphan-survey', '[]');
+  memory.values.set('@ays_draft_orphan-survey', '{"formVersion":1,"data":{"q":"Cevap"}}');
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  assert.deepEqual(await reopened.getAllProjects(), []);
+  assert.equal(memory.values.has('@ays_project_data_orphan-survey'), false);
+  assert.equal(memory.values.has('@ays_draft_orphan-survey'), false);
+  assert.equal(memory.values.has('@ays_merge_journal'), false);
 });
 
 test('listless survey template keeps questions without name or phone', async () => {

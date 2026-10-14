@@ -3,11 +3,12 @@ import { canonicalJson } from './canonicalJson';
 import { normalizeAssignment } from './assignmentFormat';
 import { CALL_STATUSES, normalizeAttempts } from './resultFormat';
 import { normalizeSourceWorkbook } from './sourceWorkbookArchive';
+import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
 
 export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 7;
+export const BACKUP_SCHEMA_VERSION = 8;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -292,6 +293,9 @@ export function normalizeBackupProject(input) {
   if (mode === 'survey' && (assignments.length || project.sourceReview || project.sourceWorkbook)) {
     throw new Error('Listesiz ankette görev veya kaynak dosya olamaz.');
   }
+  if (mode !== 'survey' && project.surveyDraft != null) throw new Error('Arama projesinde anket taslağı olamaz.');
+  const surveyDraft = mode === 'survey'
+    ? normalizeSurveyDraft(project.surveyDraft, fields, formVersion) : null;
   for (const assignment of assignments) {
     const snapshot = historyMap.get(assignment.formVersion);
     if (!snapshot || canonicalJson(snapshot) !== canonicalJson(assignment.fields)) {
@@ -322,7 +326,7 @@ export function normalizeBackupProject(input) {
     round: role === 'volunteer' ? project.round || 1 : null,
     resultRevision: role === 'volunteer' ? project.resultRevision || 0 : 0,
     resultSourceId: role === 'volunteer' ? project.resultSourceId || null : null,
-    mergeConflicts,
+    mergeConflicts, surveyDraft,
   };
 }
 
@@ -353,7 +357,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, 2, 3, 4, 5, 6, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, 3, 4, 5, 6, 7, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,
