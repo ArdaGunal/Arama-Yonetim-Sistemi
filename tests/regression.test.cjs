@@ -198,6 +198,45 @@ test('failed project metadata write removes the new contacts sidecar', async (t)
   assert.equal(loggedError.mock.callCount(), 1);
 });
 
+test('failed contact update restores its sidecar and counters', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject({ id: 'update-fail', name: 'Deneme', contacts: [
+    { id: 'one', phone: '05000000001', completed: false, data: {} },
+  ], currentIndex: 0 });
+  const oldContactsRaw = memory.values.get('@ays_project_data_update-fail');
+  const oldProjectsRaw = memory.values.get('@ays_projects');
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_projects') throw new Error('sentetik metadata hatası');
+    return originalSet(key, value);
+  };
+  await assert.rejects(storage.updateProject('update-fail', { currentIndex: 1, contacts: [
+    { id: 'one', phone: '05000000001', completed: true, data: { answer: 'Evet' } },
+  ] }), /Proje verisi kaydedilemedi/);
+  assert.equal(memory.values.get('@ays_project_data_update-fail'), oldContactsRaw);
+  assert.equal(memory.values.get('@ays_projects'), oldProjectsRaw);
+});
+
+test('failed legacy contact update leaves no orphan sidecar', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const legacy = [{ id: 'old', phone: '05000000002', completed: false, data: {} }];
+  memory.values.set('@ays_projects', JSON.stringify([{ id: 'legacy-update', name: 'Eski', contacts: legacy }]));
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_projects') throw new Error('sentetik metadata hatası');
+    return originalSet(key, value);
+  };
+  await assert.rejects(storage.updateProject('legacy-update', { contacts: [
+    { ...legacy[0], completed: true },
+  ] }), /Proje verisi kaydedilemedi/);
+  assert.equal(memory.values.has('@ays_project_data_legacy-update'), false);
+  assert.deepEqual((await storage.getProject('legacy-update')).contacts, legacy);
+});
+
 test('draft writes and deletion finish in order without deadlock', async () => {
   const memory = memoryStorage();
   const storage = loadSource('src/utils/storage.js', {

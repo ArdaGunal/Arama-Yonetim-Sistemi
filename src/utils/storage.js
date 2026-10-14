@@ -13,7 +13,7 @@ import { missingRequiredField } from './formValidation';
 import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
 import { readProjectMetadata, readProjectSummaries, readProjectContacts } from '../data/projectStore/projectReads';
-import { writeNewProject, writeSurveyResponse } from '../data/projectStore/projectWrites';
+import { writeNewProject, writeSurveyResponse, writeUpdatedProject } from '../data/projectStore/projectWrites';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -329,43 +329,13 @@ export async function replaceProjectBackup(input, expectedCurrent) {
  * Projeyi günceller
  */
 export async function updateProject(projectId, updates) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const index = projects.findIndex((p) => p.id === projectId);
-    
-    if (index !== -1) {
-      const pMeta = projects[index];
-      
-      // Sadece index ve genel meta güncellemeleri metadata'ya
-      if (updates.currentIndex !== undefined) pMeta.currentIndex = updates.currentIndex;
-      
-      // Eğer contacts güncellenmişse, ayrı olarak kaydet
-      if (updates.contacts) {
-        const nextContacts = JSON.stringify(updates.contacts);
-        if (pMeta.role === 'volunteer') {
-          const saved = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-          const previous = saved ? JSON.parse(saved) : [];
-          if (updates.contacts.length !== previous.length || updates.contacts.some((contact, i) =>
-            (contact.recordId || contact.id) !== (previous[i].recordId || previous[i].id) ||
-            contact.phone !== previous[i].phone)) {
-            throw new Error('Görevdeki kişi listesi değiştirilemez.');
-          }
-          if (saved !== nextContacts) {
-            pMeta.resultDataEpoch = (pMeta.resultDataEpoch || 0) + 1;
-          }
-        }
-        pMeta.totalContacts = updates.contacts.length;
-        pMeta.completedContacts = updates.contacts.filter((contact) => contact.completed).length;
-        if (pMeta.completedContacts > 0) pMeta.formLocked = true;
-        await AsyncStorage.setItem(PROJECT_DATA_PREFIX + projectId, nextContacts);
-      }
-
-      projects[index] = pMeta;
-      await saveAllProjects(projects);
-      return { ...pMeta, contacts: updates.contacts }; // Yeni objeyi döndür
-    }
-    return null;
-  });
+  return enqueueWrite(() => writeUpdatedProject(projectId, updates, {
+    loadProjects: getAllProjects,
+    getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+    setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
+    removeContacts: (id) => AsyncStorage.removeItem(PROJECT_DATA_PREFIX + id),
+    saveProjects: saveAllProjects,
+  }));
 }
 
 /** Listesiz ankette her doldurma yeni bir kayıt oluşturur; yazılar sıraya alınır. */

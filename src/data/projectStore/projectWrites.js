@@ -67,3 +67,49 @@ export async function writeSurveyResponse(projectId, input, { loadProjects, getC
   }
   return response;
 }
+
+/** Kişi listesi ve sayaçları birlikte kaydeder; metadata hatasında önceki yan dosyayı geri yükler. */
+export async function writeUpdatedProject(projectId, updates, { loadProjects, getContacts,
+  setContacts, removeContacts, saveProjects }) {
+  const projects = await loadProjects();
+  const index = projects.findIndex((project) => project.id === projectId);
+  if (index < 0) return null;
+  const project = { ...projects[index] };
+  if (updates.currentIndex !== undefined) project.currentIndex = updates.currentIndex;
+
+  let before;
+  let nextContacts;
+  if (updates.contacts) {
+    nextContacts = JSON.stringify(updates.contacts);
+    before = await getContacts(projectId);
+    if (project.role === 'volunteer') {
+      const previous = before ? JSON.parse(before) : [];
+      if (updates.contacts.length !== previous.length || updates.contacts.some((contact, i) =>
+        (contact.recordId || contact.id) !== (previous[i].recordId || previous[i].id) ||
+        contact.phone !== previous[i].phone)) {
+        throw new Error('Görevdeki kişi listesi değiştirilemez.');
+      }
+      if (before !== nextContacts) project.resultDataEpoch = (project.resultDataEpoch || 0) + 1;
+    }
+    project.totalContacts = updates.contacts.length;
+    project.completedContacts = updates.contacts.filter((contact) => contact.completed).length;
+    if (project.completedContacts > 0) project.formLocked = true;
+  }
+
+  projects[index] = project;
+  try {
+    if (nextContacts !== undefined) await setContacts(projectId, nextContacts);
+    await saveProjects(projects);
+  } catch (error) {
+    if (nextContacts !== undefined) {
+      try {
+        if (before == null) await removeContacts(projectId);
+        else await setContacts(projectId, before);
+      } catch (rollbackError) {
+        throw new Error(`Kişi kaydı başarısız oldu ve önceki veri geri yüklenemedi: ${rollbackError.message}`);
+      }
+    }
+    throw error;
+  }
+  return { ...project, contacts: updates.contacts };
+}
