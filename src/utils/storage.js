@@ -27,7 +27,7 @@ const TEMPLATES_KEY = '@ays_templates';
 const MERGE_JOURNAL_KEY = '@ays_merge_journal';
 let mergeInProgress = false;
 let recoveryPromise = null;
-let projectUpdateInProgress = false;
+let projectSidecarWriteInProgress = false;
 let projectUpdateRecoveryPromise = null;
 
 async function storeAttachedSource(projectId, source) {
@@ -72,7 +72,7 @@ async function recoverPendingMerge() {
 }
 
 async function recoverPendingProjectUpdate(force = false) {
-  if (projectUpdateInProgress && !force) return;
+  if (projectSidecarWriteInProgress && !force) return;
   if (projectUpdateRecoveryPromise) return projectUpdateRecoveryPromise;
   projectUpdateRecoveryPromise = recoverProjectUpdateJournal({
     readJournal: () => readProjectUpdateJournal(AsyncStorage),
@@ -85,6 +85,18 @@ async function recoverPendingProjectUpdate(force = false) {
   });
   try { await projectUpdateRecoveryPromise; } finally { projectUpdateRecoveryPromise = null; }
 }
+
+const sidecarUpdateJournal = {
+  beginUpdate: async (projectId, contactsRaw) => {
+    const projectsRaw = await AsyncStorage.getItem(PROJECTS_KEY);
+    if (projectsRaw == null) throw new Error('Proje bilgileri bulunamadı; kayıt durduruldu.');
+    await writeProjectUpdateJournal(AsyncStorage, JSON.stringify({
+      version: 1, projectId, projectsRaw, contactsRaw,
+    }));
+  },
+  finishUpdate: () => removeProjectUpdateJournal(AsyncStorage),
+  recoverUpdate: () => recoverPendingProjectUpdate(true),
+};
 
 export async function getLastDiagnostic() {
   const value = await AsyncStorage.getItem(DIAGNOSTIC_KEY);
@@ -352,37 +364,36 @@ export async function replaceProjectBackup(input, expectedCurrent) {
 export async function updateProject(projectId, updates) {
   return enqueueWrite(async () => {
     await recoverPendingProjectUpdate();
-    projectUpdateInProgress = true;
+    projectSidecarWriteInProgress = true;
     try {
       return await writeUpdatedProject(projectId, updates, {
         loadProjects: getAllProjects,
         getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
         setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
         saveProjects: saveAllProjects,
-        beginUpdate: async (id, contactsRaw) => {
-          const projectsRaw = await AsyncStorage.getItem(PROJECTS_KEY);
-          if (projectsRaw == null) throw new Error('Proje bilgileri bulunamadı; kişi kaydı durduruldu.');
-          await writeProjectUpdateJournal(AsyncStorage, JSON.stringify({
-            version: 1, projectId: id, projectsRaw, contactsRaw,
-          }));
-        },
-        finishUpdate: () => removeProjectUpdateJournal(AsyncStorage),
-        recoverUpdate: () => recoverPendingProjectUpdate(true),
+        ...sidecarUpdateJournal,
       });
-    } finally { projectUpdateInProgress = false; }
+    } finally { projectSidecarWriteInProgress = false; }
   });
 }
 
 /** Listesiz ankette her doldurma yeni bir kayıt oluşturur; yazılar sıraya alınır. */
 export async function appendSurveyResponse(projectId, input) {
-  return enqueueWrite(() => writeSurveyResponse(projectId, input, {
-    loadProjects: getAllProjects,
-    getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
-    setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
-    saveProjects: saveAllProjects,
-    createId: Crypto.randomUUID,
-    now: () => new Date().toISOString(),
-  }));
+  return enqueueWrite(async () => {
+    await recoverPendingProjectUpdate();
+    projectSidecarWriteInProgress = true;
+    try {
+      return await writeSurveyResponse(projectId, input, {
+        loadProjects: getAllProjects,
+        getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+        setContacts: (id, data) => AsyncStorage.setItem(PROJECT_DATA_PREFIX + id, data),
+        saveProjects: saveAllProjects,
+        createId: Crypto.randomUUID,
+        now: () => new Date().toISOString(),
+        ...sidecarUpdateJournal,
+      });
+    } finally { projectSidecarWriteInProgress = false; }
+  });
 }
 
 const ACTIVE_ASSIGNMENT_STATUSES = new Set(['prepared', 'sent', 'partial', 'completed']);

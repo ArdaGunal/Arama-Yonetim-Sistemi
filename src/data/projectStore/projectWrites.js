@@ -27,9 +27,9 @@ export async function writeNewProject(project, { loadProjects, getContacts, setC
   return project;
 }
 
-/** Listesiz anket yanıtını ve proje sayaçlarını birlikte günceller; metadata hatasında yanıtları geri alır. */
+/** Listesiz anket yanıtını ve sayaçlarını kalıcı kurtarma günlüğüyle birlikte günceller. */
 export async function writeSurveyResponse(projectId, input, { loadProjects, getContacts,
-  setContacts, saveProjects, createId, now }) {
+  setContacts, saveProjects, createId, now, beginUpdate, finishUpdate, recoverUpdate }) {
   const projects = await loadProjects();
   const project = projects.find((item) => item.id === projectId);
   if (!project || project.mode !== 'survey') throw new Error('Anket bulunamadı.');
@@ -53,16 +53,20 @@ export async function writeSurveyResponse(projectId, input, { loadProjects, getC
   const id = createId();
   const response = { id, recordId: id, phone: '', data, completed: true, completedAt: now() };
   const next = [...contacts, response];
-  const previousMeta = { ...project };
   project.totalContacts = next.length;
   project.completedContacts = next.length;
   project.formLocked = true;
   try {
+    await beginUpdate(projectId, before);
     await setContacts(projectId, JSON.stringify(next));
     await saveProjects(projects);
+    await finishUpdate();
   } catch (error) {
-    await setContacts(projectId, before || '[]').catch(() => {});
-    Object.assign(project, previousMeta);
+    try {
+      await recoverUpdate();
+    } catch (rollbackError) {
+      throw new Error(`Anket cevabı kaydedilemedi ve önceki veri geri yüklenemedi: ${rollbackError.message}`);
+    }
     throw error;
   }
   return response;

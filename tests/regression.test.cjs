@@ -1469,6 +1469,54 @@ test('survey response metadata failure restores the previous answer list', async
   assert.equal(project.completedContacts, 0);
 });
 
+test('survey answer journal is committed before answers and removed after metadata', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject({ id: 'ordered-survey', name: 'Anket', mode: 'survey',
+    fields: [{ id: 'answer', label: 'Cevap', type: 'text', options: [] }], contacts: [] });
+  const order = [];
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => { order.push(`set:${key}`); return originalSet(key, value); };
+  journalEvents = order;
+  try { await storage.appendSurveyResponse('ordered-survey', { answer: 'Evet' }); }
+  finally { journalEvents = null; }
+  assert.deepEqual(order, [
+    'write:journal-temp', 'move:journal',
+    'set:@ays_project_data_ordered-survey', 'set:@ays_projects', 'delete:journal',
+  ]);
+  assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+});
+
+test('interrupted survey answer restores old responses and allows one clean retry', async () => {
+  const memory = memoryStorage();
+  const first = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await first.createProject({ id: 'interrupted-survey', name: 'Anket', mode: 'survey',
+    fields: [{ id: 'answer', label: 'Cevap', type: 'text', options: [] }], contacts: [] });
+  await first.appendSurveyResponse('interrupted-survey', { answer: 'İlk' });
+  const projectsRaw = memory.values.get('@ays_projects');
+  const contactsRaw = memory.values.get('@ays_project_data_interrupted-survey');
+  await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
+    projectId: 'interrupted-survey', projectsRaw, contactsRaw }));
+  memory.values.set('@ays_project_data_interrupted-survey', JSON.stringify([
+    ...JSON.parse(contactsRaw), { id: 'unfinished', recordId: 'unfinished', phone: '',
+      data: { answer: 'Yarım' }, completed: true },
+  ]));
+  memory.values.set('@ays_projects', JSON.stringify([{ ...JSON.parse(projectsRaw)[0],
+    totalContacts: 2, completedContacts: 2 }]));
+
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const recovered = await reopened.getProject('interrupted-survey');
+  assert.equal(memory.values.get('@ays_projects'), projectsRaw);
+  assert.equal(memory.values.get('@ays_project_data_interrupted-survey'), contactsRaw);
+  assert.equal(recovered.contacts.length, 1);
+  assert.equal(recovered.contacts[0].data.answer, 'İlk');
+  assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
+  await reopened.appendSurveyResponse('interrupted-survey', { answer: 'Yeni' });
+  const retried = await reopened.getProject('interrupted-survey');
+  assert.deepEqual(retried.contacts.map((item) => item.data.answer), ['İlk', 'Yeni']);
+  assert.equal(retried.completedContacts, 2);
+});
+
 test('listless survey template keeps questions without name or phone', async () => {
   const templates = loadSource('src/utils/templateFormat.js', { 'expo-crypto': cryptoMock });
   const fields = [{ id: 'q', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'] }];

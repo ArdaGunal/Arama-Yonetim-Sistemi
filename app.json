@@ -2,7 +2,7 @@
   "expo": {
     "name": "Arama Yönetim Sistemi",
     "slug": "arama-yonetim-sistemi",
-    "version": "1.0.28",
+    "version": "1.0.29",
     "orientation": "portrait",
     "icon": "./assets/app-icon-2026.png",
     "userInterfaceStyle": "dark",
@@ -17,7 +17,7 @@
       "supportsTablet": true
     },
     "android": {
-      "versionCode": 29,
+      "versionCode": 30,
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-icon-2026.png",
         "backgroundColor": "#171920"
