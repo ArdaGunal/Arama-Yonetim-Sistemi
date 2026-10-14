@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const roots = ['src/features/calls', 'src/features/surveys'];
+const roots = ['src/features/calls', 'src/features/surveys', 'src/features/forms', 'src/features/new-project'];
 const limit = 400;
 let failed = false;
 
