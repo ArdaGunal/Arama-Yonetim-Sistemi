@@ -17,6 +17,7 @@
 | `src/data/projectStore/projectUpdateJournal.js`, `projectUpdateJournalStore.js` | Kişi güncellemesi veya listesiz anket cevabı yarım kalırsa eski metadata/yan dosya görüntüsünü ilk okumada geri getirme; Android'de uygulama dosya alanı, web'de IndexedDB |
 | `src/features/surveys/surveyDraft.js`, `surveyResponses.js`, `src/screens/FreeSurveyScreen.js`, `SurveyResponsesScreen.js` | Anket taslağı, ayrı yanıt modeli, eski yedek adaptörü, cevap ve yanıt listesi/düzeltme ekranları |
 | `src/utils/phoneUtils.js` | Telefon temizleme ve metin/Excel ayrıştırma |
+| `src/features/calls/callSourceTemplate.js`, `callExport.js`, `pool/assignmentPool.js` | Arama kaynak şablonu, Excel/CSV satırları ve görev havuzu saf kuralları |
 | `src/utils/exportUtils.js`, `src/screens/ExportScreen.js` | Excel/CSV çıktısı |
 | `src/utils/sourceWorkbookArchive.js`, `src/utils/sourceWorkbookStore.js` | Orijinal Excel eki, ayrı cihaz depolaması ve OOXML sonuç sayfaları |
 | `src/utils/diagnostics.js`, `src/screens/DeveloperPanel.js` | Hata kaydı ve rapor paylaşımı |
@@ -28,7 +29,7 @@
 | `src/features/survey-transfer/`, `src/screens/SurveyTransferScreen.js`, `SurveyInboxScreen.js` | Anket form/cevap dosyası, kalıcı gelen kutusu, önizleme ve kararlı birleştirme |
 | `plugins/withCrashInfo.js`, `native-crash/` | Android yerel çökme kaydını Expo prebuild sırasında ekleme |
 | `src/theme/colors.js` | Ortak renkler |
-| `tests/regression.test.cjs` | Depolama ve içe aktarma regresyonları |
+| `tests/regression-projects.test.cjs`, `regression-calls.test.cjs`, `regression-surveys.test.cjs` | Proje/depo, arama/görev ve anket regresyonları; ortak düzenek `tests/support/regressionHarness.cjs` |
 
 ## Bugünkü veri modeli
 

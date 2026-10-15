@@ -28,7 +28,7 @@ Anket varsayılan olarak **tek cihazda veri toplama** işidir. İsim/telefon zor
 | `src/utils/backupFormat.js` (~373 satır) | Çağrı kişisi ve anket yanıtı aynı `contacts` dizisinde; anket `phone: ''` taşır | Yanlış dalda telefon/görev kuralı uygulanabilir | Ayrı `CallContact`/`SurveyResponse` doğrulayıcısı ve sürümlü uyumluluk katmanı |
 | `src/context/SurveyContext.js` (~452 satır) | Arama durumu ve otomatik kayıt; bazı yazma hataları `console.error` ile geçiliyor | Kullanıcı kayıt başarısızlığını fark etmeyebilir | Görünür hata/yeniden dene, kaydediliyor/kaydedildi durumu |
 | `src/utils/exportUtils.js` | Arama ve anket Excel/CSV dalları aynı modülde | Sütun kayması/yanlış alan aktarımı | Ayrı saf tablo üreticileri; ortak dosya yazma katmanı |
-| `tests/regression.test.cjs` | 46 senaryo tek dosyada | İlgili testleri bulmak ve izole çalıştırmak zor | Format/depo/görev/anket test dosyalarına kademeli bölme |
+| `tests/regression-*.test.cjs` | 88 senaryo proje, arama/görev ve anket dosyalarında | Ortak test düzeneği `tests/support/regressionHarness.cjs` içinde | Yeni senaryoyu ilgili alan dosyasına ekle |
 | `docs/` | Eski plan ve dosya sözleşmesi bazı şema sürümlerini eski gösteriyor | Devralan kişi yanlış biçim uygulayabilir | Sürüm tablosunu kodla eşzamanlı tutma ve devir kontrol listesi |
 
 **İlke:** Sırf dosyaları küçültmek için çalışan kodu yeniden yazma. Her taşıma küçük, davranış koruyan bir adım olacak; önce mevcut davranışa regresyon testi, sonra taşıma. `contacts` veri anahtarını veya `.ays` içeriğini tek seferde değiştirme.
@@ -102,13 +102,13 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 2 — Davranışı değiştirmeden kodu ayırma
 
-**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje okuma mantığı `data/projectStore/projectReads.js`, yeni proje, anket yanıtı ve kişi güncelleme yazımları ile hata geri almaları `data/projectStore/projectWrites.js` içinde. Kişi güncellemesi ve listesiz anket cevabı için kesintide eski metadata/yanıt görüntüsünü geri getiren ortak kalıcı kayıt eklendi; web kaydı `IndexedDB`, Android kaydı uygulama dosya alanını kullanır. Kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Diğer depo işlemleri ve dışa aktarma ayrımı sıradadır.
+**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje okuma mantığı `data/projectStore/projectReads.js`, yeni proje, anket yanıtı ve kişi güncelleme yazımları ile hata geri almaları `data/projectStore/projectWrites.js` içinde. Kişi güncellemesi ve listesiz anket cevabı için kesintide eski metadata/yanıt görüntüsünü geri getiren ortak kalıcı kayıt eklendi; web kaydı `IndexedDB`, Android kaydı uygulama dosya alanını kullanır. Kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Arama kaynak şablonu, görev havuzu ve Excel/CSV satırları da `features/calls/` altında saf modüllere taşındı. Regresyonlar üç alan dosyasına ayrıldı; 88 senaryo geçiyor. Geri kalan depo yazımlarının ayrılması açıktır.
 
 1. `NewProjectScreen` içindeki kaynak Excel/metin ayrıştırma ve kaydetme hazırlığını saf fonksiyonlara çıkar. Arama ve anket için ayrı kaydetme komutları oluştur; ortak alan doğrulamasını tek yerde tut.
 2. `Step2Review` içinden kişi/sütun/tekrar incelemesini ayır. Ortak soru editörü, iki türden de aynı davranışı versin; önizleme kayıt yazmasın.
 3. Depoyu önce okuma, sonra yazma işlemleri halinde modüllere ayır. Mevcut `enqueueWrite` tek sıra garantisini ve merge journal kurtarmasını koru. Her taşıma sonrası arama/görev/yedek regresyonunu çalıştır.
-4. `exportUtils` içinde arama ve anket satır üreticilerini ayır; Excel/CSV sütunlarını aynı saf modelden üret. Sıfırla başlayan telefon/okul numarası metin kalsın.
-5. 46 testlik dosyayı alanlara göre böl; fixture'lar sentetik kalsın. Yeni modüllerde anlamsız `catch {}` ve `console.error` ile kullanıcıdan gizlenen yazma hatalarını incele, görünür hata ve yeniden deneme ekle.
+4. **Tamamlandı (1.0.36/b37):** Arama ve anket satır üreticileri ayrı modülde; Excel/CSV aynı saf modelden çıkar. Sıfırla başlayan telefon/okul numarası metin kalır.
+5. **Kısmen tamamlandı (1.0.36/b37):** 88 regresyon testi proje, arama/görev ve anket dosyalarına ayrıldı; fixture'lar sentetik kaldı. Arama taslağı ve otomatik kaydın hatası görünür ve yeniden denenebilir. Silme sonrası temizleme hatası tanılama raporuna çıkar. Kalan depo yazımlarını ayırırken gizli yazma hatalarını taramaya devam et.
 
 **Bitiş:** Ekranlar veri sözleşmesi ayrıntısını bilmez; aynı `.ays`, Excel ve görev sonuçları önceki sürümle eşdeğer çıkar. Büyük taşımalarda Android duman testi geçer.
 
@@ -140,7 +140,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
    Aynı adlı projeler kimlikleriyle ayrı kalır; ana ekranda tarih ve türle ayırt edilir. Yeni proje adı mevcut adla eşleşince **Adı değiştir / Yine de oluştur** uyarısı gösterme işi 1.0.26'da tamamlandı; ana ekranda aynı adlı projeleri daha belirgin ayırma işi sürüyor.
 2. Her ekranda tek baskın eylem; teknik kelimeler yardım bölümünde. Hata mesajı neyin yanlış olduğunu ve düzeltme yolunu söyler. Erişilebilir etiket, yeterli kontrast/dokunma alanı, büyük yazı ve klavye kapatma kontrolü yapılır.
 3. Kısa içe alma rehberi, örnek veriyle güvenli deneme, anket önizlemesinde kalıcı kayıt yapılmadığını açık işaretleme.
-4. Gelişmiş form mantığı (şarta göre soru, sayı/tarih doğrulama) **ayrı isteğe bağlı bölümde** ve görsel kurallarla gelir; varsayılan anket basit kalır. Yanıt dışa aktarımında alan kimlikleri sabit tutulur.
+4. **Ürün kararı:** Bu uygulama temel anket olarak kalır. Şarta göre soru, sayı/tarih doğrulama gibi ayrıntılı form mantığı burada karmaşıklık yaratacağı için [Anket Platformu](https://anketplatformu.com/) yönlendirmesinde kalır. Yanıt dışa aktarımında alan kimlikleri sabit tutulur.
 5. Tür seçiminde geliştiricinin Anket Platformu sitesine açıkça etiketlenmiş bağlantı bulunur. Dış site açılmazsa adres gösterilir; cevapların uygulamadan siteye aktarılmadığı anlaşılır kalır.
 
 **Bitiş:** İlk kez kullanan kişi yardım almadan proje türünü seçip ilk cevabı kaydeder; yanlış/eksik adımda neden ve çözüm görünür. Kullanılabilirlik denemesi en az üç teknolojiye uzak gönüllüyle yapılır.

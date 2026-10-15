@@ -20,6 +20,8 @@ function loadSource(relativePath, mocks = {}) {
       name === '../features/surveys/surveyDraft' ? surveyDraft :
       name === '../features/surveys/surveyResponses' ? surveyResponses :
       name === '../features/surveys/surveyExport' ? surveyExport :
+      name === '../features/calls/callExport' ? callExport :
+      name === '../features/calls/pool/assignmentPool' ? assignmentPool :
       name === './surveyResponses' ? surveyResponses :
       name === '../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../utils/canonicalJson' ? canonicalModule :
@@ -67,6 +69,10 @@ const resultMerge = loadSource('src/utils/resultMerge.js');
 const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
 const surveyResponses = loadSource('src/features/surveys/surveyResponses.js');
 const surveyExport = loadSource('src/features/surveys/surveyExport.js');
+const callExport = loadSource('src/features/calls/callExport.js');
+const assignmentPool = loadSource('src/features/calls/pool/assignmentPool.js', {
+  '../../../utils/phoneUtils': phoneUtils,
+});
 const surveyTransferBackup = loadSource('src/features/survey-transfer/surveyTransferBackup.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const surveyFormFormat = loadSource('src/features/survey-transfer/surveyFormFormat.js', { 'expo-crypto': cryptoMock });

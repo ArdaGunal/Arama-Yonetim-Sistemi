@@ -22,7 +22,8 @@ import EditContactModal from '../components/shared/EditContactModal';
 
 // ── İç bileşen (Context'e erişebilmek için Provider içinde olmalı) ──
 function SurveyScreenInner() {
-  const { loading, loadError, reloadProject, project, activeTab, setActiveTab, navigation } = useSurvey();
+  const { loading, loadError, saveError, retrySave, reloadProject,
+    project, activeTab, setActiveTab, navigation } = useSurvey();
 
   if (loading) {
     return (
@@ -84,6 +85,13 @@ function SurveyScreenInner() {
         </TouchableOpacity>
       </View>
 
+      {!!saveError && <View style={st.saveWarning}>
+        <Text accessibilityRole="alert" style={st.saveWarningText}>{saveError}</Text>
+        <TouchableOpacity accessibilityRole="button" style={st.saveRetry} onPress={retrySave}>
+          <Text style={st.saveRetryText}>Tekrar dene</Text>
+        </TouchableOpacity>
+      </View>}
+
       {/* ── Aktif Sekme İçeriği ── */}
       {activeTab === 'survey' && <SurveyTab />}
       {activeTab === 'stats' && <StatsTab />}
@@ -106,6 +114,11 @@ export default function SurveyScreen({ route, navigation }) {
 }
 
 const st = StyleSheet.create({
+  saveWarning: { backgroundColor: Colors.bgCard, borderColor: Colors.warning, borderWidth: 1,
+    marginHorizontal: 12, marginTop: 8, padding: 12, borderRadius: 10 },
+  saveWarningText: { color: Colors.warning, fontSize: 13, lineHeight: 18 },
+  saveRetry: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  saveRetryText: { color: Colors.accentLight, fontSize: 14, fontWeight: '800' },
   container: { flex: 1, backgroundColor: Colors.bg },
   loadC: { flex: 1, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' },
   loadT: { color: Colors.textSecondary, marginTop: 12, fontSize: 15 },

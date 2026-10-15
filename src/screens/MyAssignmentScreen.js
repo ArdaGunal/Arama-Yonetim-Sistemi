@@ -25,6 +25,7 @@ export default function MyAssignmentScreen({ route, navigation }) {
   const [callbackDate, setCallbackDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [draftError, setDraftError] = useState('');
   const [dirty, setDirty] = useState(false);
 
   const openRow = (loaded, task, nextIndex) => {
@@ -40,6 +41,7 @@ export default function MyAssignmentScreen({ route, navigation }) {
   };
   const refresh = useCallback(async () => {
     try {
+      setDraftError('');
       const loaded = await getProject(projectId);
       const task = loaded?.assignments?.find((item) => item.assignmentId === assignmentId && item.ownerType === 'coordinator');
       if (!loaded || !task) throw new Error('Kendi göreviniz bulunamadı.');
@@ -77,7 +79,22 @@ export default function MyAssignmentScreen({ route, navigation }) {
     if (updates.callbackNote !== undefined) setCallbackNote(updates.callbackNote);
     if (updates.callbackDate !== undefined) setCallbackDate(updates.callbackDate);
     setDirty(true);
-    saveDraft(assignmentId, next).catch((reason) => reportError(reason, 'Kendi görevim taslağı'));
+    saveDraft(assignmentId, next).then(() => setDraftError('')).catch((reason) => {
+      reportError(reason, 'Kendi görevim taslağı');
+      setDraftError('Taslak kaydedilemedi. Cevabı kaydedin veya tekrar deneyin.');
+    });
+  };
+  const retryDraft = async () => {
+    if (!row) return;
+    try {
+      if (draftError.startsWith('Cevap kaydedildi')) await clearDraft(assignmentId);
+      else await saveDraft(assignmentId, { recordId: row.recordId, baseAttemptCount: contact?.attempts?.length || 0,
+        data, callStatus, callbackNote, callbackDate });
+      setDraftError('');
+    } catch (reason) {
+      reportError(reason, 'Kendi görevim taslağı tekrar denenirken');
+      setDraftError('Taslak kaydedilemedi. Cevabı kaydedin veya tekrar deneyin.');
+    }
   };
   const move = (nextIndex) => {
     if (dirty) { inform('Kaydedilmemiş cevap var', 'Başka kişiye geçmeden önce Kaydet ve devam et düğmesine basın.'); return; }
@@ -102,7 +119,11 @@ export default function MyAssignmentScreen({ route, navigation }) {
       const result = await saveCoordinatorTaskContact(projectId, assignmentId, row.recordId, {
         data, callStatus, callbackNote, callbackAt,
       });
-      await clearDraft(assignmentId);
+      try { await clearDraft(assignmentId); setDraftError(''); }
+      catch (reason) {
+        reportError(reason, 'Kendi görevim taslağı temizlenirken');
+        setDraftError('Cevap kaydedildi, ancak eski taslak silinemedi. Tekrar deneyin.');
+      }
       const loaded = await getProject(projectId);
       const task = loaded.assignments.find((item) => item.assignmentId === assignmentId);
       setProject(loaded); setAssignment(task);
@@ -125,6 +146,8 @@ export default function MyAssignmentScreen({ route, navigation }) {
     <Text style={s.title}>Kendi görevim</Text>
     <Text style={s.summary}>{done}/{rows.length} kişi tamamlandı</Text>
     {closed && <Text style={s.warning}>Bu görev kapandı. Cevapları görmek için ana listeye dönün.</Text>}
+    {!!draftError && <View><Text style={s.warning}>{draftError}</Text>
+      <TouchableOpacity accessibilityRole="button" onPress={retryDraft}><Text style={s.link}>Tekrar dene</Text></TouchableOpacity></View>}
     {row && contact && <View style={s.card}>
       <Text style={s.counter}>{index + 1}. kişi / {rows.length}</Text>
       <Text style={s.name}>{nameField ? contact.data?.[nameField.id] || 'İsim yok' : 'İsim yok'}</Text>

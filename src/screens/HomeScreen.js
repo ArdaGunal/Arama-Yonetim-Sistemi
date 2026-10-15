@@ -26,6 +26,7 @@ import { getProjectSummaries, deleteProject, hasUnexportedVolunteerResult,
 import { saveEventBackup } from '../utils/automaticBackup';
 import { reportError } from '../utils/diagnostics';
 import { listIncomingResults, listIncomingSurveyResponses } from '../utils/incomingResultStore';
+import { comparableProjectName } from '../domain/projects/projectNames';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const confirmAction = (title, message, confirmText) => new Promise((resolve) => {
@@ -114,9 +115,14 @@ export default function HomeScreen({ navigation }) {
         inform('Silme durduruldu', 'Yedek hazırlanırken proje değişti. Güncel yedeği yeniden alın.');
         return;
       }
-      await deleteProject(projectId, backup.snapshot);
+      const deletion = await deleteProject(projectId, backup.snapshot);
       await loadProjects();
-      inform('Proje silindi', 'Yedek dosyasını saklayın; gerektiğinde Yedekler ekranından geri yükleyebilirsiniz.');
+      if (deletion.cleanupWarnings.length) {
+        reportError(new Error(deletion.cleanupWarnings.join('; ')), 'Silinen projenin yerel dosyaları temizlenirken');
+        inform('Proje silindi', 'Yedek dosyasını saklayın. Bazı eski yerel dosyalar temizlenemedi; ayrıntı Tanılama Raporu bölümünde.');
+      } else {
+        inform('Proje silindi', 'Yedek dosyasını saklayın; gerektiğinde Yedekler ekranından geri yükleyebilirsiniz.');
+      }
     } catch (error) {
       reportError(error, 'Proje silinmeden önce yedek alınırken');
       inform('Silme durduruldu', error.message || 'Proje silinemedi; mevcut veriler korunuyor.');
@@ -126,13 +132,14 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString, includeTime = false) => {
     const d = new Date(dateString);
-    return d.toLocaleDateString('tr-TR', {
+    const date = d.toLocaleDateString('tr-TR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     });
+    return includeTime ? `${date} ${d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` : date;
   };
 
   const getProgressColor = (called, total) => {
@@ -148,6 +155,8 @@ export default function HomeScreen({ navigation }) {
     const totalCount = item.totalContacts || 0;
     const progressRatio = totalCount > 0 ? calledCount / totalCount : 0;
     const progressColor = getProgressColor(calledCount, totalCount);
+    const sameNameCount = projects.filter((other) =>
+      comparableProjectName(other.name) === comparableProjectName(item.name)).length;
 
     return (
       <View style={styles.projectCard}>
@@ -171,11 +180,12 @@ export default function HomeScreen({ navigation }) {
               ? navigation.navigate('Assignments', { projectId: item.id })
               : navigation.navigate('Survey', { projectId: item.id, projectName: item.name })}>
           <View style={styles.cardLeft}>
+            <Text style={styles.kindBadge}>{item.mode === 'survey' ? 'ANKET' : 'ARAMA'}</Text>
             <Text style={styles.projectName} numberOfLines={1}>
               {item.name}
             </Text>
             <Text style={styles.projectDate}>
-              📅 {formatDate(item.createdAt)}
+              📅 {formatDate(item.createdAt, sameNameCount > 1)} · Aç →
             </Text>
           </View>
 
@@ -427,6 +437,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  kindBadge: { color: Colors.accentLight, fontSize: 11, fontWeight: '800', marginBottom: 5 },
   projectDate: {
     fontSize: 13,
     color: Colors.textSecondary,

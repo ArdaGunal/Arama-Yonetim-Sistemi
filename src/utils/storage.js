@@ -21,6 +21,9 @@ import { readProjectUpdateJournal, writeProjectUpdateJournal,
 import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
 import { activeSurveyResponses, fromLegacySurveyContact,
   parseSurveyResponses } from '../features/surveys/surveyResponses';
+import { getAvailableContacts, getReturnedContacts, getCallbackCandidates,
+  currentAnswers } from '../features/calls/pool/assignmentPool';
+export { getAvailableContacts, getReturnedContacts, getCallbackCandidates };
 import { writeImportedSurveyForm } from '../features/survey-transfer/surveyFormImport';
 import { createSurveyResultFile } from '../features/survey-transfer/surveyResultFormat';
 import { previewSurveyMerge, applySurveyMerge } from '../features/survey-transfer/surveyMerge';
@@ -627,91 +630,6 @@ export async function changeSurveyResponse(projectId, responseId, expected, acti
   });
 }
 
-const ACTIVE_ASSIGNMENT_STATUSES = new Set(['prepared', 'sent', 'partial', 'completed']);
-const currentAnswers = (data, fields) => Object.fromEntries(
-  (fields || []).filter((field) => typeof data?.[field.id] === 'string')
-    .map((field) => [field.id, data[field.id]]));
-
-/** İlk turda kimliği veya telefonu etkin göreve ayrılmış kişileri havuzdan çıkarır. */
-export function getAvailableContacts(project) {
-  const reservedIds = new Set();
-  const reservedPhones = new Set();
-  const returnedIds = new Set();
-  for (const assignment of project.assignments || []) {
-    if (assignment.round !== 1) continue;
-    if (assignment.status === 'cancelled') {
-      for (const contact of assignment.contacts || []) returnedIds.add(contact.recordId);
-      continue;
-    }
-    for (const recordId of assignment.releasedRecordIds || []) returnedIds.add(recordId);
-    if (!ACTIVE_ASSIGNMENT_STATUSES.has(assignment.status)) continue;
-    const released = new Set(assignment.releasedRecordIds || []);
-    for (const contact of assignment.contacts || []) {
-      if (released.has(contact.recordId)) continue;
-      reservedIds.add(contact.recordId);
-      reservedPhones.add(cleanPhoneNumber(contact.phone));
-    }
-  }
-  const seenPhones = new Set();
-  const available = (project.contacts || []).filter((contact) => {
-    const phone = cleanPhoneNumber(contact.phone);
-    const recordId = contact.recordId || contact.id;
-    if (!phone || contact.completed || reservedIds.has(recordId) || reservedPhones.has(phone) || seenPhones.has(phone)) return false;
-    seenPhones.add(phone);
-    return true;
-  });
-  return [...available.filter((contact) => returnedIds.has(contact.recordId || contact.id)),
-    ...available.filter((contact) => !returnedIds.has(contact.recordId || contact.id))];
-}
-
-/** İptal sonrası bekleyen ve henüz yeni bir göreve ayrılmamış ilk tur kişileri. */
-export function getReturnedContacts(project) {
-  const returnedIds = new Set((project.assignments || [])
-    .filter((assignment) => assignment.round === 1)
-    .flatMap((assignment) => assignment.status === 'cancelled'
-      ? (assignment.contacts || []).map((contact) => contact.recordId)
-      : assignment.releasedRecordIds || []));
-  return getAvailableContacts(project).filter((contact) => returnedIds.has(contact.recordId || contact.id));
-}
-
-/** Sonra ara sonucunu almış ve hâlihazırda geri arama görevinde olmayan kişiler. */
-export function getCallbackCandidates(project) {
-  const activeIds = new Set();
-  const activePhones = new Set();
-  const latestByRecord = new Map();
-  for (const assignment of project.assignments || []) {
-    if (assignment.status === 'cancelled') continue;
-    const round = assignment.round || 1;
-    const isActiveCallback = round >= 2 && ['prepared', 'sent', 'partial'].includes(assignment.status);
-    for (const row of assignment.contacts || []) {
-      if ((assignment.releasedRecordIds || []).includes(row.recordId)) continue;
-      const rowDone = assignment.status === 'completed' || assignment.status === 'transferred' ||
-        !!assignment.lastApplied?.[row.recordId]?.completed;
-      if (isActiveCallback && !rowDone) {
-        activeIds.add(row.recordId);
-        activePhones.add(cleanPhoneNumber(row.phone));
-      }
-      const prior = latestByRecord.get(row.recordId);
-      if (!prior || round > prior.round) {
-        latestByRecord.set(row.recordId, { round, unfinished: !rowDone });
-      } else if (round === prior.round && !rowDone) {
-        prior.unfinished = true;
-      }
-    }
-  }
-  const seenPhones = new Set();
-  return (project.contacts || []).flatMap((contact) => {
-    if (contact.callStatus !== 'later' || !contact.completed) return [];
-    const recordId = contact.recordId || contact.id;
-    const phone = cleanPhoneNumber(contact.phone);
-    if (!phone || seenPhones.has(phone) || activeIds.has(recordId) || activePhones.has(phone)) return [];
-    seenPhones.add(phone);
-    const prior = latestByRecord.get(recordId);
-    if (prior?.unfinished) return [];
-    return [{ contact, round: (prior?.round || 1) + 1 }];
-  });
-}
-
 export async function createCallbackAssignment(projectId, input) {
   return enqueueWrite(async () => {
     const projects = await getAllProjects();
@@ -1214,21 +1132,16 @@ export async function deleteProject(projectId, expectedBackup) {
     }
     const filtered = projects.filter((p) => p.id !== projectId);
     await saveAllProjects(filtered);
-    
-    try {
-      await AsyncStorage.removeItem(PROJECT_DATA_PREFIX + projectId);
-    } catch (e) {}
-    try {
-      await AsyncStorage.removeItem(RESPONSES_PREFIX + projectId);
-    } catch (e) {}
-    try {
-      await AsyncStorage.removeItem(DRAFT_KEY + projectId);
-    } catch (e) {
-      console.error('Draft silinemedi:', e);
+    const cleanupWarnings = [];
+    for (const key of [PROJECT_DATA_PREFIX + projectId, RESPONSES_PREFIX + projectId, DRAFT_KEY + projectId]) {
+      try { await AsyncStorage.removeItem(key); }
+      catch (error) { cleanupWarnings.push(error.message || 'Yerel dosya temizlenemedi.'); }
     }
     if (project.sourceWorkbookMeta) {
-      await removeSourceWorkbook(project.sourceWorkbookMeta.ref).catch(() => {});
+      try { await removeSourceWorkbook(project.sourceWorkbookMeta.ref); }
+      catch (error) { cleanupWarnings.push(error.message || 'Excel eki temizlenemedi.'); }
     }
+    return { cleanupWarnings };
   });
 }
 
@@ -1237,11 +1150,7 @@ export async function deleteProject(projectId, expectedBackup) {
  */
 export async function saveDraft(projectId, draftData) {
   return enqueueWrite(async () => {
-    try {
-      await AsyncStorage.setItem(DRAFT_KEY + projectId, JSON.stringify(draftData));
-    } catch (e) {
-      console.error('Draft kaydedilemedi:', e);
-    }
+    await AsyncStorage.setItem(DRAFT_KEY + projectId, JSON.stringify(draftData));
   });
 }
 
@@ -1249,13 +1158,8 @@ export async function saveDraft(projectId, draftData) {
  * Geçici form verisini yükler
  */
 export async function loadDraft(projectId) {
-  try {
-    const data = await AsyncStorage.getItem(DRAFT_KEY + projectId);
-    return data ? JSON.parse(data) : null;
-  } catch (e) {
-    console.error('Draft yüklenemedi:', e);
-    return null;
-  }
+  const data = await AsyncStorage.getItem(DRAFT_KEY + projectId);
+  return data ? JSON.parse(data) : null;
 }
 
 /**
@@ -1263,11 +1167,7 @@ export async function loadDraft(projectId) {
  */
 export async function clearDraft(projectId) {
   return enqueueWrite(async () => {
-    try {
-      await AsyncStorage.removeItem(DRAFT_KEY + projectId);
-    } catch (e) {
-      console.error('Draft silinemedi:', e);
-    }
+    await AsyncStorage.removeItem(DRAFT_KEY + projectId);
   });
 }
 

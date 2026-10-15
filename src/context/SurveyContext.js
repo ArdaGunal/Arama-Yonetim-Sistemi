@@ -21,6 +21,7 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [formData, setFormData] = useState({});
@@ -48,9 +49,25 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   // ── Refs (auto-save closure'ları için) ──
   const autoSaveRef = useRef(null);
   const changedRef = useRef(false);
+  const draftCleanupPendingRef = useRef(false);
   const projectRef = useRef(null);
   const formDataRef = useRef({});
   const indexRef = useRef(0);
+  const showSaveFailure = (error, context) => {
+    reportError(error, context);
+    setSaveError(`Değişiklik kaydedilemedi: ${error.message || 'Depolama hatası'}. Tekrar deneyin.`);
+  };
+  const clearDraftAfterWrite = async () => {
+    try {
+      await clearDraft(projectId);
+      draftCleanupPendingRef.current = false;
+      setSaveError('');
+    } catch (error) {
+      draftCleanupPendingRef.current = true;
+      reportError(error, 'Arama taslağı temizlenirken');
+      setSaveError('Cevap kaydedildi, ancak eski taslak silinemedi. Tekrar deneyin.');
+    }
+  };
 
   // İlk yükleme ve cleanup
   useEffect(() => {
@@ -65,7 +82,7 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   useEffect(() => {
     if (autoSaveRef.current) clearInterval(autoSaveRef.current);
     autoSaveRef.current = setInterval(() => {
-      if (changedRef.current) persistCurrentContact().catch(console.error);
+      if (!savingRef.current && changedRef.current) persistCurrentContact().catch((error) => showSaveFailure(error, 'Otomatik kayıt'));
     }, 5000);
     return () => clearInterval(autoSaveRef.current);
   }, [projectId]);
@@ -130,21 +147,24 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     // sonraki kişiye geçerken silinmiş eski bir taslağı geri getirebilir.
     await updateProject(projectId, { contacts: updatedContacts, currentIndex: idx });
     if (indexRef.current === idx && formDataRef.current === fd) changedRef.current = false;
+    if (!draftCleanupPendingRef.current) setSaveError('');
   }, [projectId]);
 
   // ── Form alanı güncelleme ──
   const setField = (fieldId, value) => {
     if (savingRef.current) return;
+    draftCleanupPendingRef.current = false;
     const newData = { ...formDataRef.current, [fieldId]: value };
     setFormData(newData);
     formDataRef.current = newData;
     changedRef.current = true;
-    saveDraft(projectId, { contactIndex: indexRef.current, formData: newData });
+    saveDraft(projectId, { contactIndex: indexRef.current, formData: newData })
+      .catch((error) => showSaveFailure(error, 'Arama taslağı kaydedilirken'));
     
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
-      persistCurrentContact().catch(console.error);
+      persistCurrentContact().catch((error) => showSaveFailure(error, 'Arama cevabı otomatik kaydedilirken'));
     }, 500); // 500ms debounce
   };
 
@@ -199,11 +219,10 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     
     // Projeyi güncelle
     const updatedProj = { ...projectRef.current, contacts, currentIndex: nextIdx };
+    await updateProject(projectId, { contacts, currentIndex: nextIdx });
     projectRef.current = updatedProj;
     changedRef.current = false;
-    
-    await updateProject(projectId, { contacts, currentIndex: nextIdx });
-    await clearDraft(projectId);
+    await clearDraftAfterWrite();
     
     if (isLast) {
       setProject(updatedProj);
@@ -264,9 +283,9 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
         ...updatedContacts[indexRef.current], data: { ...formDataRef.current },
       };
       updatedContacts[index] = { ...updatedContacts[index], data: { ...editFormData } };
-      changedRef.current = false;
       await updateProject(projectId, { contacts: updatedContacts });
-      await clearDraft(projectId);
+      changedRef.current = false;
+      await clearDraftAfterWrite();
       const updatedProj = { ...projectRef.current, contacts: updatedContacts };
       setProject(updatedProj);
       projectRef.current = updatedProj;
@@ -287,60 +306,39 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
   };
 
   // ── Önceki / Sonraki kişiye git ──
-  const handleNav = (dir) => {
-    if (!projectRef.current || savingRef.current) return;
+  const moveToContact = async (nextIndex, fromList = false) => {
+    if (!projectRef.current || savingRef.current || nextIndex < 0 ||
+        nextIndex >= projectRef.current.contacts.length) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const ni = currentIndex + dir;
-    if (ni < 0 || ni >= projectRef.current.contacts.length) return;
     saveTimerRef.current = null;
-    
-    const contacts = [...projectRef.current.contacts];
-    contacts[currentIndex] = { ...contacts[currentIndex], data: { ...formDataRef.current } };
-    
-    const updatedProj = { ...projectRef.current, contacts, currentIndex: ni };
-    projectRef.current = updatedProj;
-    changedRef.current = false;
-    
-    updateProject(projectId, { contacts, currentIndex: ni }).catch(console.error);
-    clearDraft(projectId);
-    setProject(updatedProj);
-    setCurrentIndex(ni);
-    indexRef.current = ni;
-    const nd = contacts[ni]?.data || {};
-    setFormData(nd);
-    formDataRef.current = nd;
-    setCallStatus(contacts[ni]?.callStatus || null);
-    setCallbackNote(contacts[ni]?.callbackNote || '');
-    setCallbackDate(contacts[ni]?.callbackAt?.slice(0, 10) || '');
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const previousIndex = indexRef.current;
+      const contacts = [...projectRef.current.contacts];
+      contacts[previousIndex] = { ...contacts[previousIndex], data: { ...formDataRef.current } };
+      await updateProject(projectId, { contacts, currentIndex: nextIndex });
+      await clearDraftAfterWrite();
+      const updatedProj = { ...projectRef.current, contacts, currentIndex: nextIndex };
+      projectRef.current = updatedProj;
+      changedRef.current = false;
+      setProject(updatedProj);
+      setCurrentIndex(nextIndex);
+      indexRef.current = nextIndex;
+      const data = contacts[nextIndex]?.data || {};
+      setFormData(data);
+      formDataRef.current = data;
+      setCallStatus(contacts[nextIndex]?.callStatus || null);
+      setCallbackNote(contacts[nextIndex]?.callbackNote || '');
+      setCallbackDate(contacts[nextIndex]?.callbackAt?.slice(0, 10) || '');
+      if (fromList) setActiveTab('survey');
+      if (!draftCleanupPendingRef.current) setSaveError('');
+    } catch (error) { showSaveFailure(error, 'Kişiler arasında geçilirken'); }
+    finally { savingRef.current = false; setSaving(false); }
   };
 
-  // ── Belirli bir kişiye zıpla ──
-  const jumpToContact = (contactIdx) => {
-    if (!projectRef.current || savingRef.current) return;
-    if (contactIdx < 0 || contactIdx >= projectRef.current.contacts.length) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = null;
-    
-    const contacts = [...projectRef.current.contacts];
-    contacts[currentIndex] = { ...contacts[currentIndex], data: { ...formDataRef.current } };
-    
-    const updatedProj = { ...projectRef.current, contacts, currentIndex: contactIdx };
-    projectRef.current = updatedProj;
-    changedRef.current = false;
-    
-    updateProject(projectId, { contacts, currentIndex: contactIdx }).catch(console.error);
-    clearDraft(projectId);
-    setProject(updatedProj);
-    setCurrentIndex(contactIdx);
-    indexRef.current = contactIdx;
-    const nd = contacts[contactIdx]?.data || {};
-    setFormData(nd);
-    formDataRef.current = nd;
-    setCallStatus(contacts[contactIdx]?.callStatus || null);
-    setCallbackNote(contacts[contactIdx]?.callbackNote || '');
-    setCallbackDate(contacts[contactIdx]?.callbackAt?.slice(0, 10) || '');
-    setActiveTab('survey');
-  };
+  const handleNav = (dir) => moveToContact(indexRef.current + dir);
+  const jumpToContact = (contactIdx) => moveToContact(contactIdx, true);
 
   // ── Filtrelenmiş kişiler ──
   const getFilteredContacts = () => {
@@ -379,9 +377,9 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
       return { id: uid(), phone: r.phone, data: contactData, completed: false, completedAt: null };
     });
     const updatedContacts = [...contacts, ...newContacts];
-    changedRef.current = false;
     await updateProject(projectId, { contacts: updatedContacts });
-    await clearDraft(projectId);
+    changedRef.current = false;
+    await clearDraftAfterWrite();
     const updatedProj = { ...projectRef.current, contacts: updatedContacts };
     setProject(updatedProj);
     projectRef.current = updatedProj;
@@ -409,9 +407,14 @@ export function SurveyProvider({ projectId, projectName, navigation, children })
     await waitForPendingWrites();
   };
 
+  const retrySave = () => (draftCleanupPendingRef.current ? clearDraftAfterWrite() : forceFlush())
+    .then(() => { if (!draftCleanupPendingRef.current) setSaveError(''); })
+    .catch((error) => showSaveFailure(error, 'Arama kaydı yeniden denenirken'));
+
   const value = {
     // State
-    project, currentIndex, loading, loadError, reloadProject: loadProjectData, saving, formData,
+    project, currentIndex, loading, loadError, saveError, retrySave,
+    reloadProject: loadProjectData, saving, formData,
     callStatus, setCallStatus, callbackNote, setCallbackNote, callbackDate, setCallbackDate,
     activeTab, setActiveTab,
     expandedFilter, setExpandedFilter,

@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import { fromByteArray } from 'base64-js';
 import { appendResultSheetsToSource, sourceWorkbookBytes } from './sourceWorkbookArchive';
 import { surveyExportRows } from '../features/surveys/surveyExport';
+import { callExportRows } from '../features/calls/callExport';
 
 let FileSystem = null;
 let Sharing = null;
@@ -44,8 +45,6 @@ function makeFileName(name, ext) {
   return `${(name || 'anket').replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ ]/g, '').replace(/ /g, '_')}_${date}.${ext}`;
 }
 
-const statusLabel = { contacted: 'Görüşüldü', unreached: 'Ulaşılamadı', later: 'Sonra ara', wrong_number: 'Yanlış numara' };
-
 export function buildWorkbook(project) {
   if (project.mode === 'survey') {
     const { header, rows } = surveyExportRows(project);
@@ -55,38 +54,7 @@ export function buildWorkbook(project) {
     XLSX.utils.book_append_sheet(wb, ws, 'Anket Yanıtları');
     return wb;
   }
-  const fields = project.fields || [];
-  const currentIds = new Set(fields.map((field) => field.id));
-  const historical = new Map();
-  for (const snapshot of project.formHistory || []) for (const field of snapshot.fields || []) {
-    if (!currentIds.has(field.id) && field.isSystemField !== 'name') {
-      historical.set(field.id, { ...field, label: `${field.label} (Form ${snapshot.version})` });
-    }
-  }
-  // isSystemField:'name' alanını bul — label'a bağlı değil, kimlik bazlı
-  const nameField = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
-  const otherFields = [...fields.filter(f => f !== nameField), ...historical.values()];
-  const outputFields = [...fields, ...historical.values()];
-
-  // Sütun sıralaması: İsim Soyisim | Tel No | diğer alanlar...
-  const headers = [];
-  if (nameField) headers.push(nameField.label);
-  headers.push('Tel No');
-  otherFields.forEach(f => headers.push(f.label));
-  headers.push('Arama Durumu', 'Geri Arama Tarihi', 'Geri Arama Notu', 'Kayıt Kimliği', 'Kaynak Satırı');
-
-  const rows = project.contacts.map((c) => {
-    const row = {};
-    if (nameField) row[nameField.label] = (c.data && c.data[nameField.id]) || '';
-    row['Tel No'] = c.phone;
-    otherFields.forEach((f) => { row[f.label] = (c.data && c.data[f.id]) || ''; });
-    row['Arama Durumu'] = statusLabel[c.callStatus] || (c.completed ? 'Tamamlandı' : 'Aranmadı');
-    row['Geri Arama Tarihi'] = c.callbackAt?.slice(0, 10) || '';
-    row['Geri Arama Notu'] = c.callbackNote || '';
-    row['Kayıt Kimliği'] = c.recordId || c.id;
-    row['Kaynak Satırı'] = c.sourceRow || '';
-    return row;
-  });
+  const { nameField, otherFields, outputFields, headers, rows, statusLabel } = callExportRows(project);
 
   const sourceColumns = project.role !== 'volunteer' && project.sourceReview?.columns;
   const hasSourceCells = sourceColumns?.length && project.contacts.some((contact) => contact.sourceCells);
@@ -154,36 +122,12 @@ export function buildCSV(project) {
     const esc = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     return '\uFEFF' + [header, ...rows].map((row) => row.map(esc).join(';')).join('\n');
   }
-  const fields = project.fields || [];
-  const nameField = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
-  const currentIds = new Set(fields.map((field) => field.id));
-  const historical = new Map();
-  for (const snapshot of project.formHistory || []) for (const field of snapshot.fields || []) {
-    if (!currentIds.has(field.id) && field.isSystemField !== 'name') {
-      historical.set(field.id, { ...field, label: `${field.label} (Form ${snapshot.version})` });
-    }
-  }
-  const otherFields = [...fields.filter(f => f !== nameField), ...historical.values()];
-  const esc = (v) => `"${String(v || '').replace(/"/g, '""')}"`;
-
-  // Sütun sıralaması: İsim Soyisim | Tel No | diğer alanlar...
-  const headerParts = [];
-  if (nameField) headerParts.push(nameField.label);
-  headerParts.push('Tel No');
-  otherFields.forEach(f => headerParts.push(f.label));
-  headerParts.push('Arama Durumu', 'Geri Arama Tarihi', 'Geri Arama Notu', 'Kayıt Kimliği');
-  const header = headerParts.map(esc).join(';');
-
-  const rows = project.contacts.map((c) => {
-    const parts = [];
-    if (nameField) parts.push((c.data && c.data[nameField.id]) || '');
-    parts.push(c.phone);
-    otherFields.forEach((f) => parts.push((c.data && c.data[f.id]) || ''));
-    parts.push(statusLabel[c.callStatus] || (c.completed ? 'Tamamlandı' : 'Aranmadı'));
-    parts.push(c.callbackAt?.slice(0, 10) || '', c.callbackNote || '', c.recordId || c.id);
-    return parts.map(esc).join(';');
-  });
-  return '\uFEFF' + header + '\n' + rows.join('\n');
+  const { headers, rows } = callExportRows(project);
+  const csvHeaders = headers.slice(0, -1);
+  const esc = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const header = csvHeaders.map(esc).join(';');
+  const lines = rows.map((row) => csvHeaders.map((column) => esc(row[column])).join(';'));
+  return '\uFEFF' + header + '\n' + lines.join('\n');
 }
 
 // ── Mobil: Dosyayı diske yaz ve yolunu döndür ──

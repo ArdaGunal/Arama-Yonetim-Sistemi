@@ -8,7 +8,6 @@ import * as XLSX from 'xlsx';
 import { createProject, getProjectSummaries, getTemplates, saveTemplate } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { analyzeSource, prepareSource, setColumnRole, textToRows } from '../utils/sourcePreview';
-import { normalizeString } from '../utils/phoneUtils';
 import { createTemplateFile, readTemplateFile, TEMPLATE_EXTENSION } from '../utils/templateFormat';
 import { captureSourceWorkbook, MAX_SOURCE_BYTES } from '../utils/sourceWorkbookArchive';
 import { alignSourceFields, withAnswerType } from '../utils/newProjectFields';
@@ -16,6 +15,7 @@ import { getAppSettings, saveAppSettings } from '../utils/appSettings';
 import CallStart from '../features/calls/CallStart';
 import SurveyStart from '../features/surveys/SurveyStart';
 import { createCallProject } from '../features/calls/createCallProject';
+import { prepareCallSource } from '../features/calls/callSourceTemplate';
 import { createSurveyProject } from '../features/surveys/createSurveyProject';
 import Step2Review from '../features/new-project/Step2Review';
 import DuplicateProjectPrompt from '../features/new-project/DuplicateProjectPrompt';
@@ -87,27 +87,8 @@ export default function NewProjectScreen({ navigation, route }) {
   }, [surveyOnly]);
   useEffect(() => { setSaveError(''); }, [source, selections, fields]);
 
-  const prepareWithTemplate = (rows, name, headerOverride) => {
-    let prepared = prepareSource(rows, name, headerOverride);
-    const activeTemplate = templates.find((item) => item.id === templateId);
-    if (activeTemplate?.sourceColumns?.length) {
-      const used = new Set();
-      prepared = { ...prepared, columns: prepared.columns.map((column) => {
-        const match = activeTemplate.sourceColumns.find((item, index) => !used.has(index) &&
-          normalizeString(item.label) === normalizeString(column.label));
-        if (!match) return column;
-        const index = activeTemplate.sourceColumns.indexOf(match);
-        used.add(index);
-        return { ...column, role: match.role };
-      }) };
-      // Farklı başlıklı dosyalarda yanlışlıkla iki telefon/isim seçilmesin.
-      if (prepared.columns.filter((column) => column.role === 'phone').length !== 1 ||
-          prepared.columns.filter((column) => column.role === 'name').length > 1) {
-        prepared = prepareSource(rows, name, headerOverride);
-      }
-    }
-    return prepared;
-  };
+  const prepareWithTemplate = (rows, name, headerOverride) => prepareCallSource(rows, name,
+    headerOverride, templates.find((item) => item.id === templateId));
 
   const useRows = (rows, name, workbookArchive = null) => {
     const prepared = prepareWithTemplate(rows, name);
