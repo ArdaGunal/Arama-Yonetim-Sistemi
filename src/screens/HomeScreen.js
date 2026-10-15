@@ -157,6 +157,8 @@ export default function HomeScreen({ navigation }) {
     const progressColor = getProgressColor(calledCount, totalCount);
     const sameNameCount = projects.filter((other) =>
       comparableProjectName(other.name) === comparableProjectName(item.name)).length;
+    const openAction = item.mode === 'survey' ? 'Anketi doldur' :
+      item.role !== 'volunteer' && item.assignments?.length ? 'Görevleri yönet' : 'Aramaya başla';
 
     return (
       <View style={styles.projectCard}>
@@ -173,7 +175,8 @@ export default function HomeScreen({ navigation }) {
           />
         </View>
 
-        <TouchableOpacity style={styles.cardContent} activeOpacity={0.7}
+        <TouchableOpacity style={styles.cardContent} activeOpacity={0.7} accessibilityRole="button"
+          accessibilityLabel={`${item.name} · ${openAction}`}
           onPress={() => item.mode === 'survey'
             ? navigation.navigate('FreeSurvey', { projectId: item.id, projectName: item.name })
             : item.role !== 'volunteer' && item.assignments?.length
@@ -184,9 +187,8 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.projectName} numberOfLines={1}>
               {item.name}
             </Text>
-            <Text style={styles.projectDate}>
-              📅 {formatDate(item.createdAt, sameNameCount > 1)} · Aç →
-            </Text>
+            <Text style={styles.projectDate}>📅 {formatDate(item.createdAt, sameNameCount > 1)}</Text>
+            <Text style={styles.projectAction}>{openAction} →</Text>
           </View>
 
           <View style={styles.cardRight}>
@@ -420,10 +422,12 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingRight: 44,
   },
-  formLink: { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 11, paddingHorizontal: 16 },
+  formLink: { borderTopWidth: 1, borderTopColor: Colors.border, minHeight: 44,
+    justifyContent: 'center', paddingVertical: 11, paddingHorizontal: 16 },
   formLinkText: { color: Colors.accentLight, fontSize: 13, fontWeight: '700' },
   assignmentLabel: { color: Colors.success, borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 11, paddingHorizontal: 16, fontSize: 13, fontWeight: '700' },
-  resultReminder: { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: Colors.bgElevated },
+  resultReminder: { borderTopWidth: 1, borderTopColor: Colors.border, minHeight: 44,
+    justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: Colors.bgElevated },
   resultReminderText: { color: Colors.warning, fontSize: 13, fontWeight: '800' },
   cardLeft: {
     flex: 1,
@@ -442,6 +446,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
   },
+  projectAction: { color: Colors.accentLight, fontSize: 13, fontWeight: '800', marginTop: 7 },
   cardRight: {
     alignItems: 'center',
   },
@@ -537,7 +542,7 @@ const styles = StyleSheet.create({
   },
   diagnosticLink: { alignSelf: 'flex-end', paddingHorizontal: 22, paddingVertical: 12 },
   diagnosticText: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
-  backupLink: { alignSelf: 'flex-end', paddingHorizontal: 22, paddingVertical: 10 },
+  backupLink: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 10 },
   backupText: { color: Colors.accentLight, fontSize: 13, fontWeight: '800' },
   importLink: { marginHorizontal: 16, marginVertical: 10, backgroundColor: Colors.bgCard, borderColor: Colors.borderAccent, borderWidth: 1, borderRadius: 12, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
   importText: { color: Colors.accentLight, fontSize: 14, fontWeight: '800' },

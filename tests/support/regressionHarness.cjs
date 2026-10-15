@@ -22,6 +22,13 @@ function loadSource(relativePath, mocks = {}) {
       name === '../features/surveys/surveyExport' ? surveyExport :
       name === '../features/calls/callExport' ? callExport :
       name === '../features/calls/pool/assignmentPool' ? assignmentPool :
+      name === '../data/projectStore/assignment/assignmentWrites' ? assignmentWrites :
+      name === '../data/projectStore/assignment/coordinatorAnswer' ? coordinatorAnswer :
+      name === '../../../features/calls/pool/assignmentPool' ? assignmentPool :
+      name === '../../../utils/phoneUtils' ? phoneUtils :
+      name === '../../../utils/assignmentFormat' ? assignmentFormat :
+      name === '../../../utils/resultFormat' ? resultFormat :
+      name === '../../../utils/formValidation' ? formValidation :
       name === './surveyResponses' ? surveyResponses :
       name === '../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../utils/canonicalJson' ? canonicalModule :
@@ -77,6 +84,8 @@ const callExport = loadSource('src/features/calls/callExport.js');
 const assignmentPool = loadSource('src/features/calls/pool/assignmentPool.js', {
   '../../../utils/phoneUtils': phoneUtils,
 });
+const assignmentWrites = loadSource('src/data/projectStore/assignment/assignmentWrites.js');
+const coordinatorAnswer = loadSource('src/data/projectStore/assignment/coordinatorAnswer.js');
 const surveyTransferBackup = loadSource('src/features/survey-transfer/surveyTransferBackup.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const surveyFormFormat = loadSource('src/features/survey-transfer/surveyFormFormat.js', { 'expo-crypto': cryptoMock });

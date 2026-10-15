@@ -59,7 +59,7 @@ export default function AssignmentImportScreen({ navigation }) {
   };
   return <View style={s.root}>
     <Text style={s.title}>Gelen dosyayı aç</Text>
-    <Text style={s.intro}>WhatsApp'tan gelen .ays dosyasını seçin. Görev, anket veya cevap dosyası otomatik açılır.</Text>
+    <Text style={s.intro}>WhatsApp'taki dosyaya dokunun; uygulama açılır. Açılmadıysa aşağıdan dosyayı seçin.</Text>
     <TouchableOpacity accessibilityRole="button" style={s.primary} disabled={busy} onPress={choose}>
       {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>Dosya seç</Text>}
     </TouchableOpacity>
@@ -85,7 +85,7 @@ export default function AssignmentImportScreen({ navigation }) {
         </TouchableOpacity>
       </>}
     </View>}
-    <Text style={s.note}>Aynı dosyayı tekrar seçebilirsiniz; kayıtlı cevaplar silinmez.</Text>
+    <Text style={s.note}>Görev veya anket açılınca cevapları kaydedin. Bitince sonuç dosyasını paylaşın. Aynı dosyayı tekrar açmak kayıtlı cevapları silmez.</Text>
   </View>;
 }
 

@@ -131,6 +131,23 @@ test('failed project metadata write removes the new contacts sidecar', async (t)
   assert.equal(loggedError.mock.callCount(), 1);
 });
 
+test('failed project cleanup reports the leftover local file', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => key === '@ays_projects'
+    ? Promise.reject(new Error('sentetik metadata hatası')) : originalSet(key, value);
+  const originalRemove = memory.removeItem;
+  memory.removeItem = async (key) => key === '@ays_project_data_failed-cleanup'
+    ? Promise.reject(new Error('sentetik temizleme hatası')) : originalRemove(key);
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  await assert.rejects(storage.createProject({ id: 'failed-cleanup', name: 'Deneme',
+    contacts: [{ id: 'one' }] }), /yerel dosyalar temizlenemedi: sentetik temizleme hatası/);
+  assert.equal(memory.values.has('@ays_project_data_failed-cleanup'), true);
+});
+
 test('failed contact update restores its sidecar and counters', async (t) => {
   t.mock.method(console, 'error', () => {});
   const memory = memoryStorage();
@@ -649,6 +666,24 @@ test('backup restore is idempotent and never silently overwrites a changed event
   const altered = { ...project, contacts: [{ ...project.contacts[0], data: { name: 'Başka cevap' } }] };
   await assert.rejects(storage.restoreProjectBackup(altered), /farklı içerikle/);
   assert.equal((await storage.getProject(project.id)).contacts[0].data.name, 'Ayşe Yılmaz');
+});
+
+test('failed backup recovery keeps its journal and tells the user to reopen the app', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memory,
+  });
+  const project = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(sampleProject()))).project;
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => key === '@ays_projects'
+    ? Promise.reject(new Error('sentetik depolama kesintisi')) : originalSet(key, value);
+  await assert.rejects(storage.restoreProjectBackup(project), /Önceki veri geri yüklenemedi.*Kurtarma kaydı saklandı/);
+  assert.equal(memory.values.has('@ays_merge_journal'), true);
+  memory.setItem = originalSet;
+  assert.deepEqual(await storage.getAllProjects(), []);
+  assert.equal(memory.values.has('@ays_merge_journal'), false);
+  assert.equal(memory.values.has('@ays_project_data_event-1'), false);
 });
 
 test('backup snapshot includes a pending form draft', async () => {

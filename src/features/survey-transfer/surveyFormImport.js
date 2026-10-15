@@ -41,6 +41,12 @@ export async function writeImportedSurveyForm(input, digest, {
   }
   await setResponses(id, '[]');
   try { await saveProjects([project, ...projects]); }
-  catch (error) { await removeResponses(id).catch(() => {}); throw error; }
+  catch (error) {
+    try { await removeResponses(id); }
+    catch (cleanupError) {
+      throw new Error(`Anket kaydedilemedi: ${error.message || error}. Geçici cevap dosyası temizlenemedi: ${cleanupError.message || cleanupError}.`);
+    }
+    throw error;
+  }
   return { projectId: id, state: 'imported' };
 }

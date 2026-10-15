@@ -102,13 +102,13 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 2 — Davranışı değiştirmeden kodu ayırma
 
-**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje okuma mantığı `data/projectStore/projectReads.js`, yeni proje, anket yanıtı ve kişi güncelleme yazımları ile hata geri almaları `data/projectStore/projectWrites.js` içinde. Kişi güncellemesi ve listesiz anket cevabı için kesintide eski metadata/yanıt görüntüsünü geri getiren ortak kalıcı kayıt eklendi; web kaydı `IndexedDB`, Android kaydı uygulama dosya alanını kullanır. Kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Arama kaynak şablonu, görev havuzu ve Excel/CSV satırları da `features/calls/` altında saf modüllere taşındı. Regresyonlar üç alan dosyasına ayrıldı; 88 senaryo geçiyor. Geri kalan depo yazımlarının ayrılması açıktır.
+**Durum:** Sürüyor. İlk adım ekranları ve proje hazırlama kuralları `calls/` ile `surveys/` içine taşındı; iki türün proje nesnesi ayrı saf fonksiyonlarla üretiliyor. İkinci ekrandaki kişi/tekrar/sütun incelemesi `calls/CallSourceReview.js` içine alındı. Yeni ve mevcut projelerde ortak `forms/QuestionEditor.js` kullanılıyor; mevcut form ekranının kabuğu `forms/EditFormBuilder.js` içinde. Proje okuma mantığı `data/projectStore/projectReads.js`, yeni proje, anket yanıtı ve kişi güncelleme yazımları ile hata geri almaları `data/projectStore/projectWrites.js` içinde. Görev ayırma, durum değiştirme, kişi devri ve koordinatör cevabı `data/projectStore/assignment/` içine taşındı. Kişi güncellemesi ve listesiz anket cevabı için kesintide eski metadata/yanıt görüntüsünü geri getiren ortak kalıcı kayıt eklendi; web kaydı `IndexedDB`, Android kaydı uygulama dosya alanını kullanır. Kurtarma kontrolü ve tek yazma kuyruğu `storage.js` içinde kalır. Arama kaynak şablonu, görev havuzu ve Excel/CSV satırları da `features/calls/` altında saf modüllere taşındı. Regresyonlar üç alan dosyasına ayrıldı; 91 senaryo geçiyor. Yedek ve kalan depo yazımlarının ayrılması açıktır.
 
 1. `NewProjectScreen` içindeki kaynak Excel/metin ayrıştırma ve kaydetme hazırlığını saf fonksiyonlara çıkar. Arama ve anket için ayrı kaydetme komutları oluştur; ortak alan doğrulamasını tek yerde tut.
 2. `Step2Review` içinden kişi/sütun/tekrar incelemesini ayır. Ortak soru editörü, iki türden de aynı davranışı versin; önizleme kayıt yazmasın.
 3. Depoyu önce okuma, sonra yazma işlemleri halinde modüllere ayır. Mevcut `enqueueWrite` tek sıra garantisini ve merge journal kurtarmasını koru. Her taşıma sonrası arama/görev/yedek regresyonunu çalıştır.
 4. **Tamamlandı (1.0.36/b37):** Arama ve anket satır üreticileri ayrı modülde; Excel/CSV aynı saf modelden çıkar. Sıfırla başlayan telefon/okul numarası metin kalır.
-5. **Kısmen tamamlandı (1.0.36/b37):** 88 regresyon testi proje, arama/görev ve anket dosyalarına ayrıldı; fixture'lar sentetik kaldı. Arama taslağı ve otomatik kaydın hatası görünür ve yeniden denenebilir. Silme sonrası temizleme hatası tanılama raporuna çıkar. Kalan depo yazımlarını ayırırken gizli yazma hatalarını taramaya devam et.
+5. **Kısmen tamamlandı (1.0.37/b38):** 91 regresyon testi proje, arama/görev ve anket dosyalarında; fixture'lar sentetik kaldı. Arama taslağı ve otomatik kaydın hatası görünür ve yeniden denenebilir. Silme sonrası temizleme hatası tanılama raporuna çıkar. Yedek/görev geri alması başarısızsa kurtarma günlüğü saklanır ve kullanıcıya yeniden açma yolu söylenir. Kalan depo yazımlarını ayırırken gizli yazma hatalarını taramaya devam et.
 
 **Bitiş:** Ekranlar veri sözleşmesi ayrıntısını bilmez; aynı `.ays`, Excel ve görev sonuçları önceki sürümle eşdeğer çıkar. Büyük taşımalarda Android duman testi geçer.
 
@@ -136,10 +136,9 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 5 — Saha kullanımını basitleştirme
 
-1. Ana sayfada tür rozeti ve türe özgü birincil eylem: **Aramaya başla** veya **Anketi doldur**. Gönüllü görev dosyası açma önde kalır; koordinatöre ait seçenekler gönüllüde görünmez.
-   Aynı adlı projeler kimlikleriyle ayrı kalır; ana ekranda tarih ve türle ayırt edilir. Yeni proje adı mevcut adla eşleşince **Adı değiştir / Yine de oluştur** uyarısı gösterme işi 1.0.26'da tamamlandı; ana ekranda aynı adlı projeleri daha belirgin ayırma işi sürüyor.
+1. **Uygulandı (1.0.37/b38):** Ana sayfada tür rozeti ve karta basınca yapılacak işe uygun **Aramaya başla**, **Anketi doldur** veya **Görevleri yönet** etiketi vardır. Gönüllü görev dosyası açma önde kalır; koordinatöre ait seçenekler gönüllü kartında görünmez. Aynı adlı projeler kimlikleriyle ayrı kalır; ana ekranda tarih/saat ve türle ayırt edilir. Yeni proje adı mevcut adla eşleşince **Adı değiştir / Yine de oluştur** uyarısı 1.0.26'da tamamlandı.
 2. Her ekranda tek baskın eylem; teknik kelimeler yardım bölümünde. Hata mesajı neyin yanlış olduğunu ve düzeltme yolunu söyler. Erişilebilir etiket, yeterli kontrast/dokunma alanı, büyük yazı ve klavye kapatma kontrolü yapılır.
-3. Kısa içe alma rehberi, örnek veriyle güvenli deneme, anket önizlemesinde kalıcı kayıt yapılmadığını açık işaretleme.
+3. **Uygulandı:** Gelen dosya ekranında WhatsApp'tan açma, Dosyalar'dan seçme ve sonuç dosyasını paylaşma adımları kısa anlatılır. Anket önizlemesinde sentetik örnek kişi/cevap vardır; üstte **Cevaplar kaydedilmez** yazısı görünür.
 4. **Ürün kararı:** Bu uygulama temel anket olarak kalır. Şarta göre soru, sayı/tarih doğrulama gibi ayrıntılı form mantığı burada karmaşıklık yaratacağı için [Anket Platformu](https://anketplatformu.com/) yönlendirmesinde kalır. Yanıt dışa aktarımında alan kimlikleri sabit tutulur.
 5. Tür seçiminde geliştiricinin Anket Platformu sitesine açıkça etiketlenmiş bağlantı bulunur. Dış site açılmazsa adres gösterilir; cevapların uygulamadan siteye aktarılmadığı anlaşılır kalır.
 
@@ -149,7 +148,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 1. Android APK: temiz kurulum, eski sürüm üstüne güncelleme, çevrimdışı, uygulamayı zorla kapatma, WhatsApp/Dosyalar açma, yedek ve Excel paylaşımı.
 2. PWA: çevrimdışı tekrar açma, güncelleme önbelleği, depolama izni ve sekme kapanışı. Gerçek iPhone bulunduğunda Safari Ana Ekran, Dosyalar ve WhatsApp alışverişi ile geri yükleme.
-3. 5.000 kişi/100 görev ölçümü ve anket tarafında binlerce yanıt için açılış/kayıt/Excel süresi. Hedefler ölçümden sonra cihaz sınıfına göre konur; testin geçmesi için veri bütünlüğü şarttır.
+3. **Sentetik ölçüm tamamlandı (1.0.37/b38):** 5.000 kişi/100 görev ve 5.000 anket yanıtının açılış/kayıt/Excel/CSV/yedek/geri yükleme süreleri Node üzerinde ölçüldü; veri bütünlüğü doğrulandı. Gerçek cihaz süresi ve cihaz sınıfına göre hedefler açık.
 4. `docs/` devir kılavuzu, sürüm tablosu, dosya örnekleri (sentetik), yayın adımları ve kurtarma senaryoları güncel kalır. APK `APK/` arşivine sürüm koduyla girer, GitHub'a yalnız kaynak kodu gönderilir.
 
 **Bitiş:** Android kabul matrisi ve web testleri geçer; iPhone sonucu gerçek cihazla kaydedilir. Yeni sorumlu README'den APK üretebilir ve `.ays` yedeğini geri yükleyebilir.

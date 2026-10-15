@@ -28,6 +28,29 @@ test('2000-person pool distributes 10, 50 and 17 without overlap', async () => {
   assert.equal(storage.getAvailableContacts(await storage.getProject('large-event')).length, 1933);
 });
 
+test('failed task reservation does not remove people from the pool', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  await storage.createProject(distributionProject(2));
+  const originalSet = memory.setItem;
+  memory.setItem = async (key, value) => key === '@ays_projects'
+    ? Promise.reject(new Error('sentetik metadata hatası')) : originalSet(key, value);
+  await assert.rejects(storage.createAssignment('large-event', {
+    assignmentId: 'failed-task', volunteerName: 'A', count: 1,
+    createdAt: '2026-10-08T08:01:00.000Z',
+  }), /Proje verisi kaydedilemedi/);
+  memory.setItem = originalSet;
+  const project = await storage.getProject('large-event');
+  assert.equal(project.assignments?.length || 0, 0);
+  assert.equal(storage.getAvailableContacts(project).length, 2);
+  const retry = await storage.createAssignment('large-event', {
+    assignmentId: 'failed-task', volunteerName: 'A', count: 1,
+    createdAt: '2026-10-08T08:01:00.000Z',
+  });
+  assert.equal(retry.contacts.length, 1);
+});
+
 test('cancelled work returns to the front of the pool without losing unfinished people', async () => {
   const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
   await storage.createProject(distributionProject(60));

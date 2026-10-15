@@ -1,6 +1,6 @@
 {
   "name": "arama-yonetim-sistemi",
-  "version": "1.0.36",
+  "version": "1.0.37",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -10,6 +10,7 @@
     "build:web": "expo export --platform web && node scripts/build-pwa.mjs",
     "preview:web": "node scripts/preview-pwa.mjs",
     "benchmark:large": "node scripts/benchmark-large-event.cjs",
+    "benchmark:survey": "node scripts/benchmark-large-survey.cjs",
     "test": "node --test && node scripts/check-feature-size.mjs",
     "check:feature-size": "node scripts/check-feature-size.mjs"
   },

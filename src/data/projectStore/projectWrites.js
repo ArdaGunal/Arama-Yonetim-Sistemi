@@ -32,9 +32,16 @@ export async function writeNewProject(project, { loadProjects, getContacts, getR
     projects.unshift(metaProject);
     await saveProjects(projects);
   } catch (error) {
-    await removeContacts(project.id).catch(() => {});
-    if (survey) await removeResponses(project.id).catch(() => {});
-    if (sourceMeta) await removeSource(sourceMeta.ref).catch(() => {});
+    const cleanupErrors = [];
+    for (const cleanup of [() => removeContacts(project.id),
+      ...(survey ? [() => removeResponses(project.id)] : []),
+      ...(sourceMeta ? [() => removeSource(sourceMeta.ref)] : [])]) {
+      try { await cleanup(); }
+      catch (cleanupError) { cleanupErrors.push(cleanupError.message || String(cleanupError)); }
+    }
+    if (cleanupErrors.length) {
+      throw new Error(`Proje kaydedilemedi: ${error.message || error}. Oluşturulan yerel dosyalar temizlenemedi: ${cleanupErrors.join('; ')}.`);
+    }
     throw error;
   }
   return project;

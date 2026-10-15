@@ -5,11 +5,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { normalizeBackupProject, sameBackupProject } from './backupFormat';
 import { createAssignmentFile, normalizeAssignment } from './assignmentFormat';
-import { cleanPhoneNumber } from './phoneUtils';
 import { canonicalJson } from './canonicalJson';
-import { CALL_STATUSES, createResultFile, normalizeResult } from './resultFormat';
+import { createResultFile, normalizeResult } from './resultFormat';
 import { applyPreview, previewResultMerge } from './resultMerge';
-import { missingRequiredField } from './formValidation';
 import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
 import { readProjectMetadata, readProjectSummaries, readProjectContacts } from '../data/projectStore/projectReads';
@@ -21,9 +19,10 @@ import { readProjectUpdateJournal, writeProjectUpdateJournal,
 import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
 import { activeSurveyResponses, fromLegacySurveyContact,
   parseSurveyResponses } from '../features/surveys/surveyResponses';
-import { getAvailableContacts, getReturnedContacts, getCallbackCandidates,
-  currentAnswers } from '../features/calls/pool/assignmentPool';
-export { getAvailableContacts, getReturnedContacts, getCallbackCandidates };
+export { getAvailableContacts, getReturnedContacts, getCallbackCandidates } from '../features/calls/pool/assignmentPool';
+import { writeCallbackAssignment, writeNewAssignment, writeAssignmentStatus,
+  writeTransferredContacts } from '../data/projectStore/assignment/assignmentWrites';
+import { prepareCoordinatorAnswer } from '../data/projectStore/assignment/coordinatorAnswer';
 import { writeImportedSurveyForm } from '../features/survey-transfer/surveyFormImport';
 import { createSurveyResultFile } from '../features/survey-transfer/surveyResultFormat';
 import { previewSurveyMerge, applySurveyMerge } from '../features/survey-transfer/surveyMerge';
@@ -102,6 +101,14 @@ async function recoverPendingMerge() {
     await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
   })();
   try { await recoveryPromise; } finally { recoveryPromise = null; }
+}
+
+async function recoverMergeAfterFailure(error, operation) {
+  try { await recoverPendingMerge(); }
+  catch (recoveryError) {
+    throw new Error(`${operation} başarısız oldu: ${error.message || error}. Önceki veri geri yüklenemedi: ${recoveryError.message || recoveryError}. Kurtarma kaydı saklandı; uygulamayı yeniden açın.`);
+  }
+  throw error;
 }
 
 async function recoverPendingProjectUpdate(force = false) {
@@ -480,8 +487,7 @@ export async function restoreProjectBackup(input) {
       await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
       mergeInProgress = false;
-      await recoverPendingMerge().catch(() => {});
-      throw error;
+      await recoverMergeAfterFailure(error, 'Yedek geri yükleme');
     } finally { mergeInProgress = false; }
     return 'restored';
   });
@@ -552,9 +558,15 @@ export async function replaceProjectBackup(input, expectedCurrent) {
       else await AsyncStorage.removeItem(DRAFT_KEY + incoming.id);
       await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
-      await recoverPendingMerge().catch(() => {});
+      try { await recoverPendingMerge(); }
+      catch (recoveryError) {
+        throw new Error(`Yedek değiştirme başarısız oldu: ${error.message || error}. Önceki veri geri yüklenemedi: ${recoveryError.message || recoveryError}. Kurtarma kaydı saklandı; uygulamayı yeniden açın.`);
+      }
       if (sourceMeta && sourceMeta.ref !== oldSourceMeta?.ref) {
-        await removeSourceWorkbook(sourceMeta.ref).catch(() => {});
+        try { await removeSourceWorkbook(sourceMeta.ref); }
+        catch (cleanupError) {
+          throw new Error(`Yedek değiştirme başarısız oldu: ${error.message || error}. Yeni Excel eki de temizlenemedi: ${cleanupError.message || cleanupError}.`);
+        }
       }
       throw error;
     }
@@ -630,178 +642,29 @@ export async function changeSurveyResponse(projectId, responseId, expected, acti
   });
 }
 
+const assignmentWritePorts = {
+  loadProjects: getAllProjects,
+  getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+  saveProjects: saveAllProjects,
+  now: () => new Date().toISOString(),
+};
+
 export async function createCallbackAssignment(projectId, input) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId && item.role !== 'volunteer');
-    if (!project) throw new Error('Koordinatör etkinliği bulunamadı.');
-    const count = Number(input.count);
-    if (!Number.isInteger(count) || count < 1) throw new Error('Kişi sayısı en az 1 olmalı.');
-    if ((project.assignments || []).some((item) => item.assignmentId === input.assignmentId)) {
-      throw new Error('Görev kimliği zaten kullanılıyor.');
-    }
-    const raw = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-    if (!raw) throw new Error('Etkinliğin kişi listesi bulunamadı.');
-    const candidates = getCallbackCandidates({ ...project, contacts: JSON.parse(raw) });
-    if (!candidates.length) throw new Error('Şu anda geri aranacak kişi yok.');
-    const round = candidates[0].round;
-    const selected = candidates.filter((item) => item.round === round).slice(0, count);
-    if (selected.length < count) throw new Error(`Bu turda yalnızca ${selected.length} kişi atanabilir.`);
-    const assignment = normalizeAssignment({
-      eventId: project.eventId || project.id, assignmentId: input.assignmentId,
-      eventName: project.name, volunteerName: input.volunteerName,
-      formVersion: project.formVersion || 1, round, createdAt: input.createdAt,
-      fields: project.fields, contacts: selected.map(({ contact }) => ({
-        recordId: contact.recordId || contact.id, phone: contact.phone, data: currentAnswers(contact.data, project.fields),
-        previousCallbackNote: contact.callbackNote || '',
-        baseline: { completed: !!contact.completed, callStatus: contact.callStatus || null,
-          callbackNote: contact.callbackNote || '', callbackAt: contact.callbackAt || null },
-      })),
-    });
-    const packetDigest = JSON.parse(await createAssignmentFile(assignment)).integrity.sha256;
-    const record = { ...assignment, packetDigest, status: 'prepared', sentAt: null, cancelledAt: null,
-      resultRevision: 0, resultDigest: null, lastApplied: {}, releasedRecordIds: [],
-      ownerType: input.ownerType === 'coordinator' ? 'coordinator' : 'volunteer', reassignedFrom: null };
-    project.assignments = [...(project.assignments || []), record];
-    project.backupPending = true;
-    project.backupEpoch = (project.backupEpoch || 0) + 1;
-    await saveAllProjects(projects);
-    return record;
-  });
+  return enqueueWrite(() => writeCallbackAssignment(projectId, input, assignmentWritePorts));
 }
 
-/** Görevi ve rezervasyonu tek metadata yazımında oluşturur. */
 export async function createAssignment(projectId, input) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId);
-    if (!project || project.role === 'volunteer') throw new Error('Koordinatör etkinliği bulunamadı.');
-    const count = Number(input.count);
-    if (!Number.isInteger(count) || count < 1) throw new Error('Kişi sayısı en az 1 olmalı.');
-    if ((project.assignments || []).some((item) => item.assignmentId === input.assignmentId)) {
-      throw new Error('Görev kimliği zaten kullanılıyor.');
-    }
-    const saved = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-    if (!saved) throw new Error('Etkinliğin kişi listesi bulunamadı.');
-    const available = getAvailableContacts({ ...project, contacts: JSON.parse(saved) });
-    if (count > available.length) throw new Error(`Yalnızca ${available.length} kişi atanabilir.`);
-    const assignment = normalizeAssignment({
-      eventId: project.eventId || project.id, assignmentId: input.assignmentId,
-      eventName: project.name, volunteerName: input.volunteerName,
-      formVersion: project.formVersion || 1, round: 1, createdAt: input.createdAt,
-      fields: project.fields, contacts: available.slice(0, count).map((contact) => ({
-        recordId: contact.recordId || contact.id, phone: contact.phone, data: currentAnswers(contact.data, project.fields),
-      })),
-    });
-    const packetDigest = JSON.parse(await createAssignmentFile(assignment)).integrity.sha256;
-    const record = { ...assignment, packetDigest, status: 'prepared', sentAt: null, cancelledAt: null,
-      resultRevision: 0, resultDigest: null, lastApplied: {}, releasedRecordIds: [],
-      ownerType: input.ownerType === 'coordinator' ? 'coordinator' : 'volunteer', reassignedFrom: null };
-    project.assignments = [...(project.assignments || []), record];
-    project.formLocked = true;
-    project.backupPending = true;
-    project.backupEpoch = (project.backupEpoch || 0) + 1;
-    await saveAllProjects(projects);
-    return record;
-  });
+  return enqueueWrite(() => writeNewAssignment(projectId, input, assignmentWritePorts));
 }
 
 export async function setAssignmentStatus(projectId, assignmentId, nextStatus, allowSentCancellation = false) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId && item.role !== 'volunteer');
-    const assignment = project?.assignments?.find((item) => item.assignmentId === assignmentId);
-    if (!assignment) throw new Error('Görev bulunamadı.');
-    if (nextStatus === 'sent' && assignment.status === 'prepared') {
-      assignment.status = 'sent'; assignment.sentAt = new Date().toISOString();
-    } else if (nextStatus === 'cancelled' &&
-        (assignment.status === 'prepared' || (assignment.status === 'sent' && allowSentCancellation))) {
-      assignment.status = 'cancelled'; assignment.cancelledAt = new Date().toISOString();
-    } else throw new Error('Bu görev durumu değiştirilemez.');
-    project.backupPending = true;
-    project.backupEpoch = (project.backupEpoch || 0) + 1;
-    await saveAllProjects(projects);
-    return assignment;
-  });
+  return enqueueWrite(() => writeAssignmentStatus(projectId, assignmentId, nextStatus,
+    allowSentCancellation, assignmentWritePorts));
 }
 
-/** Sonuçlanmamış kişileri eski görevden çıkarır; istenirse aynı yazımda yeni görev açar. */
 export async function transferAssignmentContacts(projectId, oldAssignmentId, recordIds, nextInput = null) {
-  return enqueueWrite(async () => {
-    if (!Array.isArray(recordIds) || !recordIds.length || new Set(recordIds).size !== recordIds.length) {
-      throw new Error('Devredilecek kişileri seçin.');
-    }
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId && item.role !== 'volunteer');
-    const old = project?.assignments?.find((item) => item.assignmentId === oldAssignmentId);
-    if (!old || !['prepared', 'sent', 'partial'].includes(old.status)) {
-      throw new Error('Bu görevden kişi devredilemez.');
-    }
-    const raw = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-    if (!raw) throw new Error('Ana kişi listesi bulunamadı.');
-    const contacts = JSON.parse(raw);
-    const master = new Map(contacts.map((contact) => [contact.recordId || contact.id, contact]));
-    const oldRows = new Map(old.contacts.map((contact) => [contact.recordId, contact]));
-    const alreadyReleased = new Set(old.releasedRecordIds || []);
-    const selected = recordIds.map((recordId) => {
-      const row = oldRows.get(recordId);
-      const contact = master.get(recordId);
-      if (!row || !contact || alreadyReleased.has(recordId) || contact.completed ||
-          cleanPhoneNumber(row.phone) !== cleanPhoneNumber(contact.phone)) {
-        throw new Error('Seçilen kişi artık bu görevde devredilebilir durumda değil.');
-      }
-      return contact;
-    });
-    if (nextInput) {
-      if (!nextInput.assignmentId || project.assignments.some((item) => item.assignmentId === nextInput.assignmentId)) {
-        throw new Error('Yeni görev kimliği zaten kullanılıyor veya boş.');
-      }
-      const selectedIds = new Set(recordIds);
-      const selectedPhones = new Set(selected.map((contact) => cleanPhoneNumber(contact.phone)));
-      for (const assignment of project.assignments || []) {
-        if (assignment.round !== old.round || ['cancelled', 'transferred'].includes(assignment.status)) continue;
-        const released = new Set(assignment.releasedRecordIds || []);
-        for (const row of assignment.contacts || []) {
-          if (released.has(row.recordId) || (assignment.assignmentId === oldAssignmentId && selectedIds.has(row.recordId))) continue;
-          if (selectedIds.has(row.recordId) || selectedPhones.has(cleanPhoneNumber(row.phone))) {
-            throw new Error('Kişi başka bir etkin görevde bulunuyor.');
-          }
-        }
-      }
-    }
-    old.releasedRecordIds = [...alreadyReleased, ...recordIds];
-    const remaining = old.contacts.filter((row) => !old.releasedRecordIds.includes(row.recordId) &&
-      !master.get(row.recordId)?.completed);
-    if (!remaining.length) {
-      old.status = old.contacts.some((row) => master.get(row.recordId)?.completed) ? 'transferred' : 'cancelled';
-      old.cancelledAt = new Date().toISOString();
-    }
-    let replacement = null;
-    if (nextInput) {
-      const assignment = normalizeAssignment({
-        eventId: project.eventId || project.id, assignmentId: nextInput.assignmentId,
-        eventName: project.name, volunteerName: nextInput.volunteerName,
-        formVersion: project.formVersion || 1, round: old.round, createdAt: nextInput.createdAt,
-        fields: project.fields, contacts: selected.map((contact) => ({
-          recordId: contact.recordId || contact.id, phone: contact.phone,
-          data: currentAnswers(contact.data, project.fields),
-          ...(old.round >= 2 ? { previousCallbackNote: contact.callbackNote || '',
-            baseline: { completed: !!contact.completed, callStatus: contact.callStatus || null,
-              callbackNote: contact.callbackNote || '', callbackAt: contact.callbackAt || null } } : {}),
-        })),
-      });
-      const packetDigest = JSON.parse(await createAssignmentFile(assignment)).integrity.sha256;
-      replacement = { ...assignment, packetDigest, status: 'prepared', sentAt: null, cancelledAt: null,
-        resultRevision: 0, resultDigest: null, lastApplied: {}, releasedRecordIds: [],
-        ownerType: nextInput.ownerType === 'coordinator' ? 'coordinator' : 'volunteer',
-        reassignedFrom: oldAssignmentId };
-      project.assignments.push(replacement);
-    }
-    project.backupPending = true;
-    project.backupEpoch = (project.backupEpoch || 0) + 1;
-    await saveAllProjects(projects);
-    return replacement || { released: recordIds.length };
-  });
+  return enqueueWrite(() => writeTransferredContacts(projectId, oldAssignmentId, recordIds,
+    nextInput, assignmentWritePorts));
 }
 
 /** Koordinatörün kendine ayırdığı kişi için cevabı doğrudan ana etkinliğe yazar. */
@@ -811,61 +674,9 @@ export async function saveCoordinatorTaskContact(projectId, assignmentId, record
     const projectsRaw = await AsyncStorage.getItem(PROJECTS_KEY);
     const contactsRaw = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
     if (!projectsRaw || !contactsRaw) throw new Error('Ana etkinlik bulunamadı.');
-    const projects = JSON.parse(projectsRaw);
-    const index = projects.findIndex((item) => item.id === projectId && item.role !== 'volunteer');
-    if (index < 0) throw new Error('Ana etkinlik bulunamadı.');
-    const project = projects[index];
-    const assignment = project.assignments?.find((item) => item.assignmentId === assignmentId);
-    if (!assignment || assignment.ownerType !== 'coordinator' ||
-        ['cancelled', 'transferred'].includes(assignment.status) ||
-        (assignment.releasedRecordIds || []).includes(recordId)) {
-      throw new Error('Bu kişi artık sizin görevinizde değil.');
-    }
-    const taskRow = assignment.contacts.find((row) => row.recordId === recordId);
-    const contacts = JSON.parse(contactsRaw);
-    const contactIndex = contacts.findIndex((row) => (row.recordId || row.id) === recordId);
-    const old = contacts[contactIndex];
-    if (!taskRow || !old || cleanPhoneNumber(taskRow.phone) !== cleanPhoneNumber(old.phone)) {
-      throw new Error('Görev kişisi ana listeyle uyuşmuyor.');
-    }
-    const newer = (project.assignments || []).some((item) => item.assignmentId !== assignmentId &&
-      !['cancelled', 'transferred'].includes(item.status) && item.round >= assignment.round &&
-      !(item.releasedRecordIds || []).includes(recordId) &&
-      item.contacts.some((row) => row.recordId === recordId));
-    if (newer) throw new Error('Bu kişi başka bir göreve devredilmiş. Ekranı yenileyin.');
-    if (!input || !CALL_STATUSES.includes(input.callStatus) ||
-        !input.data || typeof input.data !== 'object' || Array.isArray(input.data) ||
-        typeof input.callbackNote !== 'string' || input.callbackNote.length > 2000 ||
-        (input.callbackAt != null && !Number.isFinite(Date.parse(input.callbackAt)))) {
-      throw new Error('Arama cevabı geçersiz.');
-    }
-    const fieldIds = new Set(assignment.fields.map((field) => field.id));
-    if (Object.entries(input.data).some(([id, value]) => !fieldIds.has(id) || typeof value !== 'string')) {
-      throw new Error('Arama cevabı görevin formuna uymuyor.');
-    }
-    const data = { ...old.data, ...input.data };
-    const missing = missingRequiredField(assignment.fields, data, input.callStatus);
-    if (missing) throw new Error(`"${missing.label}" cevabını girin.`);
-    const now = new Date().toISOString();
-    const callbackNote = input.callStatus === 'later' ? input.callbackNote.trim() : '';
-    const callbackAt = input.callStatus === 'later' ? input.callbackAt || null : null;
-    const attempt = { id: Crypto.randomUUID(), at: now, status: input.callStatus,
-      note: callbackNote, data: currentAnswers(data, assignment.fields) };
-    const updated = { ...old, data, completed: true, completedAt: now,
-      callStatus: input.callStatus, callbackNote, callbackAt,
-      attempts: [...(old.attempts || []), attempt] };
-    contacts[contactIndex] = updated;
-    assignment.lastApplied = { ...(assignment.lastApplied || {}), [recordId]: {
-      data: currentAnswers(data, assignment.fields), completed: true,
-      callStatus: input.callStatus, callbackNote, callbackAt,
-    } };
-    const released = new Set(assignment.releasedRecordIds || []);
-    assignment.status = assignment.contacts.every((row) => released.has(row.recordId) ||
-      !!assignment.lastApplied[row.recordId]?.completed)
-      ? released.size ? 'transferred' : 'completed' : 'partial';
-    project.completedContacts = contacts.filter((row) => row.completed).length;
-    project.backupPending = true;
-    project.backupEpoch = (project.backupEpoch || 0) + 1;
+    const { projects, contacts, updated, assignmentStatus } = prepareCoordinatorAnswer(
+      projectsRaw, contactsRaw, projectId, assignmentId, recordId, input,
+      { createId: () => Crypto.randomUUID(), now: () => new Date().toISOString() });
     await AsyncStorage.setItem(MERGE_JOURNAL_KEY, JSON.stringify({ projectId, projectsRaw, contactsRaw }));
     mergeInProgress = true;
     try {
@@ -873,11 +684,10 @@ export async function saveCoordinatorTaskContact(projectId, assignmentId, record
       await AsyncStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
       await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
-      await AsyncStorage.setItem(PROJECT_DATA_PREFIX + projectId, contactsRaw).catch(() => {});
-      await AsyncStorage.setItem(PROJECTS_KEY, projectsRaw).catch(() => {});
-      throw error;
+      mergeInProgress = false;
+      await recoverMergeAfterFailure(error, 'Kendi görevim cevabı');
     } finally { mergeInProgress = false; }
-    return { contact: updated, assignmentStatus: assignment.status };
+    return { contact: updated, assignmentStatus };
   });
 }
 
@@ -910,7 +720,13 @@ export async function importVolunteerAssignment(assignment, digest) {
     if (await AsyncStorage.getItem(key)) throw new Error('Bu kimlikte eksik bir yerel kayıt var.');
     await AsyncStorage.setItem(key, JSON.stringify(contacts));
     try { await saveAllProjects([project, ...projects]); }
-    catch (error) { await AsyncStorage.removeItem(key).catch(() => {}); throw error; }
+    catch (error) {
+      try { await AsyncStorage.removeItem(key); }
+      catch (cleanupError) {
+        throw new Error(`Görev kaydedilemedi: ${error.message || error}. Oluşturulan kişi dosyası temizlenemedi: ${cleanupError.message || cleanupError}.`);
+      }
+      throw error;
+    }
     return 'imported';
   });
 }
@@ -1009,9 +825,8 @@ export async function applyImportedResults(projectId, packets, decisions, expect
       await AsyncStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
       await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
-      await AsyncStorage.setItem(PROJECT_DATA_PREFIX + projectId, contactsRaw).catch(() => {});
-      await AsyncStorage.setItem(PROJECTS_KEY, projectsRaw).catch(() => {});
-      throw error;
+      mergeInProgress = false;
+      await recoverMergeAfterFailure(error, 'Görev sonuçlarını birleştirme');
     } finally { mergeInProgress = false; }
     return { changed: preview.changes.length, conflicts: preview.conflicts.length,
       skipped: preview.skipped.length };
