@@ -17,5 +17,5 @@ export function createSurveyProject({ projectName, fields, templateId, randomUUI
   return { id, eventId: id, mode: 'survey', name: projectName.trim(),
     createdAt, currentIndex: 0, formVersion: 1, formLocked: false,
     templateId, fields: saveFields, formHistory: [{ version: 1, fields: saveFields }],
-    contacts: [], sourceWorkbook: null, sourceReview: null };
+    responses: [], sourceWorkbook: null, sourceReview: null };
 }

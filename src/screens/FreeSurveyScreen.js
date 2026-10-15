@@ -87,7 +87,7 @@ export default function FreeSurveyScreen({ route, navigation }) {
       try { setProject(await getProject(projectId)); }
       catch (reason) {
         reportError(reason, 'Kaydedilen anket yeniden okunurken');
-        setProject((previous) => ({ ...previous, contacts: [...previous.contacts, response] }));
+        setProject((previous) => ({ ...previous, responses: [...previous.responses, response] }));
       }
       inform('Kaydedildi', 'Cevap kaydedildi. Yeni bir cevap doldurabilirsiniz.');
     } catch (reason) {
@@ -130,7 +130,7 @@ export default function FreeSurveyScreen({ route, navigation }) {
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 110 }]} keyboardShouldPersistTaps="handled">
       <Text style={s.title}>{project.name}</Text>
-      <Text style={s.help}>{project.contacts.length} cevap kaydedildi. Her doldurma ayrı bir cevap olur.</Text>
+      <Text style={s.help}>{project.responses.length} cevap kaydedildi. Her doldurma ayrı bir cevap olur.</Text>
       {restored && <Text style={s.draftNote}>Yarım kalan cevabınız geri açıldı.</Text>}
       {project.fields.map((field, index) => <View key={field.id} style={s.card}>
         <Text style={s.label}>{index + 1}. {field.label}{field.required ? ' *' : ''}</Text>

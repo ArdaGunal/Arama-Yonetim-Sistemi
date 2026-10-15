@@ -83,14 +83,15 @@ export default function ExportScreen({ route, navigation }) {
     </View>
   );
 
-  const total = project.contacts.length;
-  const completed = project.contacts.filter(c => c.completed).length;
+  const rows = project.mode === 'survey' ? project.responses : project.contacts;
+  const total = rows.length;
+  const completed = project.mode === 'survey' ? total : rows.filter(c => c.completed).length;
   const fields = project.fields || [];
 
   const selectStats = fields.filter(f => f.type === 'select').map(field => {
     const counts = {};
     field.options.forEach(opt => { counts[opt] = 0; });
-    project.contacts.forEach(c => { const v = c.data?.[field.id]; if (v && counts[v] !== undefined) counts[v]++; });
+    rows.forEach(c => { const v = c.data?.[field.id]; if (v && counts[v] !== undefined) counts[v]++; });
     return { field, counts };
   });
 

@@ -11,14 +11,15 @@ Oluşturulan anket ana ekrandan açılır. Her **Cevabı kaydet** ayrı bir yan�
 ## Veri sözleşmesi
 
 - Proje `mode: 'survey'` taşır; eski projelerde alan yoksa `calls` kabul edilir.
-- Yanıtlar mevcut büyük veri yan dosyasında (`contacts`) ayrı kimliklerle saklanır. Bu modda `phone: ''`, `completed: true` ve geçerli `completedAt` zorunludur. Gerçek kişi/telefon kaydı gibi yorumlanmaz.
-- `.ays` yedek şeması 7, `.ayst` listesiz şablon şeması 3'tür. Önceki yedek ve şablon sürümleri okunur.
+- Yeni anketlerde yanıtlar `@ays_survey_responses_<id>` dosyasında `{ id, data, submittedAt }` biçiminde tutulur; `contacts` kişi listesi yoktur. Proje metadatasındaki `responseStorage: 1`, bu dosyanın zorunlu olduğunu belirtir. Dosya eksikse boş listeye dönülmez, hata gösterilir.
+- Eski anketler `@ays_project_data_<id>` kişi biçimindeki yanıtları salt okunur adaptörle gösterir. İlk yeni yanıt kaydedilirken eski ve yeni yanıtlar ayrı depoya tek kurtarma günlüğüyle taşınır; yarım yazma eski depo, metadata ve taslağı geri getirir.
+- `.ays` yedek şeması 8'dir ve dosyada eski uyumlu yanıt biçimi (`contacts`, boş `phone`, `completed: true`) korunur. İçe alma ve dışa aktarma sınırındaki adaptör uygulamanın ayrı `responses` modeline çevirir. `.ayst` listesiz şablon şeması 3'tür; önceki yedek ve şablon sürümleri okunur.
 - Sorular cevaplardan sonra değişirse form sürümü artar. Eski cevaplar ve eski soru kimlikleri korunur; Excel'de eski soru sütunları ayrıca görünür.
-- Yanıt ekleme işlemleri depolama kuyruğunda sırayla yapılır. Meta veri yazımı başarısız olursa yanıt yan dosyası önceki haline döndürülmeye çalışılır.
+- Yanıt ekleme işlemleri depolama kuyruğunda sırayla yapılır. Meta veri yazımı başarısız olursa yanıt yan dosyası ve varsa eski kişi yan dosyası önceki haline döndürülür.
 
 ## Sınır
 
-Bu anket aynı cihazda veya aynı tarayıcı profilinde doldurulmak içindir. Ayrı cihazlardan gelen bağımsız anket yanıtlarını otomatik birleştirme protokolü henüz yoktur. Birden çok cihaz kullanılacaksa her cihazın `.ays` yedeği ve Excel çıktısı ayrı saklanmalıdır; `.ays` geri yüklemesi başka cihazın yeni yanıtlarının üzerine yazmak için kullanılmamalıdır. Kaydedilmemiş, o anda formda yazılan cevaplar uygulama kapanırsa geri gelmez.
+Bu anket aynı cihazda veya aynı tarayıcı profilinde doldurulmak içindir. Ayrı cihazlardan gelen bağımsız anket yanıtlarını otomatik birleştirme protokolü henüz yoktur. Birden çok cihaz kullanılacaksa her cihazın `.ays` yedeği ve Excel çıktısı ayrı saklanmalıdır; `.ays` geri yüklemesi başka cihazın yeni yanıtlarının üzerine yazmak için kullanılmamalıdır. Kaydedilmemiş cevap ayrı taslakta tutulur ve aynı cihazda yeniden açılır; dış yedek almak yine gereklidir.
 
 ## Kontrol
 

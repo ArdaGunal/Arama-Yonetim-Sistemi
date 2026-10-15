@@ -33,7 +33,8 @@ test('survey creation has no call identity or source list and rejects invalid ch
   const project = createSurveyProject(input);
   assert.equal(project.mode, 'survey');
   assert.equal(project.id, project.eventId);
-  assert.deepEqual(project.contacts, []);
+  assert.deepEqual(project.responses, []);
+  assert.equal(project.contacts, undefined);
   assert.equal(project.sourceReview, null);
   assert.deepEqual(project.fields[0].options, ['Evet', 'Hayır']);
   assert.equal(project.fields[0].isSystemField, undefined);

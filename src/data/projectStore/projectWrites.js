@@ -1,26 +1,36 @@
 /** Yeni projeyi kişi yan dosyası ve metadata olarak kaydeder; metadata hatasında yan dosyayı geri alır. */
-export async function writeNewProject(project, { loadProjects, getContacts, setContacts,
-  removeContacts, saveProjects, saveSource, removeSource }) {
+export async function writeNewProject(project, { loadProjects, getContacts, getResponses,
+  setContacts, setResponses, removeContacts, removeResponses, saveProjects, saveSource, removeSource }) {
   const projects = await loadProjects();
-  if (projects.some((item) => item.id === project.id) || await getContacts(project.id)) {
+  if (projects.some((item) => item.id === project.id) || await getContacts(project.id) ||
+      await getResponses(project.id)) {
     throw new Error('Bu proje kimliği cihazda zaten var. Mevcut veriler korunuyor.');
   }
 
-  const contacts = project.contacts || [];
+  const survey = project.mode === 'survey';
+  if (survey && (project.contacts?.length || (project.responses && !Array.isArray(project.responses)))) {
+    throw new Error('Anket yanıtları geçersiz; proje veri kaybı olmadan oluşturulamadı.');
+  }
+  const contacts = survey ? (project.responses || []) : (project.contacts || []);
   const metaProject = { ...project };
   delete metaProject.contacts;
+  delete metaProject.responses;
   delete metaProject.sourceWorkbook;
+  if (survey) metaProject.responseStorage = 1;
   metaProject.totalContacts = contacts.length;
-  metaProject.completedContacts = contacts.filter((contact) => contact.completed).length;
+  metaProject.completedContacts = survey ? contacts.length :
+    contacts.filter((contact) => contact.completed).length;
   const sourceMeta = await saveSource(project.id, project.sourceWorkbook);
   metaProject.sourceWorkbookMeta = sourceMeta;
 
   try {
-    await setContacts(project.id, JSON.stringify(contacts));
+    if (survey) await setResponses(project.id, JSON.stringify(contacts));
+    else await setContacts(project.id, JSON.stringify(contacts));
     projects.unshift(metaProject);
     await saveProjects(projects);
   } catch (error) {
     await removeContacts(project.id).catch(() => {});
+    if (survey) await removeResponses(project.id).catch(() => {});
     if (sourceMeta) await removeSource(sourceMeta.ref).catch(() => {});
     throw error;
   }
@@ -28,8 +38,9 @@ export async function writeNewProject(project, { loadProjects, getContacts, setC
 }
 
 /** Listesiz anket yanıtını ve sayaçlarını kalıcı kurtarma günlüğüyle birlikte günceller. */
-export async function writeSurveyResponse(projectId, input, { loadProjects, getContacts,
-  setContacts, saveProjects, clearDraft, createId, now, beginUpdate, finishUpdate, recoverUpdate }) {
+export async function writeSurveyResponse(projectId, input, { loadProjects, getContacts, getResponses,
+  setResponses, removeContacts, saveProjects, clearDraft, createId, now,
+  fromLegacy, parseResponses, beginUpdate, finishUpdate, recoverUpdate }) {
   const projects = await loadProjects();
   const project = projects.find((item) => item.id === projectId);
   if (!project || project.mode !== 'survey') throw new Error('Anket bulunamadı.');
@@ -47,18 +58,24 @@ export async function writeSurveyResponse(projectId, input, { loadProjects, getC
     if (value) data[field.id] = value;
   }
   if (!Object.keys(data).length) throw new Error('Kaydetmek için en az bir soruyu cevaplayın.');
-  const before = await getContacts(projectId);
-  const contacts = before ? JSON.parse(before) : [];
-  if (!Array.isArray(contacts)) throw new Error('Anket cevapları okunamadı.');
+  const legacyRaw = await getContacts(projectId);
+  const responsesRaw = await getResponses(projectId);
+  if (project.responseStorage === 1 && responsesRaw === null) throw new Error('Anket yanıt dosyası bulunamadı.');
+  const legacy = project.responseStorage === 1 ? [] : (legacyRaw ? JSON.parse(legacyRaw) : project.contacts || []);
+  if (!Array.isArray(legacy)) throw new Error('Anket cevapları okunamadı.');
+  const responses = project.responseStorage === 1 ? parseResponses(responsesRaw) : legacy.map(fromLegacy);
   const id = createId();
-  const response = { id, recordId: id, phone: '', data, completed: true, completedAt: now() };
-  const next = [...contacts, response];
+  const response = { id, data, submittedAt: now() };
+  const next = [...responses, response];
   project.totalContacts = next.length;
   project.completedContacts = next.length;
   project.formLocked = true;
+  project.responseStorage = 1;
+  delete project.contacts;
   try {
-    await beginUpdate(projectId, before, true);
-    await setContacts(projectId, JSON.stringify(next));
+    await beginUpdate(projectId, legacyRaw, true, responsesRaw);
+    await setResponses(projectId, JSON.stringify(next));
+    if (legacyRaw !== null) await removeContacts(projectId);
     await saveProjects(projects);
     await clearDraft(projectId);
     await finishUpdate();
@@ -80,6 +97,9 @@ export async function writeUpdatedProject(projectId, updates, { loadProjects, ge
   const index = projects.findIndex((project) => project.id === projectId);
   if (index < 0) return null;
   const project = { ...projects[index] };
+  if (project.mode === 'survey' && updates.contacts) {
+    throw new Error('Anket yanıtları kişi listesi işlemiyle değiştirilemez.');
+  }
   if (updates.currentIndex !== undefined) project.currentIndex = updates.currentIndex;
 
   let before;

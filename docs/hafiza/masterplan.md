@@ -114,7 +114,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 3 — Anket verisi ve veri kaybına karşı koruma
 
-1. Şu an `contacts` yan dosyasında tutulan listesiz yanıtları ayrı `responses` modeliyle temsil et. Eski `mode: survey` projeleri yüklemede kayıpsız adaptörle oku; yeni şemaya geçiş için atomik yazma günlüğü ve geri alma testi hazırla.
+1. **Tamamlandı (1.0.31/b32):** Listesiz yanıtlar `responses` modeli ve ayrı `@ays_survey_responses_<id>` yan dosyası kullanır. Eski `mode: survey` projeleri eski kişi yan dosyasından salt okunur adaptörle açılır; ilk yeni cevapta günlükle taşınır. Kesinti, taslak, yedek değiştirme ve geri alma testleri vardır. `.ays` v8 dosya biçimi paylaşım uyumu için korunur; sınırda eski yanıt temsilini kullanan adaptör çalışır.
 2. **Tamamlandı:** Kaydedilmemiş anket ayrı yerel taslaktır. Form açıldığında kaldığı yerden devam eder; **Taslağı sil** ve **Cevabı kaydet** ayrı işlemlerdir. `.ays` v8 taslağı da kapsar; v7 yedekleri taslaksız okunur. Cevap kaydı ve taslak temizleme ortak kurtarma günlüğüne bağlıdır.
 3. Yanıt listesi: zaman, ilk anlamlı cevap, arama, ayrıntı. Düzeltme/silme için önce geri alınabilir işlem veya güncel yedek. Her yanıtın kalıcı kimliği ve düzenleme geçmişi korunur.
 4. Form sürümü değiştiğinde eski yanıtlar eski alanlarla korunur. Yeni zorunlu alan eski yanıtı geriye dönük geçersiz yapmaz. Excel/CSV eski sürüm alanlarını açık etiketlerle verir.

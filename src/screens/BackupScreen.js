@@ -215,14 +215,14 @@ export default function BackupScreen() {
           <Text style={styles.sectionTitle}>Geri yükleme önizlemesi</Text>
           <Text style={styles.detail}>Dosya: {preview.fileName}</Text>
           <Text style={styles.detail}>Etkinlik: {preview.project.name}</Text>
-          <Text style={styles.detail}>Kişi: {preview.project.contacts.length} · Alan: {preview.project.fields.length}</Text>
+          <Text style={styles.detail}>{preview.project.mode === 'survey' ? 'Yanıt' : 'Kişi'}: {preview.project.contacts.length} · Alan: {preview.project.fields.length}</Text>
           <Text style={styles.detail}>Yedek tarihi: {new Date(preview.createdAt).toLocaleString('tr-TR')}</Text>
           <Text selectable style={styles.identity}>Etkinlik kimliği: {preview.project.eventId}</Text>
           {preview.state === 'conflict' ? (
             <View>
               <Text style={styles.warning}>Bu etkinliğin cihazdaki ve dosyadaki içeriği farklı. Değiştirirseniz cihazdaki yeni cevaplar kaybolabilir.</Text>
-              {preview.existingSummary ? <Text style={styles.detail}>Cihazda: {preview.existingSummary.totalContacts ?? '?'} kişi · {preview.existingSummary.completedContacts ?? '?'} tamamlanan</Text> : null}
-              <Text style={styles.detail}>Dosyada: {preview.project.contacts.length} kişi · {preview.project.contacts.filter((contact) => contact.completed).length} tamamlanan</Text>
+              {preview.existingSummary ? <Text style={styles.detail}>Cihazda: {preview.existingSummary.totalContacts ?? '?'} {preview.project.mode === 'survey' ? 'yanıt' : 'kişi'} · {preview.existingSummary.completedContacts ?? '?'} tamamlanan</Text> : null}
+              <Text style={styles.detail}>Dosyada: {preview.project.contacts.length} {preview.project.mode === 'survey' ? 'yanıt' : 'kişi'} · {preview.project.contacts.filter((contact) => contact.completed).length} tamamlanan</Text>
               {preview.canReplace ? <>
                 <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton} onPress={saveCurrentBeforeReplace}>
                   <Text style={styles.primaryText}>{busy?.endsWith('-save') ? 'Yedek kaydediliyor…' : '1. Cihazdaki etkinliği yedekle'}</Text>

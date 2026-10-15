@@ -18,6 +18,7 @@ function loadSource(relativePath, mocks = {}) {
     name === 'expo-crypto' ? cryptoMock :
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
       name === '../features/surveys/surveyDraft' ? surveyDraft :
+      name === '../features/surveys/surveyResponses' ? surveyResponses :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
@@ -56,6 +57,7 @@ const resultFormat = loadSource('src/utils/resultFormat.js', { 'expo-crypto': cr
 const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
+const surveyResponses = loadSource('src/features/surveys/surveyResponses.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
@@ -1426,14 +1428,15 @@ test('listless survey saves independent responses and round trips through backup
     storage.appendSurveyResponse('survey-1', { school: '456', attend: 'Hayır' }),
   ]);
   const project = await storage.getProject('survey-1');
-  assert.equal(project.contacts.length, 2);
-  assert.equal(new Set(project.contacts.map((item) => item.recordId)).size, 2);
-  assert.ok(project.contacts.every((item) => item.phone === '' && item.completedAt));
+  assert.equal(project.responses.length, 2);
+  assert.equal(new Set(project.responses.map((item) => item.id)).size, 2);
+  assert.ok(project.responses.every((item) => item.submittedAt && !('phone' in item)));
+  assert.equal(project.contacts, undefined);
   const restored = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(project))).project;
   assert.equal(restored.mode, 'survey');
   assert.equal(restored.contacts[1].data.attend, 'Hayır');
   const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
-  const wb = exports.buildWorkbook(restored);
+  const wb = exports.buildWorkbook(project);
   assert.deepEqual(wb.SheetNames, ['Anket Yanıtları']);
   const rows = XLSX.utils.sheet_to_json(wb.Sheets['Anket Yanıtları'], { header: 1 });
   assert.deepEqual(rows[0], ['Yanıt zamanı', 'Yanıt kimliği', 'Okul numarası', 'Geliyor musun?']);
@@ -1445,8 +1448,8 @@ test('listless survey saves independent responses and round trips through backup
   await storage.appendSurveyResponse('survey-1', { school: '789', [newAnswerField]: 'Evet' });
   const revised = await storage.getProject('survey-1');
   assert.equal(revised.formVersion, 2);
-  assert.equal(revised.contacts.length, 3);
-  assert.equal(revised.contacts[0].data.attend, 'Evet');
+  assert.equal(revised.responses.length, 3);
+  assert.equal(revised.responses[0].data.attend, 'Evet');
   const revisedBackup = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(revised))).project;
   assert.equal(revisedBackup.contacts.length, 3);
 });
@@ -1466,9 +1469,98 @@ test('survey response metadata failure restores the previous answer list', async
     /Proje verisi kaydedilemedi/);
   memory.setItem = originalSet;
   const project = await storage.getProject('rollback-survey');
-  assert.deepEqual(project.contacts, []);
+  assert.deepEqual(project.responses, []);
+  assert.equal(memory.values.has('@ays_project_data_rollback-survey'), false);
   assert.equal(project.totalContacts, 0);
   assert.equal(project.completedContacts, 0);
+});
+
+test('legacy survey responses remain readable and migrate once when a new answer is saved', async () => {
+  const memory = memoryStorage();
+  const fields = [{ id: 'q', label: 'Soru', type: 'text', options: [] }];
+  const old = { id: 'legacy-survey', eventId: 'legacy-survey', name: 'Eski anket', mode: 'survey',
+    createdAt: '2026-10-14T00:00:00.000Z', fields, formHistory: [{ version: 1, fields }],
+    formVersion: 1, currentIndex: 0, totalContacts: 1, completedContacts: 1 };
+  const oldAnswer = { id: 'old-answer', recordId: 'old-answer', phone: '',
+    data: { q: 'İlk' }, completed: true, completedAt: '2026-10-14T01:00:00.000Z' };
+  memory.values.set('@ays_projects', JSON.stringify([old]));
+  memory.values.set('@ays_project_data_legacy-survey', JSON.stringify([oldAnswer]));
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const before = await storage.getProject('legacy-survey');
+  assert.equal(before.responses[0].submittedAt, oldAnswer.completedAt);
+  assert.equal(before.contacts, undefined);
+  assert.equal(memory.values.has('@ays_survey_responses_legacy-survey'), false);
+  await storage.appendSurveyResponse('legacy-survey', { q: 'İkinci' });
+  const after = await storage.getProject('legacy-survey');
+  assert.deepEqual(after.responses.map((row) => row.data.q), ['İlk', 'İkinci']);
+  assert.equal(memory.values.has('@ays_project_data_legacy-survey'), false);
+  assert.equal(JSON.parse(memory.values.get('@ays_projects'))[0].responseStorage, 1);
+  assert.equal((await backupFormat.readBackupFile(await backupFormat.createBackupFile(after)))
+    .project.contacts.length, 2);
+});
+
+test('interrupted legacy survey migration restores the old store and unsaved draft', async () => {
+  const memory = memoryStorage();
+  const fields = [{ id: 'q', label: 'Soru', type: 'text', options: [] }];
+  const old = { id: 'legacy-crash', eventId: 'legacy-crash', name: 'Eski anket', mode: 'survey',
+    createdAt: '2026-10-14T00:00:00.000Z', fields, formHistory: [{ version: 1, fields }],
+    formVersion: 1, currentIndex: 0, totalContacts: 1, completedContacts: 1 };
+  const oldAnswer = { id: 'old-answer', recordId: 'old-answer', phone: '',
+    data: { q: 'İlk' }, completed: true, completedAt: '2026-10-14T01:00:00.000Z' };
+  const projectsRaw = JSON.stringify([old]);
+  const contactsRaw = JSON.stringify([oldAnswer]);
+  const draftRaw = JSON.stringify({ formVersion: 1, data: { q: 'Yeni' } });
+  memory.values.set('@ays_projects', projectsRaw);
+  memory.values.set('@ays_project_data_legacy-crash', contactsRaw);
+  memory.values.set('@ays_draft_legacy-crash', draftRaw);
+  await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
+    projectId: 'legacy-crash', projectsRaw, contactsRaw, restoreResponses: true,
+    responsesRaw: null, restoreDraft: true, draftRaw }));
+  memory.values.set('@ays_survey_responses_legacy-crash', JSON.stringify([
+    surveyResponses.fromLegacySurveyContact(oldAnswer),
+    { id: 'new-answer', data: { q: 'Yeni' }, submittedAt: '2026-10-14T02:00:00.000Z' },
+  ]));
+  memory.values.delete('@ays_project_data_legacy-crash');
+  memory.values.delete('@ays_draft_legacy-crash');
+  memory.values.set('@ays_projects', JSON.stringify([{ ...old, responseStorage: 1,
+    totalContacts: 2, completedContacts: 2 }]));
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const recovered = await storage.getProject('legacy-crash');
+  assert.equal(memory.values.get('@ays_projects'), projectsRaw);
+  assert.equal(memory.values.get('@ays_project_data_legacy-crash'), contactsRaw);
+  assert.equal(memory.values.has('@ays_survey_responses_legacy-crash'), false);
+  assert.equal(recovered.responses.length, 1);
+  assert.deepEqual((await storage.loadSurveyDraft('legacy-crash')).data, { q: 'Yeni' });
+  await storage.appendSurveyResponse('legacy-crash', { q: 'Yeni' });
+  assert.equal((await storage.getProject('legacy-crash')).responses.length, 2);
+});
+
+test('survey backup replacement moves legacy data into responses and interruption restores both stores', async () => {
+  const memory = memoryStorage();
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const fields = [{ id: 'q', label: 'Soru', type: 'text', options: [] }];
+  const base = { id: 'replace-survey', eventId: 'replace-survey', name: 'Anket', mode: 'survey',
+    createdAt: '2026-10-14T00:00:00.000Z', fields, currentIndex: 0, formVersion: 1,
+    formHistory: [{ version: 1, fields }], contacts: [] };
+  await storage.createProject(base);
+  await storage.appendSurveyResponse(base.id, { q: 'Cihaz' });
+  const safety = await storage.getProjectForBackup(base.id);
+  const incoming = { ...safety, responses: [{ id: 'file-answer',
+    data: { q: 'Dosya' }, submittedAt: '2026-10-14T01:00:00.000Z' }] };
+  assert.equal(await storage.replaceProjectBackup(incoming, safety), 'replaced');
+  assert.deepEqual((await storage.getProject(base.id)).responses.map((row) => row.data.q), ['Dosya']);
+  assert.equal(memory.values.has('@ays_project_data_replace-survey'), false);
+
+  const projectsRaw = memory.values.get('@ays_projects');
+  const responsesRaw = memory.values.get('@ays_survey_responses_replace-survey');
+  await memory.setItem('@ays_merge_journal', JSON.stringify({ projectId: base.id,
+    projectsRaw, contactsRaw: null, responsesRaw, restoreResponses: true, restoreDraft: true, draftRaw: null }));
+  await memory.setItem('@ays_project_data_replace-survey', '[]');
+  await memory.setItem('@ays_survey_responses_replace-survey', '[]');
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  assert.deepEqual((await reopened.getProject(base.id)).responses.map((row) => row.data.q), ['Dosya']);
+  assert.equal(memory.values.get('@ays_survey_responses_replace-survey'), responsesRaw);
+  assert.equal(memory.values.has('@ays_project_data_replace-survey'), false);
 });
 
 test('survey answer journal is committed before answers and removed after metadata', async () => {
@@ -1484,7 +1576,7 @@ test('survey answer journal is committed before answers and removed after metada
   finally { journalEvents = null; }
   assert.deepEqual(order, [
     'write:journal-temp', 'move:journal',
-    'set:@ays_project_data_ordered-survey', 'set:@ays_projects', 'delete:journal',
+    'set:@ays_survey_responses_ordered-survey', 'set:@ays_projects', 'delete:journal',
   ]);
   assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
 });
@@ -1496,12 +1588,12 @@ test('interrupted survey answer restores old responses and allows one clean retr
     fields: [{ id: 'answer', label: 'Cevap', type: 'text', options: [] }], contacts: [] });
   await first.appendSurveyResponse('interrupted-survey', { answer: 'İlk' });
   const projectsRaw = memory.values.get('@ays_projects');
-  const contactsRaw = memory.values.get('@ays_project_data_interrupted-survey');
+  const contactsRaw = null;
+  const responsesRaw = memory.values.get('@ays_survey_responses_interrupted-survey');
   await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
-    projectId: 'interrupted-survey', projectsRaw, contactsRaw }));
-  memory.values.set('@ays_project_data_interrupted-survey', JSON.stringify([
-    ...JSON.parse(contactsRaw), { id: 'unfinished', recordId: 'unfinished', phone: '',
-      data: { answer: 'Yarım' }, completed: true },
+    projectId: 'interrupted-survey', projectsRaw, contactsRaw, restoreResponses: true, responsesRaw }));
+  memory.values.set('@ays_survey_responses_interrupted-survey', JSON.stringify([
+    ...JSON.parse(responsesRaw), { id: 'unfinished', data: { answer: 'Yarım' }, submittedAt: new Date().toISOString() },
   ]));
   memory.values.set('@ays_projects', JSON.stringify([{ ...JSON.parse(projectsRaw)[0],
     totalContacts: 2, completedContacts: 2 }]));
@@ -1509,13 +1601,13 @@ test('interrupted survey answer restores old responses and allows one clean retr
   const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
   const recovered = await reopened.getProject('interrupted-survey');
   assert.equal(memory.values.get('@ays_projects'), projectsRaw);
-  assert.equal(memory.values.get('@ays_project_data_interrupted-survey'), contactsRaw);
-  assert.equal(recovered.contacts.length, 1);
-  assert.equal(recovered.contacts[0].data.answer, 'İlk');
+  assert.equal(memory.values.get('@ays_survey_responses_interrupted-survey'), responsesRaw);
+  assert.equal(recovered.responses.length, 1);
+  assert.equal(recovered.responses[0].data.answer, 'İlk');
   assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
   await reopened.appendSurveyResponse('interrupted-survey', { answer: 'Yeni' });
   const retried = await reopened.getProject('interrupted-survey');
-  assert.deepEqual(retried.contacts.map((item) => item.data.answer), ['İlk', 'Yeni']);
+  assert.deepEqual(retried.responses.map((item) => item.data.answer), ['İlk', 'Yeni']);
   assert.equal(retried.completedContacts, 2);
 });
 
@@ -1542,8 +1634,8 @@ test('survey draft survives restart and backup restore, then clears only after s
   await restored.appendSurveyResponse('draft-survey', { school: '00123', attend: 'Evet' });
   assert.equal(await restored.loadSurveyDraft('draft-survey'), null);
   const saved = await restored.getProject('draft-survey');
-  assert.equal(saved.contacts.length, 1);
-  assert.equal(saved.contacts[0].data.school, '00123');
+  assert.equal(saved.responses.length, 1);
+  assert.equal(saved.responses[0].data.school, '00123');
 });
 
 test('a changed survey draft invalidates the older deletion backup', async () => {
@@ -1575,21 +1667,23 @@ test('failed or interrupted survey answer restores its unsaved draft', async (t)
   await assert.rejects(storage.appendSurveyResponse('draft-rollback', { q: 'Cevap' }), /Proje verisi kaydedilemedi/);
   memory.setItem = originalSet;
   assert.deepEqual((await storage.loadSurveyDraft('draft-rollback')).data, { q: 'Cevap' });
-  assert.equal((await storage.getProject('draft-rollback')).contacts.length, 0);
+  assert.equal((await storage.getProject('draft-rollback')).responses.length, 0);
 
   const projectsRaw = memory.values.get('@ays_projects');
-  const contactsRaw = memory.values.get('@ays_project_data_draft-rollback');
+  const contactsRaw = null;
+  const responsesRaw = memory.values.get('@ays_survey_responses_draft-rollback');
   const draftRaw = memory.values.get('@ays_draft_draft-rollback');
   await projectUpdateJournalStore.writeProjectUpdateJournal(memory, JSON.stringify({ version: 1,
-    projectId: 'draft-rollback', projectsRaw, contactsRaw, restoreDraft: true, draftRaw }));
-  memory.values.set('@ays_project_data_draft-rollback', JSON.stringify([
-    { id: 'unfinished', recordId: 'unfinished', phone: '', data: { q: 'Cevap' }, completed: true },
+    projectId: 'draft-rollback', projectsRaw, contactsRaw, restoreDraft: true, draftRaw,
+    restoreResponses: true, responsesRaw }));
+  memory.values.set('@ays_survey_responses_draft-rollback', JSON.stringify([
+    { id: 'unfinished', data: { q: 'Cevap' }, submittedAt: new Date().toISOString() },
   ]));
   memory.values.set('@ays_projects', JSON.stringify([{ ...JSON.parse(projectsRaw)[0],
     totalContacts: 1, completedContacts: 1 }]));
   memory.values.delete('@ays_draft_draft-rollback');
   const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
-  assert.equal((await reopened.getProject('draft-rollback')).contacts.length, 0);
+  assert.equal((await reopened.getProject('draft-rollback')).responses.length, 0);
   assert.deepEqual((await reopened.loadSurveyDraft('draft-rollback')).data, { q: 'Cevap' });
   assert.equal(await projectUpdateJournalStore.readProjectUpdateJournal(memory), null);
 });

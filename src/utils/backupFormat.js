@@ -4,6 +4,7 @@ import { normalizeAssignment } from './assignmentFormat';
 import { CALL_STATUSES, normalizeAttempts } from './resultFormat';
 import { normalizeSourceWorkbook } from './sourceWorkbookArchive';
 import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
+import { toLegacySurveyContact } from '../features/surveys/surveyResponses';
 
 export { canonicalJson } from './canonicalJson';
 
@@ -179,7 +180,9 @@ export function normalizeBackupProject(input) {
     throw new Error('Etkinlik ve proje kimliği uyuşmuyor.');
   }
   if (typeof project.name !== 'string' || !project.name.trim()) throw new Error('Proje adı boş.');
-  if (!Array.isArray(project.fields) || !Array.isArray(project.contacts)) {
+  const backupContacts = mode === 'survey' && Array.isArray(project.responses)
+    ? project.responses.map(toLegacySurveyContact) : project.contacts;
+  if (!Array.isArray(project.fields) || !Array.isArray(backupContacts)) {
     throw new Error('Yedekte alanlar veya kişiler eksik.');
   }
   const fields = normalizeFields(project.fields, 'Form', mode);
@@ -208,7 +211,7 @@ export function normalizeBackupProject(input) {
     .map(([version, snapshot]) => ({ version, fields: snapshot }));
   const fieldIds = new Set(formHistory.flatMap((item) => item.fields.map((field) => field.id)));
   const recordIds = new Set();
-  const contacts = project.contacts.map((raw, index) => {
+  const contacts = backupContacts.map((raw, index) => {
     const contact = object(raw, `Kişi ${index + 1}`);
     const contactId = identifier(contact.id, 'Kişi kimliği');
     const recordId = identifier(contact.recordId || contactId, 'Kayıt kimliği');
