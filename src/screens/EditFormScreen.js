@@ -83,7 +83,7 @@ export default function EditFormScreen({ navigation, route }) {
   if (error) return <View style={s.center}><Text style={s.text}>{error}</Text></View>;
   if (!project) return <View style={s.center}><ActivityIndicator color={Colors.accentLight} /></View>;
   return <EditFormBuilder fields={fields} projectName={project.name}
-    selectedCount={project.mode === 'survey' ? project.responses.length : project.contacts.length} loading={loading} updateField={updateField}
+    selectedCount={project.mode === 'survey' ? project.responses.filter((response) => !response.deletedAt).length : project.contacts.length} loading={loading} updateField={updateField}
     removeField={removeField} addField={addField} addOption={addOption} updateOption={updateOption}
     removeOption={removeOption} handleSave={save} saveTemplate={() => template(false)} shareTemplate={() => template(true)}
     locked={project.formLocked || (project.mode === 'survey' ? project.responses.length > 0 : project.contacts.some((contact) => contact.completed))}

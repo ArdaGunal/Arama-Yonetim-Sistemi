@@ -17,9 +17,11 @@ export async function readProjectSummaries(projects, readContacts, readResponses
     }
     const contacts = storedContacts ? JSON.parse(storedContacts) : (project.contacts || []);
     if (!Array.isArray(contacts)) throw new Error('Proje kişi listesi okunamadı.');
-    return { ...project, totalContacts: contacts.length,
+    const total = project.mode === 'survey' && project.responseStorage === 1
+      ? contacts.filter((response) => !response.deletedAt).length : contacts.length;
+    return { ...project, totalContacts: total,
       completedContacts: project.mode === 'survey' && project.responseStorage === 1
-        ? contacts.length : contacts.filter((contact) => contact.completed).length };
+        ? total : contacts.filter((contact) => contact.completed).length };
   }));
 }
 

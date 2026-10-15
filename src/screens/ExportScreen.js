@@ -83,7 +83,8 @@ export default function ExportScreen({ route, navigation }) {
     </View>
   );
 
-  const rows = project.mode === 'survey' ? project.responses : project.contacts;
+  const rows = project.mode === 'survey'
+    ? project.responses.filter((response) => !response.deletedAt) : project.contacts;
   const total = rows.length;
   const completed = project.mode === 'survey' ? total : rows.filter(c => c.completed).length;
   const fields = project.fields || [];

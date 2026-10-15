@@ -4,12 +4,13 @@ import { normalizeAssignment } from './assignmentFormat';
 import { CALL_STATUSES, normalizeAttempts } from './resultFormat';
 import { normalizeSourceWorkbook } from './sourceWorkbookArchive';
 import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
-import { toLegacySurveyContact } from '../features/surveys/surveyResponses';
+import { fromLegacySurveyContact, normalizeSurveyResponse,
+  toLegacySurveyContact } from '../features/surveys/surveyResponses';
 
 export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 8;
+export const BACKUP_SCHEMA_VERSION = 9;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -268,6 +269,9 @@ export function normalizeBackupProject(input) {
       previousCallbackNote: contact.previousCallbackNote || '',
     };
   });
+  const responses = mode === 'survey'
+    ? (Array.isArray(project.responses) ? project.responses : contacts.map(fromLegacySurveyContact))
+      .map((response) => normalizeSurveyResponse(response, fieldIds, formVersion)) : null;
   const currentIndex = project.currentIndex ?? 0;
   if (!Number.isInteger(currentIndex) || currentIndex < 0 ||
       (contacts.length > 0 && currentIndex >= contacts.length) ||
@@ -320,7 +324,8 @@ export function normalizeBackupProject(input) {
   });
   return {
     id, eventId, mode, name: project.name, createdAt: isoDate(project.createdAt, 'Proje tarihi'),
-    currentIndex, fields, formHistory, contacts, formVersion,
+    currentIndex, fields, formHistory,
+    ...(mode === 'survey' ? { responses } : { contacts }), formVersion,
     formLocked: project.formLocked || false, templateId: project.templateId || null,
     sourceReview: sourceReview(project.sourceReview, fieldIds),
     sourceWorkbook: role === 'coordinator' ? normalizeSourceWorkbook(project.sourceWorkbook) : null,
@@ -340,7 +345,8 @@ export function sameBackupProject(left, right) {
 export async function createBackupFile(project) {
   const normalized = normalizeBackupProject(project);
   const body = {
-    format: FORMAT, schemaVersion: BACKUP_SCHEMA_VERSION, kind: 'backup',
+    format: FORMAT, schemaVersion: normalized.mode === 'survey' ? BACKUP_SCHEMA_VERSION : 8,
+    kind: 'backup',
     createdAt: new Date().toISOString(), eventId: normalized.eventId,
     payload: { project: normalized },
   };
@@ -360,7 +366,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, 2, 3, 4, 5, 6, 7, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, 3, 4, 5, 6, 7, 8, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,
@@ -374,6 +380,11 @@ export async function readBackupFile(text) {
   }
   const actual = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalJson(body));
   if (actual !== file.integrity.sha256) throw new Error('Yedek dosyası değişmiş veya bozulmuş.');
+  if (body.payload.project?.mode === 'survey' &&
+      !(file.schemaVersion >= 9 ? Array.isArray(body.payload.project.responses) :
+        Array.isArray(body.payload.project.contacts))) {
+    throw new Error('Anket yedeğinin yanıt listesi eksik.');
+  }
   const project = normalizeBackupProject(body.payload.project);
   if (project.eventId !== body.eventId) throw new Error('Yedek etkinlik kimliği uyuşmuyor.');
   return { project, createdAt: body.createdAt, sha256: actual };

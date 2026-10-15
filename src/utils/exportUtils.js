@@ -53,7 +53,8 @@ export function buildWorkbook(project) {
     const outputFields = [...fields, ...new Map(historical.map((field) =>
       [field.id, { ...field, label: `${field.label} (eski soru)` }])).values()];
     const header = ['Yanıt zamanı', 'Yanıt kimliği', ...outputFields.map((field) => field.label)];
-    const rows = (project.responses || []).map((response) => [response.submittedAt || '',
+    const rows = (project.responses || []).filter((response) => !response.deletedAt)
+      .map((response) => [response.submittedAt || '',
       response.id, ...outputFields.map((field) => response.data?.[field.id] || '')]);
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
@@ -163,7 +164,8 @@ function buildCSV(project) {
       [field.id, { ...field, label: `${field.label} (eski soru)` }])).values()];
     const esc = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = [ ['Yanıt zamanı', 'Yanıt kimliği', ...outputFields.map((field) => field.label)],
-      ...(project.responses || []).map((response) => [response.submittedAt || '', response.id,
+      ...(project.responses || []).filter((response) => !response.deletedAt)
+        .map((response) => [response.submittedAt || '', response.id,
         ...outputFields.map((field) => response.data?.[field.id] || '')]) ];
     return '\uFEFF' + rows.map((row) => row.map(esc).join(';')).join('\n');
   }

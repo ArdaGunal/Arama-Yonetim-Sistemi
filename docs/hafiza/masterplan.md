@@ -116,7 +116,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 1. **Tamamlandı (1.0.31/b32):** Listesiz yanıtlar `responses` modeli ve ayrı `@ays_survey_responses_<id>` yan dosyası kullanır. Eski `mode: survey` projeleri eski kişi yan dosyasından salt okunur adaptörle açılır; ilk yeni cevapta günlükle taşınır. Kesinti, taslak, yedek değiştirme ve geri alma testleri vardır. `.ays` v8 dosya biçimi paylaşım uyumu için korunur; sınırda eski yanıt temsilini kullanan adaptör çalışır.
 2. **Tamamlandı:** Kaydedilmemiş anket ayrı yerel taslaktır. Form açıldığında kaldığı yerden devam eder; **Taslağı sil** ve **Cevabı kaydet** ayrı işlemlerdir. `.ays` v8 taslağı da kapsar; v7 yedekleri taslaksız okunur. Cevap kaydı ve taslak temizleme ortak kurtarma günlüğüne bağlıdır.
-3. Yanıt listesi: zaman, ilk anlamlı cevap, arama, ayrıntı. Düzeltme/silme için önce geri alınabilir işlem veya güncel yedek. Her yanıtın kalıcı kimliği ve düzenleme geçmişi korunur.
+3. **Tamamlandı (1.0.32/b33):** Yanıt listesi zaman ve ilk anlamlı cevapla görünür; cevap/tarih arama, ayrıntı, düzeltme ve **Silinenler** bölümünden geri alma vardır. Silme yanıtı kalıcı olarak yok etmez. Düzeltme öncesi cevap ve silme/geri alma olayları geçmişte tutulur; kimlik değişmez. Yazma günlükle korunur, eski `.ays` v8 okunur ve anket `.ays` v9 geçmişi de taşır.
 4. Form sürümü değiştiğinde eski yanıtlar eski alanlarla korunur. Yeni zorunlu alan eski yanıtı geriye dönük geçersiz yapmaz. Excel/CSV eski sürüm alanlarını açık etiketlerle verir.
 5. Anket yedeğini dışarı kaydetme hatası ekranda görünür; web depolama temizlenmesi ve uygulama zorla kapanması test edilir.
 

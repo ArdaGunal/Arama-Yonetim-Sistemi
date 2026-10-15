@@ -13,12 +13,14 @@ import { missingRequiredField } from './formValidation';
 import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
 import { readProjectMetadata, readProjectSummaries, readProjectContacts } from '../data/projectStore/projectReads';
-import { writeNewProject, writeSurveyResponse, writeUpdatedProject } from '../data/projectStore/projectWrites';
+import { writeNewProject, writeSurveyResponse, writeSurveyResponseChange,
+  writeUpdatedProject } from '../data/projectStore/projectWrites';
 import { recoverProjectUpdateJournal } from '../data/projectStore/projectUpdateJournal';
 import { readProjectUpdateJournal, writeProjectUpdateJournal,
   removeProjectUpdateJournal } from '../data/projectStore/projectUpdateJournalStore';
 import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
-import { fromLegacySurveyContact, parseSurveyResponses } from '../features/surveys/surveyResponses';
+import { activeSurveyResponses, fromLegacySurveyContact,
+  parseSurveyResponses } from '../features/surveys/surveyResponses';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -348,12 +350,13 @@ export async function restoreProjectBackup(input) {
         await AsyncStorage.getItem(RESPONSES_PREFIX + project.id)) {
       throw new Error('Bu kimlikte tamamlanmamış bir yerel kayıt var. Geri yükleme durduruldu.');
     }
-    const { contacts, sourceWorkbook, surveyDraft, ...meta } = project;
+    const { contacts, responses, sourceWorkbook, surveyDraft, ...meta } = project;
     if (survey) meta.responseStorage = 1;
     const sourceMeta = await storeAttachedSource(project.id, sourceWorkbook);
     meta.sourceWorkbookMeta = sourceMeta;
-    meta.totalContacts = contacts.length;
-    meta.completedContacts = contacts.filter((contact) => contact.completed).length;
+    const rows = survey ? responses : contacts;
+    meta.totalContacts = survey ? activeSurveyResponses(rows).length : rows.length;
+    meta.completedContacts = survey ? meta.totalContacts : rows.filter((contact) => contact.completed).length;
     await AsyncStorage.setItem(MERGE_JOURNAL_KEY, JSON.stringify({
       kind: 'new-restore', projectId: project.id,
       projectsRaw: await AsyncStorage.getItem(PROJECTS_KEY) || '[]', sourceRef: sourceMeta?.ref || null,
@@ -361,7 +364,7 @@ export async function restoreProjectBackup(input) {
     mergeInProgress = true;
     try {
       if (surveyDraft) await AsyncStorage.setItem(DRAFT_KEY + project.id, JSON.stringify(surveyDraft));
-      await AsyncStorage.setItem(key, JSON.stringify(survey ? contacts.map(fromLegacySurveyContact) : contacts));
+      await AsyncStorage.setItem(key, JSON.stringify(rows));
       await saveAllProjects([meta, ...projects]);
       await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
     } catch (error) {
@@ -411,14 +414,15 @@ export async function replaceProjectBackup(input, expectedCurrent) {
       throw new Error('Etkinlik, güvenlik yedeği alındıktan sonra değişti. Yeniden yedek alın.');
     }
     if (sameBackupProject(current, incoming)) return 'already-present';
-    const { contacts, sourceWorkbook, surveyDraft, ...meta } = incoming;
+    const { contacts, responses, sourceWorkbook, surveyDraft, ...meta } = incoming;
     const survey = incoming.mode === 'survey';
     if (survey) meta.responseStorage = 1;
     const oldSourceMeta = projects[index].sourceWorkbookMeta;
     const sourceMeta = await storeAttachedSource(incoming.id, sourceWorkbook);
     meta.sourceWorkbookMeta = sourceMeta;
-    meta.totalContacts = contacts.length;
-    meta.completedContacts = contacts.filter((contact) => contact.completed).length;
+    const rows = survey ? responses : contacts;
+    meta.totalContacts = survey ? activeSurveyResponses(rows).length : rows.length;
+    meta.completedContacts = survey ? meta.totalContacts : rows.filter((contact) => contact.completed).length;
     projects[index] = meta;
     await AsyncStorage.setItem(MERGE_JOURNAL_KEY, JSON.stringify({
       projectId: incoming.id, projectsRaw, contactsRaw, draftRaw, restoreDraft: true,
@@ -426,8 +430,7 @@ export async function replaceProjectBackup(input, expectedCurrent) {
     }));
     try {
       if (survey) {
-        await AsyncStorage.setItem(RESPONSES_PREFIX + incoming.id,
-          JSON.stringify(contacts.map(fromLegacySurveyContact)));
+        await AsyncStorage.setItem(RESPONSES_PREFIX + incoming.id, JSON.stringify(rows));
         await AsyncStorage.removeItem(PROJECT_DATA_PREFIX + incoming.id);
       } else {
         await AsyncStorage.setItem(PROJECT_DATA_PREFIX + incoming.id, JSON.stringify(contacts));
@@ -488,6 +491,28 @@ export async function appendSurveyResponse(projectId, input) {
         now: () => new Date().toISOString(),
         fromLegacy: fromLegacySurveyContact,
         parseResponses: parseSurveyResponses,
+        ...sidecarUpdateJournal,
+      });
+    } finally { projectSidecarWriteInProgress = false; }
+  });
+}
+
+/** Yanıt düzeltme, geri alınabilir silme ve geri getirme için tek sıralı yazma yolu. */
+export async function changeSurveyResponse(projectId, responseId, expected, action, input = null) {
+  return enqueueWrite(async () => {
+    await recoverPendingProjectUpdate();
+    projectSidecarWriteInProgress = true;
+    try {
+      return await writeSurveyResponseChange(projectId, responseId, expected, action, input, {
+        loadProjects: getAllProjects,
+        getContacts: (id) => AsyncStorage.getItem(PROJECT_DATA_PREFIX + id),
+        getResponses: (id) => AsyncStorage.getItem(RESPONSES_PREFIX + id),
+        setResponses: (id, data) => AsyncStorage.setItem(RESPONSES_PREFIX + id, data),
+        removeContacts: (id) => AsyncStorage.removeItem(PROJECT_DATA_PREFIX + id),
+        saveProjects: saveAllProjects,
+        fromLegacy: fromLegacySurveyContact,
+        parseResponses: parseSurveyResponses,
+        now: () => new Date().toISOString(),
         ...sidecarUpdateJournal,
       });
     } finally { projectSidecarWriteInProgress = false; }

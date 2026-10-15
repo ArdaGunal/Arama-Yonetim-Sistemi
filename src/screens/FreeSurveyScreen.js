@@ -6,6 +6,7 @@ import { appendSurveyResponse, clearSurveyDraft, getProject, loadSurveyDraft,
   saveSurveyDraft, waitForPendingWrites } from '../utils/storage';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
+import { activeSurveyResponses } from '../features/surveys/surveyResponses';
 
 const inform = (title, message) => Platform.OS === 'web' ? window.alert(message) : Alert.alert(title, message);
 
@@ -130,7 +131,11 @@ export default function FreeSurveyScreen({ route, navigation }) {
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 110 }]} keyboardShouldPersistTaps="handled">
       <Text style={s.title}>{project.name}</Text>
-      <Text style={s.help}>{project.responses.length} cevap kaydedildi. Her doldurma ayrı bir cevap olur.</Text>
+      <Text style={s.help}>{activeSurveyResponses(project.responses).length} cevap kaydedildi. Her doldurma ayrı bir cevap olur.</Text>
+      <TouchableOpacity accessibilityRole="button" style={s.listButton}
+        onPress={() => navigation.navigate('SurveyResponses', { projectId, projectName: project.name })}>
+        <Text style={s.listButtonText}>Kaydedilen cevapları gör →</Text>
+      </TouchableOpacity>
       {restored && <Text style={s.draftNote}>Yarım kalan cevabınız geri açıldı.</Text>}
       {project.fields.map((field, index) => <View key={field.id} style={s.card}>
         <Text style={s.label}>{index + 1}. {field.label}{field.required ? ' *' : ''}</Text>
@@ -167,6 +172,10 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg }, center: { flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', alignItems: 'center', padding: 24 },
   content: { padding: 18, paddingTop: 24 }, title: { color: Colors.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 6 },
   help: { color: Colors.textSecondary, fontSize: 14, lineHeight: 20, marginBottom: 18 },
+  listButton: { minHeight: 48, backgroundColor: Colors.bgElevated, borderWidth: 1,
+    borderColor: Colors.borderAccent, borderRadius: 12, justifyContent: 'center',
+    alignItems: 'center', marginBottom: 16 },
+  listButtonText: { color: Colors.accentLight, fontSize: 14, fontWeight: '700' },
   card: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderRadius: 15, padding: 16, marginBottom: 12 },
   label: { color: Colors.textPrimary, fontSize: 16, fontWeight: '700', marginBottom: 12 },
   input: { minHeight: 50, color: Colors.textPrimary, backgroundColor: Colors.bgInput, borderWidth: 1, borderColor: Colors.borderLight,

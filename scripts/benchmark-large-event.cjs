@@ -19,6 +19,8 @@ function loadSource(relativePath, mocks = {}) {
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
       name === '../features/surveys/surveyDraft' ? surveyDraft :
       name === '../features/surveys/surveyResponses' ? surveyResponses :
+      name === '../../features/surveys/surveyResponses' ? surveyResponses :
+      name === '../../utils/canonicalJson' ? canonicalModule :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :

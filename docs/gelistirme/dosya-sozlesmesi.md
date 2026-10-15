@@ -1,4 +1,4 @@
-# `.ays` dosya sözleşmesi — yedek sürüm 8, görev sürüm 2, sonuç sürüm 2
+# `.ays` dosya sözleşmesi — anket yedeği sürüm 9, arama yedeği sürüm 8, görev sürüm 2, sonuç sürüm 2
 
 Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignment"` tek gönüllünün görev paketi, `kind: "result"` gönüllünün sonuç paketidir.
 
@@ -7,7 +7,7 @@ Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignme
 ```json
 {
   "format": "arama-yonetim-sistemi",
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "kind": "backup",
   "createdAt": "2026-10-07T08:00:00.000Z",
   "eventId": "kalici-etkinlik-kimligi",
@@ -18,11 +18,13 @@ Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignme
 
 `payload.project` içinde `id`, `eventId`, `name`, `createdAt`, `currentIndex`, `fields` ve `contacts` bulunur. Koordinatör projesinde `id` ile `eventId` aynıdır; gönüllü projesinde `id` görev kimliğidir ve `eventId` ana etkinliği gösterir. Her kişide `id`, `recordId`, `phone`, `data`, `completed`, `completedAt` bulunur; kişi `id` ile `recordId` aynıdır. Eski projelerde `eventId` ve `recordId` yoksa yedek hazırlanırken mevcut `id` değerleri kullanılır. İsim veya telefon, kayıt kimliği yerine kullanılmaz.
 
+Yukarıdaki kişi sözleşmesi arama yedekleri ve sürüm 1–8 dosyaları içindir. Sürüm 9 anket yedeğinde `contacts` yerine `responses` bulunur. Her yanıt `{ id, data, submittedAt, formVersion, history, deletedAt }` taşır. `deletedAt` doluysa yanıt etkin listede/Excel'de görünmez, fakat yedekte kalır ve geri alınabilir. `history` girdisi `{ action: "edit", at, data }`, `{ action: "delete", at }` veya `{ action: "restore", at }` biçimindedir; düzeltmede `data` önceki cevaptır. Yanıt kimliği değişmez. Arama yedekleri sürüm 8 olarak üretilir; güncel uygulama 1–9 sürümlerini okur.
+
 `fields` dizisinde alan `id`, `label`, `type` (`text` veya `select`), `options`, `order`, isteğe bağlı `required` ve varsa `isSystemField: "name"` vardır. `required`, `Görüşüldü` seçilen aramalarda boş cevabı engeller. `data`, alan kimliğinden metin cevabına eşlemedir. Telefon doğrudan kişi kaydındadır. Kişi sırası, `currentIndex` ve tamamlanma bilgisi yedeğe girer.
 
 Sürüm 2'de `payload.project` ayrıca `formVersion`, `formLocked`, `templateId` ve `sourceReview` taşır. Kişide `sourceRow` bulunabilir. `sourceReview` içinde kaynak dosya adı, başlık durumu, veri satırı sayısı, sütun görevleri ile seçilmeyen tekrar ve okunamayan satırların `sourceRow`, `cells`, `reason` kayıtları vardır. Sürüm 3'te `role`, `assignmentId`, `importDigest` ve `assignments` eklenir. Sürüm 4 kişi başına `callStatus`, `callbackNote`, `callbackAt`, `attempts`; görev başına `packetDigest`, `resultRevision`, `resultDigest`, `lastApplied`; koordinatöre `mergeConflicts`, gönüllüye `round` ve `resultRevision` ekler. Sürüm 5 `formHistory` içine `{ version, fields }` kayıtlarını ekler. Sürüm 6 görevlerde `releasedRecordIds`, `ownerType`, `reassignedFrom`, `resultSourceId`, `sourceConflict`; gönüllüde `resultSourceId` alanlarını saklar. Sürüm 7 `mode: "survey"` ile kişi listesi olmayan anketi tanımlar; her yanıt kalıcı kimlik, boş `phone`, `completed: true`, zaman damgası ve soru cevaplarını taşır. Sürüm 8 anket için `surveyDraft: { formVersion, data }` veya `null` taşır. Bu, henüz **Cevabı kaydet** denmemiş tek yerel taslaktır; kayıtlı cevaplarla karışmaz. Yedek geri yüklenince taslak yeniden açılır. Eski projeler `calls` olarak okunur; sürüm 1–7 yedekleri de okunur. Kişi cevaplarında artık kullanılmayan eski alan kimlikleri korunur.
 
-Uygulama içindeki anket yanıtları 1.0.31 sürümünden itibaren `{ id, data, submittedAt }` modelindedir ve ayrı yanıt deposunda saklanır. `.ays` sürüm 8 dosyası önceki uygulamalarla paylaşılabilsin diye yukarıdaki `contacts` biçimini korur; dışa aktarmada yanıtlar bu biçime, geri yüklemede ayrı yanıtlara dönüştürülür. Dosya şema sürümü bu iç depolama değişikliğinde artırılmadı.
+Uygulama içindeki anket yanıtları 1.0.31 sürümünden itibaren ayrı yanıt deposundadır. O sürümde `.ays` sürüm 8 `contacts` biçimini koruyordu. 1.0.32 sürümündeki geri alınabilir silme ve düzeltme geçmişi eski biçimde kaybolacağı için anket yedeği sürüm 9'a çıkarıldı. Sürüm 7/8 anket dosyası okunurken yanıtlar geçmişi boş olarak yeni modele uyarlanır.
 
 Sürüm 5 koordinatör yedeğinde isteğe bağlı `sourceWorkbook` eki de bulunabilir: `{ name, format, base64, byteLength, sha256 }`. `format` `xlsx`, `xlsm` veya `xls` olur; orijinal dosya en fazla 8 MiB'dir. `base64` orijinal baytları aynen taşır; iç SHA-256 bu baytların base64 metni üzerinden hesaplanır. Dış zarf özeti bütün eki de kapsar. Gönüllü yedeğinde ana Excel bulunmaz. Eski uygulama sürümü bu isteğe bağlı alanı okuyup yeniden yedeklerken atabilir; kaynak biçimini korumak için güncel sürümle geri yükleyin.
 

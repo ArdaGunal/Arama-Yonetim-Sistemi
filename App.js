@@ -16,6 +16,7 @@ import ProjectTypeScreen from './src/screens/ProjectTypeScreen';
 import EditFormScreen from './src/screens/EditFormScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import FreeSurveyScreen from './src/screens/FreeSurveyScreen';
+import SurveyResponsesScreen from './src/screens/SurveyResponsesScreen';
 import ExportScreen from './src/screens/ExportScreen';
 import BackupScreen from './src/screens/BackupScreen';
 import AssignmentsScreen from './src/screens/AssignmentsScreen';
@@ -165,6 +166,7 @@ export default function App() {
           })}
         />
         <Stack.Screen name="FreeSurvey" component={FreeSurveyScreen} options={{ title: 'Anket' }} />
+        <Stack.Screen name="SurveyResponses" component={SurveyResponsesScreen} options={{ title: 'Kaydedilen Yanıtlar' }} />
         <Stack.Screen
           name="Export"
           component={ExportScreen}
