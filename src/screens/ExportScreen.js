@@ -8,6 +8,7 @@ import { reportError } from '../utils/diagnostics';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { shareOrDownloadWebFile } from '../utils/webFileTransfer';
+import { surveyExportFields } from '../features/surveys/surveyExport';
 
 const msg = (title, m) => Platform.OS === 'web' ? window.alert(m) : Alert.alert(title, m);
 
@@ -89,7 +90,8 @@ export default function ExportScreen({ route, navigation }) {
   const completed = project.mode === 'survey' ? total : rows.filter(c => c.completed).length;
   const fields = project.fields || [];
 
-  const selectStats = fields.filter(f => f.type === 'select').map(field => {
+  const outputFields = project.mode === 'survey' ? surveyExportFields(project) : fields;
+  const selectStats = outputFields.filter(f => f.type === 'select').map(field => {
     const counts = {};
     field.options.forEach(opt => { counts[opt] = 0; });
     rows.forEach(c => { const v = c.data?.[field.id]; if (v && counts[v] !== undefined) counts[v]++; });
@@ -119,6 +121,10 @@ export default function ExportScreen({ route, navigation }) {
           {project.mode !== 'survey' && <><View style={[s.overviewCard,{borderColor:Colors.success}]}><Text style={[s.ovNum,{color:Colors.success}]}>{completed}</Text><Text style={s.ovLbl}>Tamamlanan</Text></View>
           <View style={[s.overviewCard,{borderColor:Colors.warning}]}><Text style={[s.ovNum,{color:Colors.warning}]}>{total-completed}</Text><Text style={s.ovLbl}>Kalan</Text></View></>}
         </View>
+
+        {project.mode === 'survey' && (project.formHistory || []).length > 1 && <Text style={s.resultHelp}>
+          Eski form soruları sürüm numarasıyla gösterilir. Her istatistik yalnız o soruya verilen cevapları sayar.
+        </Text>}
 
         {/* Select İstatistikleri */}
         {selectStats.map(({ field, counts }) => (
@@ -174,7 +180,7 @@ export default function ExportScreen({ route, navigation }) {
         <View style={s.infoBox}>
           <Text style={s.infoTitle}>📋 Çıktı Formatı</Text>
           <Text style={s.infoText}>{(() => {
-            if (project.mode === 'survey') return ['Yanıt zamanı', 'Yanıt kimliği', ...fields.map((field) => field.label)].join(' | ');
+            if (project.mode === 'survey') return ['Yanıt zamanı', 'Yanıt kimliği', ...outputFields.map((field) => field.label)].join(' | ');
             const nameF = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');
             const otherF = fields.filter(f => f !== nameF);
             const parts = [];

@@ -19,6 +19,8 @@ function loadSource(relativePath, mocks = {}) {
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
       name === '../features/surveys/surveyDraft' ? surveyDraft :
       name === '../features/surveys/surveyResponses' ? surveyResponses :
+      name === '../features/surveys/surveyExport' ? surveyExport :
+      name === './surveyResponses' ? surveyResponses :
       name === '../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../utils/canonicalJson' ? canonicalModule :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
@@ -60,6 +62,7 @@ const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
 const surveyResponses = loadSource('src/features/surveys/surveyResponses.js');
+const surveyExport = loadSource('src/features/surveys/surveyExport.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
@@ -1454,6 +1457,55 @@ test('listless survey saves independent responses and round trips through backup
   assert.equal(revised.responses[0].data.attend, 'Evet');
   const revisedBackup = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(revised))).project;
   assert.equal(revisedBackup.responses.length, 3);
+});
+
+test('old survey answers keep their form rules and distinct Excel/CSV columns after revision', async () => {
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
+  const fields = [
+    { id: 'school', label: 'Okul numarası', type: 'text', options: [], required: true },
+    { id: 'attend', label: 'Geliyor musun?', type: 'select', options: ['Evet', 'Hayır'], required: true },
+    { id: 'note', label: 'Geliyor musun?', type: 'text', options: [], required: false },
+  ];
+  await storage.createProject({ id: 'versioned-survey', eventId: 'versioned-survey', name: 'Sürümlü anket',
+    mode: 'survey', createdAt: '2026-10-15T00:00:00.000Z', currentIndex: 0,
+    formVersion: 1, fields, formHistory: [{ version: 1, fields }], responses: [] });
+  const first = await storage.appendSurveyResponse('versioned-survey', {
+    school: '00123', attend: 'Evet', note: 'A; "B"',
+  });
+  await storage.updateProjectForm('versioned-survey', [fields[0],
+    { ...fields[1], options: ['Evet', 'Hayır', 'Belki'] },
+    { id: 'paid', label: 'Parayı ödedin mi?', type: 'text', options: [], required: true },
+  ]);
+  let project = await storage.getProject('versioned-survey');
+  const newAttendId = project.fields[1].id;
+  assert.notEqual(newAttendId, 'attend');
+  assert.deepEqual(surveyResponses.surveyResponseFields(project, first).map((field) => field.id),
+    ['school', 'attend', 'note']);
+  await assert.rejects(storage.appendSurveyResponse(project.id, {
+    school: '00456', [newAttendId]: 'Belki',
+  }), /Parayı ödedin mi.*boş bırakılamaz/);
+  await storage.changeSurveyResponse(project.id, first.id, first, 'edit', {
+    school: '00123', attend: 'Hayır', note: 'A; "B"',
+  });
+  await storage.appendSurveyResponse(project.id, {
+    school: '00456', [newAttendId]: 'Belki', paid: 'Evet',
+  });
+  project = await storage.getProject(project.id);
+  const expectedHeader = ['Yanıt zamanı', 'Yanıt kimliği', 'Okul numarası', 'Geliyor musun?',
+    'Parayı ödedin mi?', 'Geliyor musun? (Form 1)', 'Geliyor musun? (Form 1) [2]'];
+  const exports = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
+  const excel = XLSX.utils.sheet_to_json(exports.buildWorkbook(project).Sheets['Anket Yanıtları'], { header: 1 });
+  assert.deepEqual(excel[0], expectedHeader);
+  assert.deepEqual(excel[1].slice(2), ['00123', '', '', 'Hayır', 'A; "B"']);
+  assert.deepEqual(excel[2].slice(2), ['00456', 'Belki', 'Evet', '', '']);
+  const csv = exports.buildCSV(project);
+  assert.equal(csv.split('\n')[0], '\uFEFF' + expectedHeader.map((label) => `"${label}"`).join(';'));
+  assert.ok(csv.includes('"A; ""B"""'));
+  assert.equal(csv.split('\n').length, excel.length);
+  const restored = (await backupFormat.readBackupFile(await backupFormat.createBackupFile(project))).project;
+  assert.deepEqual(surveyResponses.surveyResponseFields(restored, restored.responses[0]).map((field) => field.id),
+    ['school', 'attend', 'note']);
+  assert.equal(restored.responses[0].history[0].data.attend, 'Evet');
 });
 
 test('survey response metadata failure restores the previous answer list', async (t) => {

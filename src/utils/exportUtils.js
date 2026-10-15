@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { Platform } from 'react-native';
 import { fromByteArray } from 'base64-js';
 import { appendResultSheetsToSource, sourceWorkbookBytes } from './sourceWorkbookArchive';
+import { surveyExportRows } from '../features/surveys/surveyExport';
 
 let FileSystem = null;
 let Sharing = null;
@@ -47,15 +48,7 @@ const statusLabel = { contacted: 'Görüşüldü', unreached: 'Ulaşılamadı', 
 
 export function buildWorkbook(project) {
   if (project.mode === 'survey') {
-    const fields = project.fields || [];
-    const historical = (project.formHistory || []).flatMap((snapshot) => snapshot.fields || [])
-      .filter((field) => !fields.some((current) => current.id === field.id));
-    const outputFields = [...fields, ...new Map(historical.map((field) =>
-      [field.id, { ...field, label: `${field.label} (eski soru)` }])).values()];
-    const header = ['Yanıt zamanı', 'Yanıt kimliği', ...outputFields.map((field) => field.label)];
-    const rows = (project.responses || []).filter((response) => !response.deletedAt)
-      .map((response) => [response.submittedAt || '',
-      response.id, ...outputFields.map((field) => response.data?.[field.id] || '')]);
+    const { header, rows } = surveyExportRows(project);
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     ws['!cols'] = header.map(() => ({ wch: 20 }));
@@ -155,19 +148,11 @@ export function buildWorkbook(project) {
   return wb;
 }
 
-function buildCSV(project) {
+export function buildCSV(project) {
   if (project.mode === 'survey') {
-    const fields = project.fields || [];
-    const historical = (project.formHistory || []).flatMap((snapshot) => snapshot.fields || [])
-      .filter((field) => !fields.some((current) => current.id === field.id));
-    const outputFields = [...fields, ...new Map(historical.map((field) =>
-      [field.id, { ...field, label: `${field.label} (eski soru)` }])).values()];
+    const { header, rows } = surveyExportRows(project);
     const esc = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const rows = [ ['Yanıt zamanı', 'Yanıt kimliği', ...outputFields.map((field) => field.label)],
-      ...(project.responses || []).filter((response) => !response.deletedAt)
-        .map((response) => [response.submittedAt || '', response.id,
-        ...outputFields.map((field) => response.data?.[field.id] || '')]) ];
-    return '\uFEFF' + rows.map((row) => row.map(esc).join(';')).join('\n');
+    return '\uFEFF' + [header, ...rows].map((row) => row.map(esc).join(';')).join('\n');
   }
   const fields = project.fields || [];
   const nameField = fields.find(f => f.isSystemField === 'name') || fields.find(f => f.type === 'text');

@@ -19,6 +19,8 @@ function loadSource(relativePath, mocks = {}) {
     name === './phoneUtils' ? phoneUtils : name === './canonicalJson' ? canonicalModule :
       name === '../features/surveys/surveyDraft' ? surveyDraft :
       name === '../features/surveys/surveyResponses' ? surveyResponses :
+      name === '../features/surveys/surveyExport' ? surveyExport :
+      name === './surveyResponses' ? surveyResponses :
       name === '../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../utils/canonicalJson' ? canonicalModule :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
@@ -56,6 +58,7 @@ const formValidation = loadSource('src/utils/formValidation.js');
 const resultMerge = loadSource('src/utils/resultMerge.js');
 const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
 const surveyResponses = loadSource('src/features/surveys/surveyResponses.js');
+const surveyExport = loadSource('src/features/surveys/surveyExport.js');
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
 const projectUpdateJournal = loadSource('src/data/projectStore/projectUpdateJournal.js');

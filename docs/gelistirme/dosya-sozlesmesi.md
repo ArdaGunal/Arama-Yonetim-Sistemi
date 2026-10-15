@@ -30,6 +30,8 @@ Sürüm 5 koordinatör yedeğinde isteğe bağlı `sourceWorkbook` eki de buluna
 
 Koordinatör kilitli formu düzenlediğinde `formVersion` artar. Adı, türü veya şıkları değişen soruya yeni alan kimliği verilir; eski cevap kendi eski alanında ve görev formunda kalır. Güncel Excel eski alanları form sürümü etiketiyle ayrıca gösterir. Eski görevden gelen sonuç kendi görev formuyla doğrulanır ve güncel formun başka alanlarını silmez.
 
+Anket Excel ve CSV dışa aktarması aynı sütun üreticisini kullanır. Güncel sorular önce, eski alan kimlikleri ilk görüldüğü `Form N` etiketiyle sonra gelir; aynı başlıklı sorulara `[2]` gibi ayırt edici ek verilir. Her yanıt yalnız kendi alan kimliğine yazılır. Sonradan eklenen zorunlu soru eski yanıttan istenmez; eski yanıt eski şıklarla düzeltilebilir. Silinen yanıtlar bu çıktılarda yer almaz, tam `.ays` yedeğinde kalır.
+
 ## `.ays` görev paketi
 
 Zarf `format: "arama-yonetim-sistemi"`, `schemaVersion: 2`, `kind: "assignment"`, `eventId`, `assignmentId`, `createdAt`, `payload.assignment` ve SHA-256 `integrity` içerir. Sürüm 1 görevleri de okunur ve yeniden paylaşıldığında eski dosya özeti korunur. İçerik etkinlik adı, gönüllü adı, `formVersion`, `round`, zorunlu alan bilgisi dahil formun tamamı ve **yalnızca atanmış kişilerin** `recordId`, telefon ve başlangıç verileridir. Geri aramada `round` 2 veya daha büyük olur; önceki kısa not ve karşılaştırma için başlangıç görüntüsü de taşınır. Aynı görev yeniden paylaşıldığında kimliği ve içeriği değişmez.
