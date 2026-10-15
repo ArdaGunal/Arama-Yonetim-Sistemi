@@ -11,9 +11,8 @@ import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 import { downloadWebFile, shareOrDownloadWebFile } from '../utils/webFileTransfer';
 import { getWebStoragePersistence, requestWebStoragePersistence } from '../utils/webStoragePersistence';
+import { deliverBackupFile } from '../utils/backupDelivery';
 
-const MIME = 'application/json';
-const SAVE_MIME = 'application/x-arama-yonetim-backup';
 const inform = (title, message) => Platform.OS === 'web' ? window.alert(`${title}\n${message}`) : Alert.alert(title, message);
 
 function fileName(project) {
@@ -31,6 +30,8 @@ export default function BackupScreen() {
   const [loadError, setLoadError] = useState('');
   const [storagePersistence, setStoragePersistence] = useState('checking');
   const [storageRequestDenied, setStorageRequestDenied] = useState(false);
+  const [transferProblem, setTransferProblem] = useState(null);
+  const [fileConfirmation, setFileConfirmation] = useState(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -54,39 +55,70 @@ export default function BackupScreen() {
     setBusy('');
   };
 
-  const exportBackup = async (projectId, mode) => {
+  const exportBackup = async (projectId, mode, purpose = 'regular') => {
     if (busy) return;
     setBusy(`${projectId}-${mode}`);
+    setTransferProblem(null);
+    setFileConfirmation(null);
     try {
       const project = await getProjectForBackup(projectId);
       const content = await createBackupFile(project);
       const name = fileName(project);
-      if (Platform.OS === 'web') {
-        if (mode === 'share') {
-          if (await shareOrDownloadWebFile(content, name) === 'cancelled') return null;
-        } else downloadWebFile(content, name);
-      } else if (mode === 'save' && Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
-        const saf = FileSystem.StorageAccessFramework;
-        const permission = await saf.requestDirectoryPermissionsAsync();
-        if (!permission.granted) return null;
-        const uri = await saf.createFileAsync(permission.directoryUri, name, SAVE_MIME);
-        await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
-        inform('Yedek kaydedildi', 'Dosyayı seçtiğiniz klasörde saklayın.');
-      } else {
-        if (!await Sharing.isAvailableAsync()) throw new Error('Bu cihazda dosya paylaşımı kullanılamıyor.');
-        const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${name}`;
-        await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
-        await Sharing.shareAsync(uri, { mimeType: MIME, dialogTitle: 'Etkinlik yedeğini paylaş' });
+      const outcome = await deliverBackupFile(content, name, mode, {
+        platform: Platform.OS, fileSystem: FileSystem, sharing: Sharing,
+        downloadWebFile, shareOrDownloadWebFile,
+      });
+      if (outcome === 'cancelled') {
+        setTransferProblem({ projectId, mode, purpose, message: 'Dosya seçimi iptal edildi. Yedek kaydedilmedi.' });
+        return null;
       }
-      await markProjectBackupSaved(projectId, project.backupEpoch || 0);
+      if (outcome === 'confirm-file') {
+        setFileConfirmation({ projectId, mode, purpose, name, project,
+          previewDigest: purpose === 'replace' ? preview?.sha256 : null });
+        return null;
+      }
+      if (!await markProjectBackupSaved(projectId, project.backupEpoch || 0)) {
+        setTransferProblem({ projectId, mode, purpose,
+          message: 'Yedek hazırlanırken yeni cevap kaydedildi. Güncel yedeği tekrar alın.' });
+        await refresh();
+        return null;
+      }
+      await refresh();
+      inform('Yedek kaydedildi', 'Dosya seçtiğiniz klasöre yazıldı.');
       return project;
     } catch (error) {
       reportError(error, 'Etkinlik yedeği dışa aktarılırken');
-      inform('Yedek oluşturulamadı', error.message || 'Lütfen yeniden deneyin.');
+      setTransferProblem({ projectId, mode, purpose,
+        message: `Yedek kaydedilemedi: ${error.message || 'Lütfen yeniden deneyin.'}` });
       return null;
     } finally {
       setBusy('');
     }
+  };
+
+  const confirmSavedFile = async () => {
+    const pending = fileConfirmation;
+    if (!pending || busy) return;
+    setBusy('confirm-file');
+    try {
+      if (pending.purpose === 'replace' && preview?.sha256 !== pending.previewDigest) {
+        throw new Error('Geri yüklenecek dosya değişti. Önce mevcut etkinliği yeniden yedekleyin.');
+      }
+      const current = await markProjectBackupSaved(pending.projectId, pending.project.backupEpoch || 0);
+      setFileConfirmation(null);
+      await refresh();
+      if (!current) {
+        setTransferProblem({ projectId: pending.projectId, mode: pending.mode, purpose: pending.purpose,
+          message: 'Dosya hazırlanırken yeni cevap kaydedildi. Güncel yedeği tekrar alın.' });
+        return;
+      }
+      if (pending.purpose === 'replace') setSafetyCopy(pending.project);
+      inform('Yedek kontrol edildi', 'Dosyanın saklandığını onayladınız.');
+    } catch (error) {
+      reportError(error, 'Yedek dosyası doğrulanırken');
+      setTransferProblem({ projectId: pending.projectId, mode: pending.mode, purpose: pending.purpose,
+        message: error.message || 'Yedek kontrol edilemedi.' });
+    } finally { setBusy(''); }
   };
 
   const chooseBackup = async () => {
@@ -94,6 +126,7 @@ export default function BackupScreen() {
     setBusy('choose');
     setPreview(null);
     setSafetyCopy(null);
+    setFileConfirmation(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
       if (result.canceled) return;
@@ -145,7 +178,7 @@ export default function BackupScreen() {
 
   const saveCurrentBeforeReplace = async () => {
     if (!preview?.canReplace || busy) return;
-    const saved = await exportBackup(preview.existingSummary.id, 'save');
+    const saved = await exportBackup(preview.existingSummary.id, 'save', 'replace');
     if (saved) setSafetyCopy(saved);
   };
 
@@ -232,7 +265,7 @@ export default function BackupScreen() {
               {preview.existingSummary ? <Text style={styles.detail}>Cihazda: {preview.existingSummary.totalContacts ?? '?'} {preview.project.mode === 'survey' ? 'yanıt' : 'kişi'} · {preview.existingSummary.completedContacts ?? '?'} tamamlanan</Text> : null}
               <Text style={styles.detail}>Dosyada: {previewCount} {preview.project.mode === 'survey' ? 'yanıt' : 'kişi'} · {previewCompleted} tamamlanan</Text>
               {preview.canReplace ? <>
-                <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton} onPress={saveCurrentBeforeReplace}>
+                <TouchableOpacity accessibilityRole="button" disabled={!!busy || !!fileConfirmation} style={styles.primaryButton} onPress={saveCurrentBeforeReplace}>
                   <Text style={styles.primaryText}>{busy?.endsWith('-save') ? 'Yedek kaydediliyor…' : '1. Cihazdaki etkinliği yedekle'}</Text>
                 </TouchableOpacity>
                 {safetyCopy ? <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.replaceButton} onPress={confirmReplace}>
@@ -245,11 +278,28 @@ export default function BackupScreen() {
               <Text style={styles.primaryText}>{busy === 'restore' ? 'Geri yükleniyor…' : preview.state === 'same' ? 'Aynı yedeği kontrol et' : 'Etkinliği geri yükle'}</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity accessibilityRole="button" style={styles.dismissButton} onPress={() => { setPreview(null); setSafetyCopy(null); }}>
+          <TouchableOpacity accessibilityRole="button" style={styles.dismissButton} onPress={() => {
+            setPreview(null); setSafetyCopy(null); setFileConfirmation(null); }}>
             <Text style={styles.dismissText}>Önizlemeyi kapat</Text>
           </TouchableOpacity>
         </View>
       )}
+
+      {transferProblem && <View style={styles.preview}>
+        <Text accessibilityRole="alert" style={styles.warning}>{transferProblem.message}</Text>
+        <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton}
+          onPress={() => exportBackup(transferProblem.projectId, transferProblem.mode, transferProblem.purpose)}>
+          <Text style={styles.primaryText}>Yedeklemeyi tekrar dene</Text>
+        </TouchableOpacity>
+      </View>}
+
+      {fileConfirmation && <View style={styles.preview}>
+        <Text style={styles.sectionTitle}>Dosyayı kontrol edin</Text>
+        <Text style={styles.helper}>{fileConfirmation.name} dosyasını Dosyalar veya İndirilenler içinde açıp saklandığını kontrol edin. Paylaşım menüsünün kapanması bunu doğrulamaz.</Text>
+        <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.primaryButton} onPress={confirmSavedFile}>
+          <Text style={styles.primaryText}>Dosyayı buldum, yedeği onayla</Text>
+        </TouchableOpacity>
+      </View>}
 
       <Text style={styles.listTitle}>Projelerimi yedekle</Text>
       {loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
@@ -257,7 +307,9 @@ export default function BackupScreen() {
       {projects.map((project) => (
         <View key={project.id} style={styles.card}>
           <Text style={styles.projectName}>{project.name}</Text>
-          <Text style={styles.helper}>{project.totalContacts ?? 0} kişi · {project.completedContacts ?? 0} tamamlandı</Text>
+          <Text style={styles.helper}>{project.mode === 'survey'
+            ? `${project.totalContacts ?? 0} yanıt` : `${project.totalContacts ?? 0} kişi · ${project.completedContacts ?? 0} tamamlandı`}</Text>
+          {project.backupPending && <Text style={styles.warning}>Yeni kayıtlar var, güncel yedek alın.</Text>}
           <View style={styles.actions}>
             <TouchableOpacity accessibilityRole="button" disabled={!!busy} style={styles.secondaryButton} onPress={() => exportBackup(project.id, 'save')}>
               <Text style={styles.secondaryText}>Kaydet</Text>

@@ -17,13 +17,13 @@ function backupName(project, reason) {
 }
 
 /** Önemli değişiklikten sonra dış dosya oluşturur. Android'de seçilen klasörü hatırlar. */
-export async function saveEventBackup(projectId, reason = 'Yedek') {
+export async function saveEventBackup(projectId, reason = 'Yedek', { deferSavedMark = false } = {}) {
   const project = await getProjectForBackup(projectId);
   const content = await createBackupFile(project);
   const name = backupName(project, reason);
   if (Platform.OS === 'web') {
     downloadWebFile(content, name, MIME);
-    const current = await markProjectBackupSaved(projectId, project.backupEpoch || 0);
+    const current = deferSavedMark || await markProjectBackupSaved(projectId, project.backupEpoch || 0);
     return { saved: current, name, destination: 'downloads', snapshot: project };
   }
   if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
@@ -42,13 +42,13 @@ export async function saveEventBackup(projectId, reason = 'Yedek') {
       await AsyncStorage.removeItem(DIRECTORY_KEY);
       throw new Error(`Yedek klasörüne yazılamadı: ${error.message}`);
     }
-    const current = await markProjectBackupSaved(projectId, project.backupEpoch || 0);
+    const current = deferSavedMark || await markProjectBackupSaved(projectId, project.backupEpoch || 0);
     return { saved: current, name, destination: 'folder', snapshot: project };
   }
   if (!await Sharing.isAvailableAsync()) throw new Error('Bu cihazda yedek paylaşımı kullanılamıyor.');
   const uri = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${name}`;
   await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
   await Sharing.shareAsync(uri, { mimeType: MIME, dialogTitle: 'Etkinlik yedeğini Dosyalar’a kaydet' });
-  const current = await markProjectBackupSaved(projectId, project.backupEpoch || 0);
+  const current = deferSavedMark || await markProjectBackupSaved(projectId, project.backupEpoch || 0);
   return { saved: current, name, destination: 'share', snapshot: project };
 }

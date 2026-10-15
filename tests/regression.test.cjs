@@ -634,6 +634,7 @@ test('required answers are checked only for a completed conversation', () => {
 test('automatic Android backups reuse the selected external folder', async () => {
   const memory = memoryStorage();
   let permissions = 0;
+  let marked = 0;
   const written = [];
   const fileSystem = {
     EncodingType: { UTF8: 'utf8' },
@@ -649,14 +650,47 @@ test('automatic Android backups reuse the selected external folder', async () =>
     'expo-file-system/legacy': fileSystem,
     'expo-sharing': {},
     './backupFormat': backupFormat,
-    './storage': { getProjectForBackup: async () => sampleProject(), markProjectBackupSaved: async () => true },
+    './storage': { getProjectForBackup: async () => sampleProject(),
+      markProjectBackupSaved: async () => { marked += 1; return true; } },
     './webFileTransfer': {},
   });
   assert.equal((await backup.saveEventBackup('event-1', 'Gorev')).saved, true);
   assert.equal((await backup.saveEventBackup('event-1', 'Sonuc')).saved, true);
+  assert.equal((await backup.saveEventBackup('event-1', 'Silmeden-once',
+    { deferSavedMark: true })).saved, true);
   assert.equal(permissions, 1);
-  assert.equal(written.length, 2);
+  assert.equal(written.length, 3);
+  assert.equal(marked, 2);
   for (const item of written) assert.equal((await backupFormat.readBackupFile(item.content)).project.id, 'event-1');
+});
+
+test('backup delivery reports cancellations and failures without claiming a saved file', async () => {
+  const delivery = loadSource('src/utils/backupDelivery.js');
+  const fileSystem = {
+    EncodingType: { UTF8: 'utf8' }, cacheDirectory: 'file:///cache/',
+    StorageAccessFramework: {
+      async requestDirectoryPermissionsAsync() { return { granted: false }; },
+      async createFileAsync() { return 'content://backup/test.ays'; },
+    },
+    async writeAsStringAsync() { throw new Error('disk full'); },
+  };
+  const adapters = { platform: 'android', fileSystem, sharing: {},
+    downloadWebFile: () => {}, shareOrDownloadWebFile: async () => 'cancelled' };
+  assert.equal(await delivery.deliverBackupFile('{}', 'test.ays', 'save', adapters), 'cancelled');
+  fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync = async () =>
+    ({ granted: true, directoryUri: 'content://backup' });
+  await assert.rejects(delivery.deliverBackupFile('{}', 'test.ays', 'save', adapters), /disk full/);
+  fileSystem.writeAsStringAsync = async () => {};
+  assert.equal(await delivery.deliverBackupFile('{}', 'test.ays', 'save', adapters), 'saved');
+  assert.equal(await delivery.deliverBackupFile('{}', 'test.ays', 'share', {
+    ...adapters, sharing: { isAvailableAsync: async () => true, shareAsync: async () => {} },
+  }), 'confirm-file');
+  const web = { ...adapters, platform: 'web' };
+  assert.equal(await delivery.deliverBackupFile('{}', 'test.ays', 'share', web), 'cancelled');
+  assert.equal(await delivery.deliverBackupFile('{}', 'test.ays', 'save', web), 'confirm-file');
+  await assert.rejects(delivery.deliverBackupFile('{}', 'test.ays', 'save', {
+    ...web, downloadWebFile: () => { throw new Error('download blocked'); },
+  }), /download blocked/);
 });
 
 test('backup restore is idempotent and never silently overwrites a changed event', async () => {
@@ -1690,6 +1724,35 @@ test('survey draft survives restart and backup restore, then clears only after s
   const saved = await restored.getProject('draft-survey');
   assert.equal(saved.responses.length, 1);
   assert.equal(saved.responses[0].data.school, '00123');
+});
+
+test('survey backup recovers answers and draft after browser storage is cleared', async () => {
+  const before = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memoryStorage(),
+  });
+  const fields = [{ id: 'q', label: 'Soru', type: 'text', options: [], required: true }];
+  await before.createProject({ id: 'web-loss-survey', eventId: 'web-loss-survey', name: 'Deneme anketi',
+    mode: 'survey', createdAt: '2026-10-15T00:00:00.000Z', currentIndex: 0, fields, responses: [] });
+  const original = await before.appendSurveyResponse('web-loss-survey', { q: 'İlk' });
+  await before.changeSurveyResponse('web-loss-survey', original.id, original, 'edit', { q: 'Düzeltildi' });
+  await before.saveSurveyDraft('web-loss-survey', { q: 'Kaydedilmemiş' });
+  const snapshot = await before.getProjectForBackup('web-loss-survey');
+  const file = await backupFormat.createBackupFile(snapshot);
+  await before.clearSurveyDraft('web-loss-survey');
+  await before.appendSurveyResponse('web-loss-survey', { q: 'Yeni' });
+  assert.equal(await before.markProjectBackupSaved('web-loss-survey', snapshot.backupEpoch || 0), false);
+  assert.equal((await before.getProjectSummaries())[0].backupPending, true);
+  const blankBrowser = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memoryStorage(),
+  });
+  assert.deepEqual(await blankBrowser.getProjectSummaries(), []);
+  const parsed = await backupFormat.readBackupFile(file);
+  assert.equal(await blankBrowser.restoreProjectBackup(parsed.project), 'restored');
+  const recovered = await blankBrowser.getProject('web-loss-survey');
+  assert.equal(recovered.responses[0].data.q, 'Düzeltildi');
+  assert.equal(recovered.responses[0].history[0].data.q, 'İlk');
+  assert.equal((await blankBrowser.loadSurveyDraft('web-loss-survey')).data.q, 'Kaydedilmemiş');
+  assert.equal(await blankBrowser.restoreProjectBackup(parsed.project), 'already-present');
 });
 
 test('a changed survey draft invalidates the older deletion backup', async () => {

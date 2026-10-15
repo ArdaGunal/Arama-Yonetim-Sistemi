@@ -7,6 +7,7 @@
 - `public/index.html` service worker'ı kaydeder. Her üretim derlemesindeki dosyaların SHA-256 özetinden yeni önbellek adı yapılır. Yeni sürüm tam indirilemezse eski sürüm kalır; etkin sekme kapanana kadar yeni sürüm devreye girmez. Ana ekrandaki uyarı yedek alıp uygulamayı yeniden açmayı söyler.
 - Service worker yalnızca aynı kökendeki uygulama dosyalarını önbelleğe alır. Kişi ve cevaplar sunucuya gönderilmez; uygulama tarayıcı depolamasında saklar. Bu depolama silinebilir. `.ays` sonuç ve yedek dosyaları zorunlu kullanımın parçasıdır.
 - Web yedek ekranı `navigator.storage.persisted()` ile ek depolama korumasını kontrol eder. Kullanıcı düğmeye bastığında `persist()` çağrılır; desteklenmiyorsa veya tarayıcı reddederse dosya yedeği akışı aynen sürer. Bu izin tarayıcı verilerinin kullanıcı tarafından silinmesini veya cihaz değişimini önlemez.
+- Web'de `.ays` indirmesi veya paylaşım menüsünün kapanması dosyanın saklandığını kanıtlamaz. Yedek ekranı dosyanın Dosyalar/İndirilenler içinde bulunduğunu kullanıcıya onaylatır; iptal veya indirme hatasında aynı ekranda yeniden deneme sunar. Yeni yanıt dosya hazırlanırken geldiyse yedek uyarısı açık kalır.
 - `public/pwa-icon.png` Android APK'daki görsel simgenin kopyasıdır. Görsel değiştiğinde iki kopyayı birlikte güncelleyin.
 
 ## Yerel kontrol
@@ -15,6 +16,7 @@
 2. `npm run preview:web` ile `http://localhost:8091/Arama-Yonetim-Sistemi/` adresini açın. İlk açılışta `manifest.json`, `sw.js`, JavaScript ve simge isteklerinin başarılı olduğunu doğrulayın.
 3. Sayfayı açtıktan sonra önizleme sunucusunu durdurun; sayfayı yeniden yükleyin. Uygulama, önceki içerik ve görevler görünmelidir. Sahte `.ays` dosyasıyla içe aktarma, cevap kaydetme, sonuç dosyası çıkarma ve yedekten geri yüklemeyi sınayın.
 4. Üretim alanında çevrimdışı kullanım için HTTPS gerekir. `localhost` yalnızca geliştirici testidir.
+5. Depolama kaybını canlı kullanıcı verisine dokunmadan sınamak için bir yerel önizleme kökeninde sentetik anket ve cevap oluşturup `.ays` yedeğini indirin. Farklı bir portta ikinci, boş depolamalı önizleme açın; dosyayı geri yükleyip yanıtı ve taslağı kontrol edin.
 
 ## GitHub Pages yayını
 

@@ -80,7 +80,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 | Veri | Yerel sahibi | Paylaşılan biçim | Eski sürüm okuma | Kurtarma yolu |
 | --- | --- | --- | --- | --- |
 | Arama projesi ve kişiler | `storage.js`, metadata + kişi yan dosyası | `.ays` yedek v8 | v1–7 | Dış yedek; tekrarlı içe alma kimliğe göre güvenli |
-| Anket ve yanıtlar | `storage.js`, şimdilik aynı yan dosya | `.ays` yedek v8, `mode: survey`, taslak | v7 anket; v1–6 arama | Dış yedek; başka cihazla otomatik yanıt birleşimi henüz yok |
+| Anket ve yanıtlar | `storage.js` ve ayrı anket yanıt dosyası | `.ays` yedek v9, `mode: survey`, taslak/geçmiş | v7–8 anket; v1–6 arama | Dış yedek; başka cihazla otomatik yanıt birleşimi henüz yok |
 | Form şablonu | Şablon deposu | `.ayst` arama v2, anket v3 | v1–3 | Şablon tekrar içe aktarılabilir; kişisel cevap taşımaz |
 | Arama görevi | Görev deposu | `.ays` görev v2 | v1–2 | Ana koordinatör projesi ve görev dosyası |
 | Arama sonucu | Gelen kutusu, birleştirme günlüğü | `.ays` sonuç v2 | v1–2 | Birleştirme öncesi dış yedek, kesinti günlüğü |
@@ -118,7 +118,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 2. **Tamamlandı:** Kaydedilmemiş anket ayrı yerel taslaktır. Form açıldığında kaldığı yerden devam eder; **Taslağı sil** ve **Cevabı kaydet** ayrı işlemlerdir. `.ays` v8 taslağı da kapsar; v7 yedekleri taslaksız okunur. Cevap kaydı ve taslak temizleme ortak kurtarma günlüğüne bağlıdır.
 3. **Tamamlandı (1.0.32/b33):** Yanıt listesi zaman ve ilk anlamlı cevapla görünür; cevap/tarih arama, ayrıntı, düzeltme ve **Silinenler** bölümünden geri alma vardır. Silme yanıtı kalıcı olarak yok etmez. Düzeltme öncesi cevap ve silme/geri alma olayları geçmişte tutulur; kimlik değişmez. Yazma günlükle korunur, eski `.ays` v8 okunur ve anket `.ays` v9 geçmişi de taşır.
 4. **Tamamlandı (1.0.33/b34):** Form sürümü değiştiğinde eski yanıtlar eski alanlarla korunur. Yeni zorunlu alan eski yanıtı geriye dönük geçersiz yapmaz. Excel/CSV ve istatistik ekranı eski sürüm alanlarını `Form N` etiketiyle ayrı gösterir; aynı adlı sütunlar ayrıca ayırt edilir.
-5. Anket yedeğini dışarı kaydetme hatası ekranda görünür; web depolama temizlenmesi ve uygulama zorla kapanması test edilir.
+5. **Tamamlandı (1.0.34/b35):** Anket yedeğini dışarı kaydetme hatası ve iptal ekranda görünür; yeniden deneme sunulur. Android klasöre yazma tamamlanınca, web/Paylaş akışında ise kullanıcı dosyayı kontrol edince yedek uyarısı kapanır. Dosya hazırlanırken yeni cevap gelirse eski yedek güncel sayılmaz. Boş tarayıcı depolamasına `.ays` geri yükleme ve uygulamayı zorla kapatıp açma doğrulanır.
 
 **Bitiş:** Başlanmış ama kaydedilmemiş yanıt yeniden açılır; kayıtlı yanıt ve taslak yedek/geri yükleme sonrası kaybolmaz; eski 1.0.16 anketleri okunur.
 

@@ -21,7 +21,8 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../theme/colors';
-import { getProjectSummaries, deleteProject, hasUnexportedVolunteerResult } from '../utils/storage';
+import { getProjectSummaries, deleteProject, hasUnexportedVolunteerResult,
+  markProjectBackupSaved } from '../utils/storage';
 import { saveEventBackup } from '../utils/automaticBackup';
 import { reportError } from '../utils/diagnostics';
 import { listIncomingResults } from '../utils/incomingResultStore';
@@ -97,7 +98,7 @@ export default function HomeScreen({ navigation }) {
       const proceed = await confirmAction('Projeyi sil',
         `"${projectName}" silinmeden önce .ays yedeği kaydedilecek. Devam edilsin mi?`, 'Yedek al');
       if (!proceed) return;
-      const backup = await saveEventBackup(projectId, 'Silmeden-once');
+      const backup = await saveEventBackup(projectId, 'Silmeden-once', { deferSavedMark: true });
       if (!backup.saved) {
         inform('Silme durduruldu', 'Yedek kaydedilemedi. Proje ve cevaplar cihazda duruyor.');
         return;
@@ -106,6 +107,10 @@ export default function HomeScreen({ navigation }) {
         `${backup.name} dosyasını Dosyalar/İndirilenler içinde gördünüz mü? Dosya yoksa silmeyin. Bu işlem geri alınamaz.`,
         'Yedeği kontrol ettim, sil');
       if (!confirmed) return;
+      if (!await markProjectBackupSaved(projectId, backup.snapshot.backupEpoch || 0)) {
+        inform('Silme durduruldu', 'Yedek hazırlanırken proje değişti. Güncel yedeği yeniden alın.');
+        return;
+      }
       await deleteProject(projectId, backup.snapshot);
       await loadProjects();
       inform('Proje silindi', 'Yedek dosyasını saklayın; gerektiğinde Yedekler ekranından geri yükleyebilirsiniz.');

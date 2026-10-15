@@ -21,6 +21,8 @@ Oluşturulan anket ana ekrandan açılır. Her **Cevabı kaydet** ayrı bir yan�
 
 Bu anket aynı cihazda veya aynı tarayıcı profilinde doldurulmak içindir. Ayrı cihazlardan gelen bağımsız anket yanıtlarını otomatik birleştirme protokolü henüz yoktur. Birden çok cihaz kullanılacaksa her cihazın `.ays` yedeği ve Excel çıktısı ayrı saklanmalıdır; `.ays` geri yüklemesi başka cihazın yeni yanıtlarının üzerine yazmak için kullanılmamalıdır. Kaydedilmemiş cevap ayrı taslakta tutulur ve aynı cihazda yeniden açılır; dış yedek almak yine gereklidir.
 
+**Ayarlar → Yedek al veya geri yükle** ekranında anketin `.ays` dosyası alınır. Android'de seçilen klasöre yazma bitince işlem başarılı sayılır. Web'de indirme ve iPhone/Android paylaşım menüsünde dosyanın gerçekten saklandığı kullanıcıya kontrol ettirilir. İptal, yazma hatası veya yedek hazırlanırken yeni cevap gelmesi halinde ekranda yeniden deneme görünür ve güncel yedek uyarısı kapanmaz. Tarayıcı depolaması temizlenirse yalnız dışarıda duran `.ays` dosyasından geri yükleme yapılabilir.
+
 ## Kontrol
 
 `npm test` ankette doğrulama, eşzamanlı iki yanıt, form sürümü, yedek ve Excel akışını kapsar. `npm run build:web` ile PWA derlemesi doğrulanır. Android APK'da yeni proje → Anket → soru oluşturma → cevap kaydetme → çıktı akışı elle kontrol edilir.
