@@ -6,11 +6,12 @@ import { normalizeSourceWorkbook } from './sourceWorkbookArchive';
 import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
 import { fromLegacySurveyContact, normalizeSurveyResponse,
   toLegacySurveyContact } from '../features/surveys/surveyResponses';
+import { normalizeSurveyTransferState } from '../features/survey-transfer/surveyTransferBackup';
 
 export { canonicalJson } from './canonicalJson';
 
 export const BACKUP_EXTENSION = '.ays';
-export const BACKUP_SCHEMA_VERSION = 9;
+export const BACKUP_SCHEMA_VERSION = 10;
 const FORMAT = 'arama-yonetim-sistemi';
 const MAX_BACKUP_CHARS = 30 * 1024 * 1024;
 
@@ -172,7 +173,7 @@ export function normalizeBackupProject(input) {
   const eventId = identifier(project.eventId || id, 'Etkinlik kimliği');
   const role = project.role || 'coordinator';
   const mode = project.mode || 'calls';
-  if (!['calls', 'survey'].includes(mode) || (mode === 'survey' && role !== 'coordinator')) {
+  if (!['calls', 'survey'].includes(mode)) {
     throw new Error('Etkinlik türü geçersiz.');
   }
   if (!['coordinator', 'volunteer'].includes(role) ||
@@ -303,6 +304,8 @@ export function normalizeBackupProject(input) {
   if (mode !== 'survey' && project.surveyDraft != null) throw new Error('Arama projesinde anket taslağı olamaz.');
   const surveyDraft = mode === 'survey'
     ? normalizeSurveyDraft(project.surveyDraft, fields, formVersion) : null;
+  const transfer = mode === 'survey'
+    ? normalizeSurveyTransferState(project, fieldIds, formVersion, role) : null;
   for (const assignment of assignments) {
     const snapshot = historyMap.get(assignment.formVersion);
     if (!snapshot || canonicalJson(snapshot) !== canonicalJson(assignment.fields)) {
@@ -335,6 +338,7 @@ export function normalizeBackupProject(input) {
     resultRevision: role === 'volunteer' ? project.resultRevision || 0 : 0,
     resultSourceId: role === 'volunteer' ? project.resultSourceId || null : null,
     mergeConflicts, surveyDraft,
+    ...(transfer || {}),
   };
 }
 
@@ -366,7 +370,7 @@ export async function readBackupFile(text) {
   try { file = JSON.parse(text); } catch { throw new Error('Yedek dosyası geçerli JSON değil.'); }
   object(file, 'Yedek');
   if (file.format !== FORMAT || file.kind !== 'backup') throw new Error('Bu dosya desteklenen bir etkinlik yedeği değil.');
-  if (![1, 2, 3, 4, 5, 6, 7, 8, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
+  if (![1, 2, 3, 4, 5, 6, 7, 8, 9, BACKUP_SCHEMA_VERSION].includes(file.schemaVersion)) throw new Error('Yedek sürümü desteklenmiyor. Uygulamayı güncelleyin.');
   const body = {
     format: file.format, schemaVersion: file.schemaVersion, kind: file.kind,
     createdAt: file.createdAt, eventId: file.eventId, payload: file.payload,

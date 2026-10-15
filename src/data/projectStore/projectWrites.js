@@ -64,6 +64,7 @@ export async function writeSurveyResponse(projectId, input, { loadProjects, getC
   project.responseStorage = 1;
   project.backupPending = true;
   project.backupEpoch = (project.backupEpoch || 0) + 1;
+  if (project.role === 'volunteer') project.surveyDataEpoch = (project.surveyDataEpoch || 0) + 1;
   delete project.contacts;
   try {
     await beginUpdate(projectId, legacyRaw, true, responsesRaw);
@@ -126,6 +127,7 @@ export async function writeSurveyResponseChange(projectId, responseId, expected,
   project.completedContacts = project.totalContacts;
   project.backupPending = true;
   project.backupEpoch = (project.backupEpoch || 0) + 1;
+  if (project.role === 'volunteer') project.surveyDataEpoch = (project.surveyDataEpoch || 0) + 1;
   try {
     await beginUpdate(projectId, legacyRaw, false, responsesRaw);
     await setResponses(projectId, JSON.stringify(responses));

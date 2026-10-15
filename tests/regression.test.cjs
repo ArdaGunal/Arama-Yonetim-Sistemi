@@ -23,6 +23,14 @@ function loadSource(relativePath, mocks = {}) {
       name === './surveyResponses' ? surveyResponses :
       name === '../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../utils/canonicalJson' ? canonicalModule :
+      name === '../../utils/backupFormat' ? backupFormat :
+      name === './surveyFormFormat' ? surveyFormFormat :
+      name === './surveyResultFormat' ? surveyResultFormat :
+      name === '../features/survey-transfer/surveyFormImport' ? surveyFormImport :
+      name === '../features/survey-transfer/surveyTransferBackup' ? surveyTransferBackup :
+      name === '../features/survey-transfer/surveyResultFormat' ? surveyResultFormat :
+      name === '../features/survey-transfer/surveyMerge' ? surveyMerge :
+      name === '../surveys/surveyResponses' ? surveyResponses :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
@@ -63,7 +71,12 @@ const resultMerge = loadSource('src/utils/resultMerge.js');
 const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
 const surveyResponses = loadSource('src/features/surveys/surveyResponses.js');
 const surveyExport = loadSource('src/features/surveys/surveyExport.js');
+const surveyTransferBackup = loadSource('src/features/survey-transfer/surveyTransferBackup.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
+const surveyFormFormat = loadSource('src/features/survey-transfer/surveyFormFormat.js', { 'expo-crypto': cryptoMock });
+const surveyFormImport = loadSource('src/features/survey-transfer/surveyFormImport.js');
+const surveyResultFormat = loadSource('src/features/survey-transfer/surveyResultFormat.js', { 'expo-crypto': cryptoMock });
+const surveyMerge = loadSource('src/features/survey-transfer/surveyMerge.js');
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
 const projectUpdateJournal = loadSource('src/data/projectStore/projectUpdateJournal.js');
@@ -480,7 +493,7 @@ test('versioned backup restores legacy IDs and detects changed content', async (
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(tampered)), /değişmiş veya bozulmuş/);
 
   const unsupported = JSON.parse(file);
-  unsupported.schemaVersion = 10;
+  unsupported.schemaVersion = 11;
   await assert.rejects(backupFormat.readBackupFile(JSON.stringify(unsupported)), /sürümü desteklenmiyor/);
   const duplicate = sampleProject();
   duplicate.contacts.push({ ...duplicate.contacts[0] });
@@ -1712,7 +1725,7 @@ test('survey draft survives restart and backup restore, then clears only after s
   await assert.rejects(reopened.updateProjectForm('draft-survey', fields), /Açık bir anket taslağı/);
 
   const backup = await backupFormat.createBackupFile(await reopened.getProjectForBackup('draft-survey'));
-  assert.equal(JSON.parse(backup).schemaVersion, 9);
+  assert.equal(JSON.parse(backup).schemaVersion, 10);
   const parsed = await backupFormat.readBackupFile(backup);
   assert.deepEqual(parsed.project.surveyDraft.data, { school: '00123' });
   const restored = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });
@@ -1753,6 +1766,217 @@ test('survey backup recovers answers and draft after browser storage is cleared'
   assert.equal(recovered.responses[0].history[0].data.q, 'İlk');
   assert.equal((await blankBrowser.loadSurveyDraft('web-loss-survey')).data.q, 'Kaydedilmemiş');
   assert.equal(await blankBrowser.restoreProjectBackup(parsed.project), 'already-present');
+});
+
+test('incoming survey answer remains in inbox across restart and duplicate opening', async () => {
+  const memory = memoryStorage();
+  const files = new Map();
+  const mocks = {
+    '@react-native-async-storage/async-storage': memory,
+    'react-native': { Platform: { OS: 'android' } },
+    'expo-file-system/legacy': {
+      documentDirectory: 'file:///docs/', EncodingType: { UTF8: 'utf8' },
+      async writeAsStringAsync(uri, value) { files.set(uri, value); },
+      async getInfoAsync(uri) { return { exists: files.has(uri) }; },
+      async readAsStringAsync(uri) { return files.get(uri); },
+    },
+  };
+  const result = { eventId: 'survey-inbox', eventName: 'Saha anketi', formVersion: 1,
+    fields: [{ id: 'q', label: 'Soru', type: 'text', options: [] }],
+    sourceId: 'volunteer-one', packetId: 'survey-file-one', revision: 1,
+    exportedAt: '2026-10-15T00:00:00.000Z', responses: [{ id: 'answer-one',
+      data: { q: 'Evet' }, submittedAt: '2026-10-15T00:00:00.000Z', formVersion: 1,
+      history: [], deletedAt: null }] };
+  const content = await surveyResultFormat.createSurveyResultFile(result);
+  const packet = await surveyResultFormat.readSurveyResultFile(content);
+  const inbox = loadSource('src/utils/incomingResultStore.js', mocks);
+  assert.equal((await inbox.saveIncomingSurveyResponse(packet, content)).duplicate, undefined);
+  assert.equal((await inbox.saveIncomingSurveyResponse(packet, content)).duplicate, true);
+  const reopened = loadSource('src/utils/incomingResultStore.js', mocks);
+  assert.equal((await reopened.listIncomingSurveyResponses()).length, 1);
+  assert.equal((await reopened.readIncomingSurveyResponse(packet.sha256)).packet.result.responses[0].id, 'answer-one');
+  await assert.rejects(reopened.saveIncomingSurveyResponse(packet, content,
+    { id: 'wrong', mode: 'survey', eventId: 'other-event' }), /uyuşmuyor/);
+  await reopened.markIncomingSurveyResponsesProcessed([packet.sha256]);
+  assert.equal((await reopened.listIncomingSurveyResponses())[0].processed, true);
+  assert.equal(files.size, 1);
+});
+
+test('survey form packet keeps event identity and reimport preserves volunteer answers', async () => {
+  const fields = [{ id: 'question', label: 'Katılıyor musunuz?', type: 'text', options: [], order: 0, required: false }];
+  const form = { eventId: 'shared-survey', eventName: 'Topluluk anketi',
+    createdAt: '2026-10-15T00:00:00.000Z', formVersion: 1, fields,
+    formHistory: [{ version: 1, fields }] };
+  const content = await surveyFormFormat.createSurveyFormFile(form);
+  const parsed = await surveyFormFormat.readSurveyFormFile(content);
+  assert.equal(parsed.form.eventId, 'shared-survey');
+  assert.deepEqual(parsed.form.fields, fields);
+  const damaged = JSON.parse(content);
+  damaged.payload.form.fields[0].label = 'Başka soru';
+  await assert.rejects(surveyFormFormat.readSurveyFormFile(JSON.stringify(damaged)), /bozulmuş/);
+
+  const storage = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memoryStorage(),
+  });
+  const first = await storage.importSurveyForm(parsed.form, parsed.sha256);
+  assert.equal(first.state, 'imported');
+  const response = await storage.appendSurveyResponse(first.projectId, { question: 'Evet' });
+  const second = await storage.importSurveyForm(parsed.form, parsed.sha256);
+  assert.deepEqual(second, { projectId: first.projectId, state: 'already-present' });
+  const imported = await storage.getProject(first.projectId);
+  assert.equal(imported.eventId, 'shared-survey');
+  assert.equal(imported.formVersion, 1);
+  assert.equal(imported.responses[0].id, response.id);
+  assert.equal(imported.responses[0].data.question, 'Evet');
+  await assert.rejects(storage.importSurveyForm({ ...parsed.form,
+    fields: [{ ...fields[0], label: 'Değişik soru' }],
+    formHistory: [{ version: 1, fields: [{ ...fields[0], label: 'Değişik soru' }] }] }, 'b'.repeat(64)),
+  /farklı/);
+  const backup = await backupFormat.createBackupFile(await storage.getProjectForBackup(first.projectId));
+  assert.equal((await backupFormat.readBackupFile(backup)).project.responses[0].id, response.id);
+});
+
+test('two offline survey devices merge 10 + 7 answers once and preserve a visible conflict', async () => {
+  const fields = [{ id: 'q', label: 'Cevap', type: 'text', options: [], order: 0, required: false }];
+  const form = { eventId: 'multi-survey', eventName: 'Ortak anket',
+    createdAt: '2026-10-15T00:00:00.000Z', formVersion: 1, fields,
+    formHistory: [{ version: 1, fields }] };
+  const digest = (await surveyFormFormat.readSurveyFormFile(
+    await surveyFormFormat.createSurveyFormFile(form))).sha256;
+  const coordinator = loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memoryStorage(),
+  });
+  await coordinator.createProject({ id: form.eventId, eventId: form.eventId,
+    mode: 'survey', name: form.eventName, createdAt: form.createdAt,
+    currentIndex: 0, formVersion: 1, fields, formHistory: form.formHistory, responses: [] });
+  const volunteers = [10, 7].map(() => loadSource('src/utils/storage.js', {
+    '@react-native-async-storage/async-storage': memoryStorage(),
+  }));
+  const exports = [];
+  let firstResponse;
+  for (const [deviceIndex, volunteer] of volunteers.entries()) {
+    const imported = await volunteer.importSurveyForm(form, digest);
+    for (let i = 0; i < [10, 7][deviceIndex]; i += 1) {
+      const response = await volunteer.appendSurveyResponse(imported.projectId, { q: `${deviceIndex}-${i}` });
+      if (deviceIndex === 0 && i === 0) firstResponse = response;
+    }
+    const built = await volunteer.createSurveyResponsePacket(imported.projectId);
+    assert.equal(await volunteer.markSurveyResponsesShared(imported.projectId, built.revision, built.epoch), true);
+    exports.push({ volunteer, projectId: imported.projectId,
+      packet: await surveyResultFormat.readSurveyResultFile(built.content) });
+  }
+  for (const item of [exports[1], exports[0]]) {
+    const snapshot = await coordinator.getProjectForBackup(form.eventId);
+    await backupFormat.createBackupFile(snapshot);
+    assert.equal(await coordinator.markProjectBackupSaved(form.eventId, snapshot.backupEpoch || 0), true);
+    const preview = await coordinator.previewIncomingSurveyResponses(form.eventId,
+      item.packet.result, item.packet.sha256);
+    assert.equal(preview.conflicts.length, 0);
+    await coordinator.applyIncomingSurveyResponses(form.eventId, item.packet.result,
+      item.packet.sha256, {}, preview.snapshot);
+  }
+  assert.equal((await coordinator.getProject(form.eventId)).responses.length, 17);
+  const repeated = await coordinator.previewIncomingSurveyResponses(form.eventId,
+    exports[0].packet.result, exports[0].packet.sha256);
+  assert.equal(repeated.alreadyProcessed, true);
+  assert.equal((await coordinator.getProject(form.eventId)).responses.length, 17);
+
+  const changed = await exports[0].volunteer.changeSurveyResponse(exports[0].projectId,
+    firstResponse.id, firstResponse, 'edit', { q: 'Düzeltildi' });
+  assert.equal(changed.id, firstResponse.id);
+  const update = await exports[0].volunteer.createSurveyResponsePacket(exports[0].projectId);
+  const updatePacket = await surveyResultFormat.readSurveyResultFile(update.content);
+  const conflict = await coordinator.previewIncomingSurveyResponses(form.eventId,
+    updatePacket.result, updatePacket.sha256);
+  assert.equal(conflict.added.length, 0);
+  assert.equal(conflict.conflicts.length, 1);
+  await assert.rejects(coordinator.applyIncomingSurveyResponses(form.eventId,
+    updatePacket.result, updatePacket.sha256, {}, conflict.snapshot), /Birleştirmeden önce/);
+  const before = await coordinator.getProjectForBackup(form.eventId);
+  await backupFormat.createBackupFile(before);
+  await coordinator.markProjectBackupSaved(form.eventId, before.backupEpoch || 0);
+  await assert.rejects(coordinator.applyIncomingSurveyResponses(form.eventId,
+    updatePacket.result, updatePacket.sha256, {}, conflict.snapshot), /karar/i);
+  await coordinator.applyIncomingSurveyResponses(form.eventId, updatePacket.result,
+    updatePacket.sha256, { [firstResponse.id]: 'keep' }, conflict.snapshot);
+  const merged = await coordinator.getProject(form.eventId);
+  assert.equal(merged.responses.length, 17);
+  assert.equal(merged.responses.find((row) => row.id === firstResponse.id).data.q, '0-0');
+  assert.equal(merged.surveyMergeConflicts[0].incoming.data.q, 'Düzeltildi');
+  const fullBackup = await backupFormat.createBackupFile(await coordinator.getProjectForBackup(form.eventId));
+  const recovered = await backupFormat.readBackupFile(fullBackup);
+  assert.equal(recovered.project.surveyImportedPackets.length, 3);
+  assert.equal(recovered.project.surveyMergeConflicts.length, 1);
+});
+
+test('survey response file rejects damage, wrong event, stale revision and missing form version', async () => {
+  const fields = [{ id: 'q', label: 'Soru', type: 'text', options: [], order: 0, required: false }];
+  const source = { eventId: 'survey-a', eventName: 'Anket A', formVersion: 1, fields,
+    sourceId: 'source-a', packetId: 'packet-a', revision: 1,
+    exportedAt: '2026-10-15T00:00:00.000Z', responses: [{ id: 'response-a',
+      data: { q: 'Evet' }, submittedAt: '2026-10-15T00:00:00.000Z', formVersion: 1,
+      history: [], deletedAt: null }] };
+  const content = await surveyResultFormat.createSurveyResultFile(source);
+  const parsed = await surveyResultFormat.readSurveyResultFile(content);
+  const damaged = JSON.parse(content);
+  damaged.payload.result.responses[0].data.q = 'Hayır';
+  await assert.rejects(surveyResultFormat.readSurveyResultFile(JSON.stringify(damaged)), /bozulmuş/);
+  const base = { id: 'survey-b', eventId: 'survey-b', mode: 'survey', role: 'coordinator',
+    fields, formVersion: 1, formHistory: [{ version: 1, fields }], responses: [] };
+  assert.throws(() => surveyMerge.previewSurveyMerge(base, parsed.result, parsed.sha256), /ait değil/);
+  assert.throws(() => surveyMerge.previewSurveyMerge({ ...base, eventId: 'survey-a',
+    formHistory: [{ version: 2, fields }] }, parsed.result, parsed.sha256), /sürümü/);
+  const project = { ...base, eventId: 'survey-a', surveyImportedPackets: [{
+    packetId: 'newer', digest: 'a'.repeat(64), sourceId: 'source-a', revision: 2,
+    at: '2026-10-15T00:00:00.000Z' }] };
+  assert.throws(() => surveyMerge.previewSurveyMerge(project, parsed.result, parsed.sha256), /daha yeni/);
+  const oldBackup = JSON.parse(await backupFormat.createBackupFile({
+    ...base, id: 'survey-a', eventId: 'survey-a', name: 'Anket A',
+    createdAt: '2026-10-15T00:00:00.000Z', currentIndex: 0,
+  }));
+  oldBackup.schemaVersion = 9;
+  delete oldBackup.payload.project.surveyImportedPackets;
+  delete oldBackup.payload.project.surveyMergeConflicts;
+  delete oldBackup.payload.project.surveyDataEpoch;
+  delete oldBackup.payload.project.surveyExportedEpoch;
+  const { integrity, ...body } = oldBackup;
+  oldBackup.integrity.sha256 = await cryptoMock.digestStringAsync('SHA-256', canonicalModule.canonicalJson(body));
+  assert.equal((await backupFormat.readBackupFile(JSON.stringify(oldBackup))).project.mode, 'survey');
+});
+
+test('failed survey merge restores both answer sidecar and packet history', async () => {
+  const memory = memoryStorage();
+  const originalSet = memory.setItem.bind(memory);
+  let failMetadata = false;
+  memory.setItem = async (key, value) => {
+    if (key === '@ays_projects' && failMetadata) { failMetadata = false; throw new Error('disk full'); }
+    return originalSet(key, value);
+  };
+  const storage = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const fields = [{ id: 'q', label: 'Soru', type: 'text', options: [], order: 0, required: false }];
+  await storage.createProject({ id: 'merge-crash', eventId: 'merge-crash', mode: 'survey',
+    name: 'Anket', createdAt: '2026-10-15T00:00:00.000Z', currentIndex: 0,
+    fields, formVersion: 1, formHistory: [{ version: 1, fields }], responses: [] });
+  const file = await surveyResultFormat.createSurveyResultFile({ eventId: 'merge-crash',
+    eventName: 'Anket', formVersion: 1, fields, sourceId: 'device-a', packetId: 'packet-a',
+    revision: 1, exportedAt: '2026-10-15T00:00:00.000Z',
+    responses: [{ id: 'answer-a', data: { q: 'Evet' },
+      submittedAt: '2026-10-15T00:00:00.000Z', formVersion: 1, history: [], deletedAt: null }] });
+  const packet = await surveyResultFormat.readSurveyResultFile(file);
+  const snapshot = await storage.getProjectForBackup('merge-crash');
+  await backupFormat.createBackupFile(snapshot);
+  await storage.markProjectBackupSaved('merge-crash', snapshot.backupEpoch || 0);
+  const preview = await storage.previewIncomingSurveyResponses('merge-crash', packet.result, packet.sha256);
+  failMetadata = true;
+  await assert.rejects(storage.applyIncomingSurveyResponses('merge-crash', packet.result,
+    packet.sha256, {}, preview.snapshot), /kaydedilemedi/);
+  const reopened = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memory });
+  const project = await reopened.getProject('merge-crash');
+  assert.equal(project.responses.length, 0);
+  assert.equal(project.surveyImportedPackets?.length || 0, 0);
+  const retry = await reopened.previewIncomingSurveyResponses('merge-crash', packet.result, packet.sha256);
+  assert.equal((await reopened.applyIncomingSurveyResponses('merge-crash', packet.result,
+    packet.sha256, {}, retry.snapshot)).added, 1);
 });
 
 test('a changed survey draft invalidates the older deletion backup', async () => {
@@ -1845,7 +2069,7 @@ test('survey correction history and reversible deletion survive v9 backup and re
   const wb = exports.buildWorkbook(await storage.getProjectForExport('history-survey'));
   assert.equal(XLSX.utils.sheet_to_json(wb.Sheets['Anket Yanıtları'], { header: 1 }).length, 1);
   const file = await backupFormat.createBackupFile(await storage.getProjectForBackup('history-survey'));
-  assert.equal(JSON.parse(file).schemaVersion, 9);
+  assert.equal(JSON.parse(file).schemaVersion, 10);
   assert.equal(JSON.parse(file).payload.project.responses[0].history.length, 2);
   const parsed = await backupFormat.readBackupFile(file);
   const restored = loadSource('src/utils/storage.js', { '@react-native-async-storage/async-storage': memoryStorage() });

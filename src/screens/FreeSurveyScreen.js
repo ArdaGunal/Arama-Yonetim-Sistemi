@@ -136,6 +136,11 @@ export default function FreeSurveyScreen({ route, navigation }) {
         onPress={() => navigation.navigate('SurveyResponses', { projectId, projectName: project.name })}>
         <Text style={s.listButtonText}>Kaydedilen cevapları gör →</Text>
       </TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" style={s.listButton}
+        onPress={() => navigation.navigate('SurveyTransfer', { projectId })}>
+        <Text style={s.listButtonText}>{project.role === 'volunteer'
+          ? 'Cevapları ana kişiye gönder →' : 'Anketi paylaş ve cevapları topla →'}</Text>
+      </TouchableOpacity>
       {restored && <Text style={s.draftNote}>Yarım kalan cevabınız geri açıldı.</Text>}
       {project.fields.map((field, index) => <View key={field.id} style={s.card}>
         <Text style={s.label}>{index + 1}. {field.label}{field.required ? ' *' : ''}</Text>

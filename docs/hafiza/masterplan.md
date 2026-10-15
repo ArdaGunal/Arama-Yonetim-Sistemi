@@ -80,7 +80,7 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 | Veri | Yerel sahibi | Paylaşılan biçim | Eski sürüm okuma | Kurtarma yolu |
 | --- | --- | --- | --- | --- |
 | Arama projesi ve kişiler | `storage.js`, metadata + kişi yan dosyası | `.ays` yedek v8 | v1–7 | Dış yedek; tekrarlı içe alma kimliğe göre güvenli |
-| Anket ve yanıtlar | `storage.js` ve ayrı anket yanıt dosyası | `.ays` yedek v9, `mode: survey`, taslak/geçmiş | v7–8 anket; v1–6 arama | Dış yedek; başka cihazla otomatik yanıt birleşimi henüz yok |
+| Anket ve yanıtlar | `storage.js` ve ayrı anket yanıt dosyası | `.ays` yedek v10, ayrıca anket form/cevap paketi v1 | v7–9 anket; v1–6 arama | Dış yedek; kalıcı gelen kutusu ve önizlemeli cevap birleştirme |
 | Form şablonu | Şablon deposu | `.ayst` arama v2, anket v3 | v1–3 | Şablon tekrar içe aktarılabilir; kişisel cevap taşımaz |
 | Arama görevi | Görev deposu | `.ays` görev v2 | v1–2 | Ana koordinatör projesi ve görev dosyası |
 | Arama sonucu | Gelen kutusu, birleştirme günlüğü | `.ays` sonuç v2 | v1–2 | Birleştirme öncesi dış yedek, kesinti günlüğü |
@@ -123,6 +123,8 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 **Bitiş:** Başlanmış ama kaydedilmemiş yanıt yeniden açılır; kayıtlı yanıt ve taslak yedek/geri yükleme sonrası kaybolmaz; eski 1.0.16 anketleri okunur.
 
 ### Faz 4 — Dosyayla çok cihazlı anket toplama
+
+**Durum:** Uygulama ve yerel web kabulü tamamlandı (1.0.35/b36). İki gönüllüde 10 + 7 cevap, yinelenen paket, farklı içerikli aynı yanıt, eski sürüm, yanlış etkinlik, yarım yazma ve güncel yedek kuralı otomatik test edildi. Boş tarayıcıda ana anket yedeği geri yüklenene kadar cevap paketinin gelen kutusunda beklemesi, sonra birleştirilmesi ekran üzerinden denendi. Gerçek iPhone dosya alışverişi kullanıcı cihaz bulana kadar bekler.
 
 1. Koordinatör anket şablonunu/form paketini paylaşır; karşı cihaz aynı `eventId` ve `formVersion` ile doldurur. Sunucu gerekmez.
 2. Yanıt paketi `eventId`, `formVersion`, kaynak cihaz kimliği, paket kimliği/sürümü ve her yanıtın kalıcı `responseId` değerini taşır. Bütünlük özeti bozulmayı saptar; kimlik doğrulama veya şifreleme iddiası taşımaz.

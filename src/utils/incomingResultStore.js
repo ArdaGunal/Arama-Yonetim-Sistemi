@@ -2,8 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { readResultFile } from './resultFormat';
+import { readSurveyResultFile } from '../features/survey-transfer/surveyResultFormat';
 
 const MANIFEST_KEY = '@ays_incoming_results_v1';
+const SURVEY_MANIFEST_KEY = '@ays_incoming_surveys_v1';
 const DB_NAME = 'ays-incoming-results';
 const STORE_NAME = 'files';
 let pending = Promise.resolve();
@@ -66,12 +68,62 @@ async function deleteFile(digest) {
   return FileSystem.deleteAsync(nativeUri(digest), { idempotent: true });
 }
 
-async function manifest() {
-  const raw = await AsyncStorage.getItem(MANIFEST_KEY);
+async function manifest(key = MANIFEST_KEY) {
+  const raw = await AsyncStorage.getItem(key);
   if (!raw) return [];
   const entries = JSON.parse(raw);
   if (!Array.isArray(entries)) throw new Error('Gelen kutusu kaydı bozulmuş.');
   return entries;
+}
+
+/** Gelen anket cevabını önizlemeden önce kalıcı gelen kutusuna alır. */
+export async function saveIncomingSurveyResponse(packet, content, project = null) {
+  const verified = await readSurveyResultFile(content);
+  if (verified.sha256 !== packet.sha256 ||
+      (project && (project.mode !== 'survey' || project.role === 'volunteer' ||
+        project.eventId !== packet.result.eventId))) {
+    throw new Error('Gelen anket cevabı ana etkinlikle uyuşmuyor.');
+  }
+  return serialize(async () => {
+    const entries = await manifest(SURVEY_MANIFEST_KEY);
+    const existing = entries.find((item) => item.digest === packet.sha256);
+    if (existing) {
+      if (!await readFile(existing.digest)) throw new Error('Gelen cevap dosyası bulunamadı. Yeniden açın.');
+      return { ...existing, duplicate: true };
+    }
+    await writeFile(packet.sha256, content);
+    const entry = { digest: packet.sha256, projectId: project?.id || null,
+      eventId: packet.result.eventId, eventName: project?.name || packet.result.eventName,
+      sourceId: packet.result.sourceId, revision: packet.result.revision,
+      count: packet.result.responses.length, receivedAt: new Date().toISOString(), processed: false };
+    await AsyncStorage.setItem(SURVEY_MANIFEST_KEY, JSON.stringify([entry, ...entries]));
+    return entry;
+  });
+}
+
+export async function listIncomingSurveyResponses() {
+  await pending;
+  return manifest(SURVEY_MANIFEST_KEY);
+}
+
+export async function readIncomingSurveyResponse(digest) {
+  validDigest(digest);
+  const entry = (await listIncomingSurveyResponses()).find((item) => item.digest === digest);
+  if (!entry) throw new Error('Gelen anket cevabı bulunamadı.');
+  const content = await readFile(digest);
+  if (!content) throw new Error('Gelen anket cevap dosyası bulunamadı.');
+  const packet = await readSurveyResultFile(content);
+  if (packet.sha256 !== digest) throw new Error('Gelen anket cevap dosyası bozulmuş.');
+  return { entry, packet };
+}
+
+export async function markIncomingSurveyResponsesProcessed(digests) {
+  const selected = new Set(digests.map(validDigest));
+  return serialize(async () => {
+    const entries = await manifest(SURVEY_MANIFEST_KEY);
+    await AsyncStorage.setItem(SURVEY_MANIFEST_KEY, JSON.stringify(entries.map((item) =>
+      selected.has(item.digest) ? { ...item, processed: true, processedAt: new Date().toISOString() } : item)));
+  });
 }
 
 export async function saveIncomingResult(packet, content, project) {

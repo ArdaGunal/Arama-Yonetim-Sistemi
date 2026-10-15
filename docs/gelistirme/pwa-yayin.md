@@ -8,6 +8,7 @@
 - Service worker yalnızca aynı kökendeki uygulama dosyalarını önbelleğe alır. Kişi ve cevaplar sunucuya gönderilmez; uygulama tarayıcı depolamasında saklar. Bu depolama silinebilir. `.ays` sonuç ve yedek dosyaları zorunlu kullanımın parçasıdır.
 - Web yedek ekranı `navigator.storage.persisted()` ile ek depolama korumasını kontrol eder. Kullanıcı düğmeye bastığında `persist()` çağrılır; desteklenmiyorsa veya tarayıcı reddederse dosya yedeği akışı aynen sürer. Bu izin tarayıcı verilerinin kullanıcı tarafından silinmesini veya cihaz değişimini önlemez.
 - Web'de `.ays` indirmesi veya paylaşım menüsünün kapanması dosyanın saklandığını kanıtlamaz. Yedek ekranı dosyanın Dosyalar/İndirilenler içinde bulunduğunu kullanıcıya onaylatır; iptal veya indirme hatasında aynı ekranda yeniden deneme sunar. Yeni yanıt dosya hazırlanırken geldiyse yedek uyarısı açık kalır.
+- Anketi birden fazla cihazda toplarken ana kişi `survey-form` dosyasını gönderir; gönüllü `survey-response` dosyasını geri yollar. Web'de ana ekrandaki **Gelen dosyayı aç** her iki dosyayı tanır. Cevap paketi, ana anket henüz yoksa da IndexedDB gelen kutusunda kalır; tam yedek geri yüklendikten sonra yeniden açılır. Birleştirme güncel dış yedek ister ve yinelenen paket yanıt çoğaltmaz.
 - `public/pwa-icon.png` Android APK'daki görsel simgenin kopyasıdır. Görsel değiştiğinde iki kopyayı birlikte güncelleyin.
 
 ## Yerel kontrol

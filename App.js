@@ -17,6 +17,8 @@ import EditFormScreen from './src/screens/EditFormScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import FreeSurveyScreen from './src/screens/FreeSurveyScreen';
 import SurveyResponsesScreen from './src/screens/SurveyResponsesScreen';
+import SurveyTransferScreen from './src/screens/SurveyTransferScreen';
+import SurveyInboxScreen from './src/screens/SurveyInboxScreen';
 import ExportScreen from './src/screens/ExportScreen';
 import BackupScreen from './src/screens/BackupScreen';
 import AssignmentsScreen from './src/screens/AssignmentsScreen';
@@ -153,10 +155,12 @@ export default function App() {
         />
         <Stack.Screen name="EditForm" component={EditFormScreen} options={{ title: 'Sorular ve Şablon' }} />
         <Stack.Screen name="Assignments" component={AssignmentsScreen} options={{ title: 'Görevleri Dağıt' }} />
-        <Stack.Screen name="AssignmentImport" component={AssignmentImportScreen} options={{ title: 'Görev Dosyası Aç' }} />
+        <Stack.Screen name="AssignmentImport" component={AssignmentImportScreen} options={{ title: 'Gelen Dosyayı Aç' }} />
         <Stack.Screen name="ResultsImport" component={ResultsImportScreen} options={{ title: 'Sonuçları Topla' }} />
         <Stack.Screen name="ResultsInbox" component={ResultsInboxScreen} options={{ title: 'Gelen Sonuçlar' }} />
         <Stack.Screen name="IncomingFile" component={IncomingFileScreen} options={{ title: 'Gelen Dosya' }} />
+        <Stack.Screen name="SurveyTransfer" component={SurveyTransferScreen} options={{ title: 'Anket Paylaşımı' }} />
+        <Stack.Screen name="SurveyInbox" component={SurveyInboxScreen} options={{ title: 'Gelen Anket Cevapları' }} />
         <Stack.Screen name="MyAssignment" component={MyAssignmentScreen} options={{ title: 'Kendi Görevim' }} />
         <Stack.Screen
           name="Survey"

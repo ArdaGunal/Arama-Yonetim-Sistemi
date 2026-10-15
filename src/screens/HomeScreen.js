@@ -22,10 +22,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../theme/colors';
 import { getProjectSummaries, deleteProject, hasUnexportedVolunteerResult,
-  markProjectBackupSaved } from '../utils/storage';
+  hasUnsharedSurveyResponses, markProjectBackupSaved } from '../utils/storage';
 import { saveEventBackup } from '../utils/automaticBackup';
 import { reportError } from '../utils/diagnostics';
-import { listIncomingResults } from '../utils/incomingResultStore';
+import { listIncomingResults, listIncomingSurveyResponses } from '../utils/incomingResultStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const confirmAction = (title, message, confirmText) => new Promise((resolve) => {
@@ -51,6 +51,7 @@ export default function HomeScreen({ navigation }) {
   const [offline, setOffline] = useState(Platform.OS === 'web' && !navigator.onLine);
   const [updateReady, setUpdateReady] = useState(Platform.OS === 'web' && !!window.__aysUpdateReady);
   const [incomingCount, setIncomingCount] = useState(0);
+  const [surveyIncomingCount, setSurveyIncomingCount] = useState(0);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -74,6 +75,8 @@ export default function HomeScreen({ navigation }) {
       loadProjects();
       listIncomingResults().then((items) => setIncomingCount(items.filter((item) => !item.processed).length))
         .catch((error) => reportError(error, 'Gelen sonuç sayısı okunurken'));
+      listIncomingSurveyResponses().then((items) => setSurveyIncomingCount(items.filter((item) => !item.processed).length))
+        .catch((error) => reportError(error, 'Gelen anket sayısı okunurken'));
     }, [])
   );
 
@@ -189,11 +192,17 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         {item.role === 'volunteer' ? <>
-          <Text style={styles.assignmentLabel}>Bana gelen görev · {totalCount} kişi</Text>
-          {hasUnexportedVolunteerResult(item) &&
+          <Text style={styles.assignmentLabel}>{item.mode === 'survey'
+            ? `Bana gelen anket · Form ${item.formVersion}` : `Bana gelen görev · ${totalCount} kişi`}</Text>
+          {item.mode !== 'survey' && hasUnexportedVolunteerResult(item) &&
             <TouchableOpacity accessibilityRole="button" style={styles.resultReminder}
               onPress={() => navigation.navigate('Export', { projectId: item.id, projectName: item.name })}>
               <Text style={styles.resultReminderText}>Yeni cevaplar bekliyor · Sonuç dosyasını paylaş →</Text>
+            </TouchableOpacity>}
+          {item.mode === 'survey' && hasUnsharedSurveyResponses(item) &&
+            <TouchableOpacity accessibilityRole="button" style={styles.resultReminder}
+              onPress={() => navigation.navigate('SurveyTransfer', { projectId: item.id })}>
+              <Text style={styles.resultReminderText}>Gönderilmeyen anket cevapları var · Paylaş →</Text>
             </TouchableOpacity>}
         </> : <>
           {item.mode !== 'survey' && <TouchableOpacity accessibilityRole="button" style={styles.formLink}
@@ -235,7 +244,7 @@ export default function HomeScreen({ navigation }) {
         <>
           <Text style={styles.emptyIcon}>📋</Text>
           <Text style={styles.emptyTitle}>Henüz proje yok</Text>
-          <Text style={styles.emptySubtitle}>Görev dosyanız varsa yukarıdaki açma düğmesine basın.</Text>
+          <Text style={styles.emptySubtitle}>Görev veya anket dosyanız varsa yukarıdaki açma düğmesine basın.</Text>
         </>
       )}
     </View>
@@ -260,11 +269,14 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       <TouchableOpacity accessibilityRole="button" style={styles.importLink} onPress={() => navigation.navigate('AssignmentImport')}>
-        <Text style={styles.importText}>Bana gelen görev dosyasını aç →</Text>
+        <Text style={styles.importText}>Bana gelen görev/anket dosyasını aç →</Text>
       </TouchableOpacity>
 
       <TouchableOpacity accessibilityRole="button" style={styles.backupLink} onPress={() => navigation.navigate('ResultsInbox')}>
         <Text style={styles.backupText}>Gelen sonuçlar{incomingCount ? ` (${incomingCount})` : ''} →</Text>
+      </TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" style={styles.backupLink} onPress={() => navigation.navigate('SurveyInbox')}>
+        <Text style={styles.backupText}>Gelen anket cevapları{surveyIncomingCount ? ` (${surveyIncomingCount})` : ''} →</Text>
       </TouchableOpacity>
 
       {Platform.OS === 'web' && <View style={styles.webNotice}>

@@ -3,8 +3,10 @@ import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View }
 import * as FileSystem from 'expo-file-system/legacy';
 import { readAssignmentFile } from '../utils/assignmentFormat';
 import { readResultFile } from '../utils/resultFormat';
-import { getProjectSummaries, importVolunteerAssignment } from '../utils/storage';
-import { saveIncomingResult } from '../utils/incomingResultStore';
+import { readSurveyFormFile } from '../features/survey-transfer/surveyFormFormat';
+import { readSurveyResultFile } from '../features/survey-transfer/surveyResultFormat';
+import { getProjectSummaries, importSurveyForm, importVolunteerAssignment } from '../utils/storage';
+import { saveIncomingResult, saveIncomingSurveyResponse } from '../utils/incomingResultStore';
 import { reportError } from '../utils/diagnostics';
 import { Colors } from '../theme/colors';
 
@@ -31,6 +33,21 @@ export default function IncomingFileScreen({ route, navigation }) {
           const parsed = await readAssignmentFile(content);
           const result = await importVolunteerAssignment(parsed.assignment, parsed.sha256);
           if (active) setState({ loading: false, kind, assignment: parsed.assignment, result });
+        } else if (kind === 'survey-form') {
+          const parsed = await readSurveyFormFile(content);
+          const result = await importSurveyForm(parsed.form, parsed.sha256);
+          if (active) setState({ loading: false, kind, form: parsed.form, projectId: result.projectId, result: result.state });
+        } else if (kind === 'survey-response') {
+          const packet = await readSurveyResultFile(content);
+          const projects = await getProjectSummaries();
+          const project = projects.find((item) => item.mode === 'survey' && item.role !== 'volunteer' &&
+            item.eventId === packet.result.eventId);
+          const stored = await saveIncomingSurveyResponse(packet, content, project || null);
+          if (active) {
+            if (stored.processed) navigation.replace('SurveyInbox');
+            else if (project) navigation.replace('SurveyTransfer', { projectId: project.id, initialPacket: packet });
+            else navigation.replace('SurveyInbox');
+          }
         } else if (kind === 'result') {
           const packet = await readResultFile(content);
           const projects = await getProjectSummaries();
@@ -42,7 +59,7 @@ export default function IncomingFileScreen({ route, navigation }) {
               initialPacket: packet, inboxDigests: [packet.sha256] });
             else navigation.replace('ResultsInbox');
           }
-        } else throw new Error('Bu dosya görev veya sonuç paketi değil.');
+        } else throw new Error('Bu dosya desteklenen görev, anket veya sonuç paketi değil.');
       } catch (error) {
         reportError(error, 'Gelen dosya açılırken');
         if (active) setState({ loading: false, error: error.message || 'Dosya açılamadı.' });
@@ -62,6 +79,14 @@ export default function IncomingFileScreen({ route, navigation }) {
       <TouchableOpacity style={s.button} onPress={() => navigation.replace('Survey', {
         projectId: state.assignment.assignmentId, projectName: state.assignment.eventName,
       })}><Text style={s.buttonText}>Aramaya başla →</Text></TouchableOpacity>
+    </> : state.kind === 'survey-form' ? <>
+      <Text style={s.title}>Anketiniz hazır</Text>
+      <Text style={s.help}>{state.form.eventName} · Form {state.form.formVersion}</Text>
+      <Text style={s.note}>{state.result === 'already-present'
+        ? 'Bu anket zaten kayıtlı; cevaplarınız korundu.' : 'Sorular otomatik kaydedildi.'}</Text>
+      <TouchableOpacity style={s.button} onPress={() => navigation.replace('FreeSurvey', {
+        projectId: state.projectId, projectName: state.form.eventName,
+      })}><Text style={s.buttonText}>Anketi doldur →</Text></TouchableOpacity>
     </> : state.kind === 'processed' ? <>
       <Text style={s.title}>Bu sonuç daha önce işlendi</Text>
       <Text style={s.help}>Dosya gelen kutusunda saklanıyor. Tekrar birleştirme yapılmadı.</Text>

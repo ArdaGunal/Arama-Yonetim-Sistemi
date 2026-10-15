@@ -1,13 +1,13 @@
-# `.ays` dosya sözleşmesi — anket yedeği sürüm 9, arama yedeği sürüm 8, görev sürüm 2, sonuç sürüm 2
+# `.ays` dosya sözleşmesi — anket yedeği sürüm 10, arama yedeği sürüm 8, görev sürüm 2, sonuç sürüm 2
 
-Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignment"` tek gönüllünün görev paketi, `kind: "result"` gönüllünün sonuç paketidir.
+Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignment"` tek gönüllünün görev paketi, `kind: "result"` gönüllünün arama sonuç paketidir. `survey-form` anket sorularını, `survey-response` anket cevaplarını taşır.
 
 ## Zarf
 
 ```json
 {
   "format": "arama-yonetim-sistemi",
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "kind": "backup",
   "createdAt": "2026-10-07T08:00:00.000Z",
   "eventId": "kalici-etkinlik-kimligi",
@@ -18,7 +18,7 @@ Dosyalar UTF-8 JSON'dur. `kind: "backup"` tam etkinlik yedeği, `kind: "assignme
 
 `payload.project` içinde `id`, `eventId`, `name`, `createdAt`, `currentIndex`, `fields` ve `contacts` bulunur. Koordinatör projesinde `id` ile `eventId` aynıdır; gönüllü projesinde `id` görev kimliğidir ve `eventId` ana etkinliği gösterir. Her kişide `id`, `recordId`, `phone`, `data`, `completed`, `completedAt` bulunur; kişi `id` ile `recordId` aynıdır. Eski projelerde `eventId` ve `recordId` yoksa yedek hazırlanırken mevcut `id` değerleri kullanılır. İsim veya telefon, kayıt kimliği yerine kullanılmaz.
 
-Yukarıdaki kişi sözleşmesi arama yedekleri ve sürüm 1–8 dosyaları içindir. Sürüm 9 anket yedeğinde `contacts` yerine `responses` bulunur. Her yanıt `{ id, data, submittedAt, formVersion, history, deletedAt }` taşır. `deletedAt` doluysa yanıt etkin listede/Excel'de görünmez, fakat yedekte kalır ve geri alınabilir. `history` girdisi `{ action: "edit", at, data }`, `{ action: "delete", at }` veya `{ action: "restore", at }` biçimindedir; düzeltmede `data` önceki cevaptır. Yanıt kimliği değişmez. Arama yedekleri sürüm 8 olarak üretilir; güncel uygulama 1–9 sürümlerini okur.
+Yukarıdaki kişi sözleşmesi arama yedekleri ve sürüm 1–8 dosyaları içindir. Sürüm 9–10 anket yedeğinde `contacts` yerine `responses` bulunur. Her yanıt `{ id, data, submittedAt, formVersion, history, deletedAt }` taşır. `deletedAt` doluysa yanıt etkin listede/Excel'de görünmez, fakat yedekte kalır ve geri alınabilir. `history` girdisi `{ action: "edit", at, data }`, `{ action: "delete", at }` veya `{ action: "restore", at }` biçimindedir; düzeltmede `data` önceki cevaptır. Yanıt kimliği değişmez. Sürüm 10 ayrıca `surveyImportedPackets`, `surveyMergeConflicts`, gönüllü yanıtının paylaşım sayacı ve form kaynak kimliğini korur. Arama yedekleri sürüm 8 olarak üretilir; güncel uygulama 1–10 sürümlerini okur.
 
 `fields` dizisinde alan `id`, `label`, `type` (`text` veya `select`), `options`, `order`, isteğe bağlı `required` ve varsa `isSystemField: "name"` vardır. `required`, `Görüşüldü` seçilen aramalarda boş cevabı engeller. `data`, alan kimliğinden metin cevabına eşlemedir. Telefon doğrudan kişi kaydındadır. Kişi sırası, `currentIndex` ve tamamlanma bilgisi yedeğe girer.
 
@@ -49,6 +49,14 @@ Android'de WhatsApp'tan gelen sonuç, inceleme ekranı açılmadan önce uygulam
 Görev hazırlanıp gönderildiğinde veya iptal edildiğinde ve sonuçlar birleştirildikten sonra yeni `.ays` yedeği oluşturulur. Android'de ilk kullanımda yedek klasörü seçilir; sonraki dosyalar aynı klasöre yazılır. Web'de dosya İndirilenler'e gönderilir. iPhone'da paylaşım menüsünde **Dosyalara Kaydet** seçilmelidir. Klasör izni verilmezse veya yazma başarısız olursa işlem kaybolmaz; ekran yedeği ayrıca kaydetme uyarısı gösterir. Birleştirme öncesi dış yedek hâlâ zorunludur.
 
 Gönüllü aynı dosyayı tekrar açarsa ikinci proje oluşmaz ve cevapları silinmez. Aynı `assignmentId` ile farklı içerik reddedilir. Gönüllünün kişi listesi değiştirilemez. Görev dosyasının SHA-256 özeti bozulmayı saptar; kimlik doğrulama veya şifreleme sağlamaz.
+
+## Çok cihazlı anket dosyaları
+
+`survey-form` ve `survey-response` dosyaları `.ays` uzantılıdır, zarf sürümü 1'dir. İkisi de yukarıdaki SHA-256 bütünlük hesabını kullanır. `survey-form` ana anketin `eventId`, ad, `formVersion`, `fields` ve `formHistory` bilgisini taşır; yanıt taşımaz. Gönüllünün yerel proje kimliği farklıdır, fakat `eventId` aynıdır. Aynı etkinlik ve sürümde farklı sorularla gelen dosya reddedilir; aynı dosyanın tekrar açılması yerel cevapları korur.
+
+`survey-response` içinde `eventId`, `formVersion`, kaynak cihaz `sourceId`, `packetId`, artan `revision`, `exportedAt`, kullanılan `fields` ve kalıcı kimlikli `responses` bulunur. Her pakette yanıt kimlikleri tekil olmalıdır. Ana kişi yalnız kendi etkinliğinin kaydedilmiş form sürümüyle eşleşen paketi inceler. Aynı paket veya aynı içerikli yanıt ikinci kez eklenmez. Aynı yanıt kimliği farklı içerikle gelirse seçim gerekir; seçim ve dosya kimliği v10 tam yedekte saklanır. Daha yeni sürüm işlendikten sonra aynı kaynaktan gelen eski sürüm reddedilir. Birleştirme öncesi güncel dış yedek ve kesinti halinde geri alma günlüğü zorunludur.
+
+Android'de dışarıdan açılan anket cevap dosyası, web'de seçilen dosya, birleştirmeden önce kalıcı **Gelen anket cevapları** kutusuna yazılır. Ana anket henüz cihazda yoksa dosya kutuda bekler; yedek geri yüklendiğinde tekrar açılır. Gelen kutusu da yereldir: cihaz depolaması silinirse harici dosya kopyasına ihtiyaç vardır.
 
 ## `.ayst` form şablonu
 

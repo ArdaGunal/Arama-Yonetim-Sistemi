@@ -23,6 +23,14 @@ function loadSource(relativePath, mocks = {}) {
       name === './surveyResponses' ? surveyResponses :
       name === '../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../utils/canonicalJson' ? canonicalModule :
+      name === '../../utils/backupFormat' ? backupFormat :
+      name === './surveyFormFormat' ? surveyFormFormat :
+      name === './surveyResultFormat' ? surveyResultFormat :
+      name === '../features/survey-transfer/surveyFormImport' ? surveyFormImport :
+      name === '../features/survey-transfer/surveyTransferBackup' ? surveyTransferBackup :
+      name === '../features/survey-transfer/surveyResultFormat' ? surveyResultFormat :
+      name === '../features/survey-transfer/surveyMerge' ? surveyMerge :
+      name === '../surveys/surveyResponses' ? surveyResponses :
       name === './sourceWorkbookArchive' ? sourceWorkbookArchive :
         name === './sourceWorkbookStore' ? sourceWorkbookStore :
       name === './assignmentFormat' ? assignmentFormat :
@@ -59,6 +67,12 @@ const resultMerge = loadSource('src/utils/resultMerge.js');
 const surveyDraft = loadSource('src/features/surveys/surveyDraft.js');
 const surveyResponses = loadSource('src/features/surveys/surveyResponses.js');
 const surveyExport = loadSource('src/features/surveys/surveyExport.js');
+const surveyTransferBackup = loadSource('src/features/survey-transfer/surveyTransferBackup.js');
+const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
+const surveyFormFormat = loadSource('src/features/survey-transfer/surveyFormFormat.js', { 'expo-crypto': cryptoMock });
+const surveyFormImport = loadSource('src/features/survey-transfer/surveyFormImport.js');
+const surveyResultFormat = loadSource('src/features/survey-transfer/surveyResultFormat.js', { 'expo-crypto': cryptoMock });
+const surveyMerge = loadSource('src/features/survey-transfer/surveyMerge.js');
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
 const projectUpdateJournal = loadSource('src/data/projectStore/projectUpdateJournal.js');
@@ -74,7 +88,6 @@ const projectUpdateJournalStore = loadSource('src/data/projectStore/projectUpdat
     async deleteAsync(uri) { journalFiles.delete(uri); },
   },
 });
-const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
 const sourcePreview = loadSource('src/utils/sourcePreview.js');
 const workbookUtils = loadSource('src/utils/exportUtils.js', { 'react-native': { Platform: { OS: 'web' } } });
 
