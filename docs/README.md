@@ -16,6 +16,7 @@ Bu klasör, projeyi devralacak kişinin kodu çalıştırması ve önceki kararl
 10. [Büyük veri performansı](gelistirme/buyuk-veri-performansi.md): 5.000 kişi/100 görev sentetik ölçümü ve gerçek cihazda kalan kontrol.
 11. [Anket](gelistirme/listesiz-anket.md): tür seçimi, yanıt, yedek ve çıktı akışı.
 12. [Sürüm kabul kontrolleri](gelistirme/kabul-kontrolleri.md): Android, web, iPhone ve üç gönüllü denemesinde beklenen sonuçlar.
+13. [Arayüzü sadeleştirme planı](hafiza/arayuz-sadelestirme-plani.md): ilk kullanıcı incelemesinde bulunan sorunlar; ana ekran, proje, görev, ayarlar ve dosya akışlarının tasarım fazları.
 
 ## Hafıza dosyaları için kural
 

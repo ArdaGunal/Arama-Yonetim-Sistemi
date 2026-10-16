@@ -4,6 +4,8 @@ Son gözden geçirme: 16 Ekim 2026. Kaynak kodun bulunduğu dizin `Arama_Yonetim
 
 Güncel yol haritası ve fazların kabul koşulları [master plandadır](masterplan.md). Bu dosya uygulanmış işlevlerin durumunu kaydeder.
 
+16 Ekim 2026 arayüz incelemesi: 1.0.39/b40 güncel web derlemesinde boş yerel oturum ve telefon görünümüyle Arama/Anket oluşturma, cevap kaydı, görev hazırlama, dosya girişleri ve ayarlar incelendi. Bulunan sorunlar ve önerilen uygulama fazları [arayüzü sadeleştirme planında](arayuz-sadelestirme-plani.md). Henüz tasarım kodu değişmedi; gerçek gönüllü, temiz kurulum ve fiziksel cihaz kabulü açıktır.
+
 ## Mevcut uygulama
 
 - Expo SDK 54, React Native 0.81, React 19. Android ve web hedefleri vardır. iOS için Expo yapılandırması bulunur; gerçek iPhone dağıtım akışı henüz hazırlanmadı.

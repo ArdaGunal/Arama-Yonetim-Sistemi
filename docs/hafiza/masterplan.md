@@ -136,6 +136,8 @@ Bu **hedef yapı**dır; mevcut dosyalar bir anda taşınmaz. `storage.js` önce 
 
 ### Faz 5 — Saha kullanımını basitleştirme
 
+16 Ekim 2026: Güncel 1.0.39/b40 sürümünün ilk kullanıcı senaryoları incelendi. Renkleri koruyan ana ekran, proje, görev ve ayarlar tasarımının uygulama sırası [arayüzü sadeleştirme planında](arayuz-sadelestirme-plani.md) yer alır. Bu yeni plan henüz uygulanmış sayılmaz; aşağıdaki gerçek kullanıcı ve cihaz kabul koşulları açıktır.
+
 1. **Uygulandı (1.0.37/b38):** Ana sayfada tür rozeti ve karta basınca yapılacak işe uygun **Aramaya başla**, **Anketi doldur** veya **Görevleri yönet** etiketi vardır. Gönüllü görev dosyası açma önde kalır; koordinatöre ait seçenekler gönüllü kartında görünmez. Aynı adlı projeler kimlikleriyle ayrı kalır; ana ekranda tarih/saat ve türle ayırt edilir. Yeni proje adı mevcut adla eşleşince **Adı değiştir / Yine de oluştur** uyarısı 1.0.26'da tamamlandı.
 2. Her ekranda tek baskın eylem; teknik kelimeler yardım bölümünde. Hata mesajı neyin yanlış olduğunu ve düzeltme yolunu söyler. Erişilebilir etiket, yeterli kontrast/dokunma alanı, büyük yazı ve klavye kapatma kontrolü yapılır.
 3. **Uygulandı:** Gelen dosya ekranında WhatsApp'tan açma, Dosyalar'dan seçme ve sonuç dosyasını paylaşma adımları kısa anlatılır. Önizlemede sorular deneme amacıyla doldurulabilir; arama türünde sentetik örnek kişi gösterilir. Üstte **Cevaplar kaydedilmez** yazısı görünür.
