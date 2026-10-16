@@ -24,6 +24,9 @@ function loadSource(relativePath, mocks = {}) {
       name === '../features/calls/pool/assignmentPool' ? assignmentPool :
       name === '../data/projectStore/assignment/assignmentWrites' ? assignmentWrites :
       name === '../data/projectStore/assignment/coordinatorAnswer' ? coordinatorAnswer :
+      name === '../data/projectStore/backup/projectBackups' ? projectBackups :
+      name === '../../../utils/backupFormat' ? backupFormat :
+      name === '../../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../../features/calls/pool/assignmentPool' ? assignmentPool :
       name === '../../../utils/phoneUtils' ? phoneUtils :
       name === '../../../utils/assignmentFormat' ? assignmentFormat :
@@ -88,6 +91,7 @@ const assignmentWrites = loadSource('src/data/projectStore/assignment/assignment
 const coordinatorAnswer = loadSource('src/data/projectStore/assignment/coordinatorAnswer.js');
 const surveyTransferBackup = loadSource('src/features/survey-transfer/surveyTransferBackup.js');
 const backupFormat = loadSource('src/utils/backupFormat.js', { 'expo-crypto': cryptoMock });
+const projectBackups = loadSource('src/data/projectStore/backup/projectBackups.js');
 const surveyFormFormat = loadSource('src/features/survey-transfer/surveyFormFormat.js', { 'expo-crypto': cryptoMock });
 const surveyFormImport = loadSource('src/features/survey-transfer/surveyFormImport.js');
 const surveyResultFormat = loadSource('src/features/survey-transfer/surveyResultFormat.js', { 'expo-crypto': cryptoMock });

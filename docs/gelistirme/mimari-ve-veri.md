@@ -15,6 +15,7 @@
 | `src/data/projectStore/projectReads.js` | Proje metadatası ve kişi yan dosyası okuması; eski proje sayaçlarını tamamlama |
 | `src/data/projectStore/projectWrites.js` | Yeni proje, anket yanıtı ve kişi güncellemesinde yan dosya → metadata yazımı; yazma hatasında geri alma |
 | `src/data/projectStore/assignment/` | Görev ayırma, durum değiştirme, kişi devri ve koordinatör cevabının saf doğrulama/yazma hazırlığı; tek yazma kuyruğu `storage.js` içinde kalır |
+| `src/data/projectStore/backup/` | Tam yedeği hazırlama, geri yükleme ve mevcut projeyi yedekle değiştirme; tek yazma kuyruğu ve kurtarma günlüğü `storage.js` denetiminde kalır |
 | `src/data/projectStore/projectUpdateJournal.js`, `projectUpdateJournalStore.js` | Kişi güncellemesi veya listesiz anket cevabı yarım kalırsa eski metadata/yan dosya görüntüsünü ilk okumada geri getirme; Android'de uygulama dosya alanı, web'de IndexedDB |
 | `src/features/surveys/surveyDraft.js`, `surveyResponses.js`, `src/screens/FreeSurveyScreen.js`, `SurveyResponsesScreen.js` | Anket taslağı, ayrı yanıt modeli, eski yedek adaptörü, cevap ve yanıt listesi/düzeltme ekranları |
 | `src/utils/phoneUtils.js` | Telefon temizleme ve metin/Excel ayrıştırma |
