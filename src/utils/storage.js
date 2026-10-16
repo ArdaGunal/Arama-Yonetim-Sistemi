@@ -3,11 +3,6 @@
  * Tüm proje verilerini yerel olarak yönetir.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sameBackupProject } from './backupFormat';
-import { createAssignmentFile, normalizeAssignment } from './assignmentFormat';
-import { canonicalJson } from './canonicalJson';
-import { createResultFile, normalizeResult } from './resultFormat';
-import { applyPreview, previewResultMerge } from './resultMerge';
 import { verifySourceWorkbook } from './sourceWorkbookArchive';
 import { writeSourceWorkbook, readSourceWorkbook, removeSourceWorkbook } from './sourceWorkbookStore';
 import { readProjectMetadata, readProjectSummaries, readProjectContacts } from '../data/projectStore/projectReads';
@@ -17,16 +12,16 @@ import { recoverProjectUpdateJournal } from '../data/projectStore/projectUpdateJ
 import { readProjectUpdateJournal, writeProjectUpdateJournal,
   removeProjectUpdateJournal } from '../data/projectStore/projectUpdateJournalStore';
 import { normalizeSurveyDraft } from '../features/surveys/surveyDraft';
-import { activeSurveyResponses, fromLegacySurveyContact,
+import { fromLegacySurveyContact,
   parseSurveyResponses } from '../features/surveys/surveyResponses';
 export { getAvailableContacts, getReturnedContacts, getCallbackCandidates } from '../features/calls/pool/assignmentPool';
 import { writeCallbackAssignment, writeNewAssignment, writeAssignmentStatus,
   writeTransferredContacts } from '../data/projectStore/assignment/assignmentWrites';
 import { prepareCoordinatorAnswer } from '../data/projectStore/assignment/coordinatorAnswer';
 import { createBackupOperations } from '../data/projectStore/backup/projectBackups';
-import { writeImportedSurveyForm } from '../features/survey-transfer/surveyFormImport';
-import { createSurveyResultFile } from '../features/survey-transfer/surveyResultFormat';
-import { previewSurveyMerge, applySurveyMerge } from '../features/survey-transfer/surveyMerge';
+import { createSurveyTransferOperations } from '../data/projectStore/survey-transfer/surveyTransfer';
+import { createCallTransferOperations } from '../data/projectStore/call-transfer/callTransfer';
+import { createProjectLifecycleOperations } from '../data/projectStore/lifecycle/projectLifecycle';
 import * as Crypto from 'expo-crypto';
 
 const PROJECTS_KEY = '@ays_projects';
@@ -289,109 +284,18 @@ export async function createProject(project) {
   }));
 }
 
-/** Ana anketten gelen soruları aynı kimlikle yerel, boş bir gönüllü anketi olarak açar. */
-export async function importSurveyForm(form, digest) {
-  return enqueueWrite(() => writeImportedSurveyForm(form, digest, {
-    loadProjects: getAllProjects,
-    getResponses: (id) => AsyncStorage.getItem(RESPONSES_PREFIX + id),
-    setResponses: (id, raw) => AsyncStorage.setItem(RESPONSES_PREFIX + id, raw),
-    removeResponses: (id) => AsyncStorage.removeItem(RESPONSES_PREFIX + id),
-    saveProjects: saveAllProjects, createId: Crypto.randomUUID,
-  }));
-}
-
-/** Gönüllünün tüm anket cevaplarını kalıcı kimlikleriyle yeniden gönderilebilir dosyaya koyar. */
-export async function createSurveyResponsePacket(projectId) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId && item.mode === 'survey' && item.role === 'volunteer');
-    if (!project) throw new Error('Bana gelen anket bulunamadı.');
-    const raw = await AsyncStorage.getItem(RESPONSES_PREFIX + projectId);
-    if (raw === null) throw new Error('Anket cevap dosyası bulunamadı. Paylaşım durduruldu.');
-    const responses = parseSurveyResponses(raw);
-    if (!responses.length) throw new Error('Paylaşılacak kaydedilmiş cevap yok.');
-    const revision = (project.resultRevision || 0) + 1;
-    const sourceId = project.resultSourceId || Crypto.randomUUID();
-    const content = await createSurveyResultFile({ eventId: project.eventId,
-      eventName: project.name, formVersion: project.formVersion, fields: project.fields,
-      sourceId, packetId: Crypto.randomUUID(), revision,
-      exportedAt: new Date().toISOString(), responses });
-    project.resultSourceId = sourceId;
-    project.resultRevision = revision;
-    await saveAllProjects(projects);
-    return { content, revision, epoch: project.surveyDataEpoch || 0, count: activeSurveyResponses(responses).length };
-  });
-}
-
-/** Paylaşım menüsü değil, kullanıcının dosya kontrolü hatırlatmayı kapatır. */
-export async function markSurveyResponsesShared(projectId, revision, expectedEpoch) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId && item.mode === 'survey' && item.role === 'volunteer');
-    if (!project) throw new Error('Bana gelen anket bulunamadı.');
-    if (project.resultRevision !== revision || (project.surveyDataEpoch || 0) !== expectedEpoch) return false;
-    project.surveyExportedEpoch = expectedEpoch;
-    await saveAllProjects(projects);
-    return true;
-  });
-}
-
-export function hasUnsharedSurveyResponses(project) {
-  return project?.mode === 'survey' && project.role === 'volunteer' &&
-    (project.surveyDataEpoch || 0) > (project.surveyExportedEpoch || 0);
-}
-
-/** Cevap paketi uygulanmadan önce koordinatöre yeni/aynı/çakışan kayıtları gösterir. */
-export async function previewIncomingSurveyResponses(projectId, packet, digest) {
-  await waitForPendingWrites();
-  const project = await getProject(projectId);
-  if (!project) throw new Error('Ana anket bulunamadı.');
-  return previewSurveyMerge(project, packet, digest);
-}
-
-/** Önizleme ve dış yedek güncelse, yanıt ile metadata aynı kurtarma günlüğünde yazılır. */
-export async function applyIncomingSurveyResponses(projectId, packet, digest, decisions, expectedSnapshot) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const index = projects.findIndex((item) => item.id === projectId);
-    const meta = projects[index];
-    if (!meta || meta.mode !== 'survey' || meta.role === 'volunteer') throw new Error('Ana anket bulunamadı.');
-    if (meta.backupSavedEpoch == null || meta.backupSavedEpoch !== (meta.backupEpoch || 0)) {
-      throw new Error('Birleştirmeden önce ana anketin güncel .ays yedeğini alın ve dosyayı kontrol edin.');
-    }
-    const project = await getProject(projectId);
-    const preview = previewSurveyMerge(project, packet, digest);
-    if (preview.snapshot !== expectedSnapshot) throw new Error('Anket önizlemeden sonra değişti. Dosyayı yeniden inceleyin.');
-    if (preview.alreadyProcessed) return { status: 'already-processed', added: 0, conflicts: 0 };
-    const next = applySurveyMerge(project, preview, decisions, new Date().toISOString());
-    const contactsRaw = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-    const responsesRaw = await AsyncStorage.getItem(RESPONSES_PREFIX + projectId);
-    if (meta.responseStorage === 1 && responsesRaw === null) throw new Error('Ana anketin yanıt dosyası eksik.');
-    const { responses, ...nextMeta } = next;
-    delete nextMeta.contacts;
-    nextMeta.responseStorage = 1;
-    nextMeta.totalContacts = activeSurveyResponses(responses).length;
-    nextMeta.completedContacts = nextMeta.totalContacts;
-    nextMeta.formLocked = true;
-    nextMeta.backupPending = true;
-    nextMeta.backupEpoch = (meta.backupEpoch || 0) + 1;
-    projects[index] = nextMeta;
-    try {
-      await sidecarUpdateJournal.beginUpdate(projectId, contactsRaw, false, responsesRaw);
-      await AsyncStorage.setItem(RESPONSES_PREFIX + projectId, JSON.stringify(responses));
-      if (contactsRaw !== null) await AsyncStorage.removeItem(PROJECT_DATA_PREFIX + projectId);
-      await saveAllProjects(projects);
-      await sidecarUpdateJournal.finishUpdate();
-    } catch (error) {
-      try { await sidecarUpdateJournal.recoverUpdate(); }
-      catch (rollbackError) {
-        throw new Error(`Anket birleştirmesi başarısız oldu ve önceki veri geri yüklenemedi: ${rollbackError.message}`);
-      }
-      throw error;
-    }
-    return { status: 'merged', added: preview.added.length, conflicts: preview.conflicts.length };
-  });
-}
+const surveyTransferOperations = createSurveyTransferOperations({
+  AsyncStorage, Crypto,
+  keys: { PROJECT_DATA_PREFIX, RESPONSES_PREFIX },
+  enqueueWrite, getAllProjects, saveAllProjects, getProject, waitForPendingWrites,
+  sidecarUpdateJournal,
+});
+export const importSurveyForm = surveyTransferOperations.importSurveyForm;
+export const createSurveyResponsePacket = surveyTransferOperations.createSurveyResponsePacket;
+export const markSurveyResponsesShared = surveyTransferOperations.markSurveyResponsesShared;
+export const hasUnsharedSurveyResponses = surveyTransferOperations.hasUnsharedSurveyResponses;
+export const previewIncomingSurveyResponses = surveyTransferOperations.previewIncomingSurveyResponses;
+export const applyIncomingSurveyResponses = surveyTransferOperations.applyIncomingSurveyResponses;
 
 const backupOperations = createBackupOperations({
   AsyncStorage,
@@ -522,273 +426,28 @@ export async function saveCoordinatorTaskContact(projectId, assignmentId, record
 }
 
 /** Aynı dosya ikinci kez açıldığında gönüllünün mevcut cevaplarını korur. */
-export async function importVolunteerAssignment(assignment, digest) {
-  const packet = normalizeAssignment(assignment);
-  if (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)) throw new Error('Görev özeti geçersiz.');
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const existing = projects.find((item) => item.id === packet.assignmentId);
-    if (existing) {
-      if (existing.role === 'volunteer' && existing.eventId === packet.eventId && existing.importDigest === digest) return 'already-present';
-      throw new Error('Bu görev kimliği cihazda farklı içerikle var. Mevcut veriler korunuyor.');
-    }
-    const contacts = packet.contacts.map((contact) => ({ id: contact.recordId, recordId: contact.recordId,
-      phone: contact.phone, data: { ...contact.data }, completed: false, completedAt: null,
-      callStatus: null, callbackNote: '', callbackAt: null, attempts: [],
-      previousCallbackNote: contact.previousCallbackNote || '', sourceRow: null }));
-    const project = {
-      id: packet.assignmentId, eventId: packet.eventId, assignmentId: packet.assignmentId,
-      role: 'volunteer', importDigest: digest, round: packet.round, resultRevision: 0,
-      resultSourceId: Crypto.randomUUID(),
-      resultDataEpoch: 0, resultExportedEpoch: 0,
-      name: `${packet.eventName} · ${packet.volunteerName}`,
-      createdAt: packet.createdAt, currentIndex: 0, formVersion: packet.formVersion, formLocked: true,
-      templateId: null, sourceReview: null, fields: packet.fields,
-      totalContacts: contacts.length, completedContacts: 0, assignments: [],
-    };
-    const key = PROJECT_DATA_PREFIX + project.id;
-    if (await AsyncStorage.getItem(key)) throw new Error('Bu kimlikte eksik bir yerel kayıt var.');
-    await AsyncStorage.setItem(key, JSON.stringify(contacts));
-    try { await saveAllProjects([project, ...projects]); }
-    catch (error) {
-      try { await AsyncStorage.removeItem(key); }
-      catch (cleanupError) {
-        throw new Error(`Görev kaydedilemedi: ${error.message || error}. Oluşturulan kişi dosyası temizlenemedi: ${cleanupError.message || cleanupError}.`);
-      }
-      throw error;
-    }
-    return 'imported';
-  });
-}
+const callTransferOperations = createCallTransferOperations({
+  AsyncStorage, Crypto,
+  keys: { PROJECTS_KEY, PROJECT_DATA_PREFIX, MERGE_JOURNAL_KEY },
+  enqueueWrite, getAllProjects, saveAllProjects, getProject, waitForPendingWrites,
+  recoverMergeAfterFailure, setMergeInProgress: (value) => { mergeInProgress = value; },
+});
+export const importVolunteerAssignment = callTransferOperations.importVolunteerAssignment;
+export const createVolunteerResultFile = callTransferOperations.createVolunteerResultFile;
+export const markVolunteerResultExported = callTransferOperations.markVolunteerResultExported;
+export const hasUnexportedVolunteerResult = callTransferOperations.hasUnexportedVolunteerResult;
+export const previewImportedResults = callTransferOperations.previewImportedResults;
+export const applyImportedResults = callTransferOperations.applyImportedResults;
 
-/** Her paylaşımda artan sürüm numarasıyla gönüllünün son durumunu dosyalar. */
-export async function createVolunteerResultFile(projectId) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId && item.role === 'volunteer');
-    if (!project) throw new Error('Gönüllü görevi bulunamadı.');
-    const raw = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-    if (!raw) throw new Error('Görev kişileri bulunamadı.');
-    const contacts = JSON.parse(raw);
-    const revision = (project.resultRevision || 0) + 1;
-    project.resultSourceId ||= Crypto.randomUUID();
-    const result = normalizeResult({ eventId: project.eventId, assignmentId: project.assignmentId,
-      formVersion: project.formVersion, round: project.round || 1, revision,
-      sourceId: project.resultSourceId,
-      assignmentDigest: project.importDigest, exportedAt: new Date().toISOString(), fields: project.fields,
-      contacts: contacts.map((contact) => ({ recordId: contact.recordId || contact.id,
-        phone: contact.phone, data: contact.data || {}, completed: !!contact.completed,
-        completedAt: contact.completedAt || null, callStatus: contact.callStatus || null,
-        callbackNote: contact.callbackNote || '', callbackAt: contact.callbackAt || null,
-        attempts: contact.attempts || [] })) });
-    const content = await createResultFile(result);
-    project.resultRevision = revision;
-    await saveAllProjects(projects);
-    return { content, revision, completed: contacts.filter((contact) => contact.completed).length,
-      total: contacts.length,
-      epoch: project.resultDataEpoch || (project.completedContacts > 0 ? 1 : 0) };
-  });
-}
-
-/** Yalnızca dışa aktarılan görüntü hâlâ güncelse hatırlatmayı kapatır. */
-export async function markVolunteerResultExported(projectId, revision, expectedEpoch) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId && item.role === 'volunteer');
-    if (!project) throw new Error('Gönüllü görevi bulunamadı.');
-    const currentEpoch = project.resultDataEpoch || (project.completedContacts > 0 ? 1 : 0);
-    if (project.resultRevision !== revision || currentEpoch !== expectedEpoch) return false;
-    project.resultDataEpoch = currentEpoch;
-    project.resultExportedEpoch = currentEpoch;
-    await saveAllProjects(projects);
-    return true;
-  });
-}
-
-/** Eski görevler için güvenli tarafta kalıp tamamlanan cevapları yeniden dışa aktarmayı ister. */
-export function hasUnexportedVolunteerResult(project) {
-  if (project?.role !== 'volunteer') return false;
-  if (!Number.isInteger(project.resultDataEpoch)) return (project.completedContacts || 0) > 0;
-  return project.resultDataEpoch > (project.resultExportedEpoch || 0);
-}
-
-async function projectWithDigests(project) {
-  const assignments = await Promise.all((project.assignments || []).map(async (item) => ({ ...item,
-    packetDigest: item.packetDigest || JSON.parse(await createAssignmentFile(item)).integrity.sha256 })));
-  return { ...project, assignments };
-}
-
-export async function previewImportedResults(projectId, packets) {
-  await waitForPendingWrites();
-  const project = await getProject(projectId);
-  if (!project) throw new Error('Etkinlik bulunamadı.');
-  const prepared = await projectWithDigests(project);
-  const preview = previewResultMerge(prepared, packets);
-  return { ...preview, snapshot: canonicalJson({ contacts: project.contacts, assignments: project.assignments }) };
-}
-
-/** Önizleme değişmediyse bütün sonucu uygular; kesinti halinde eski duruma dönen günlük bırakır. */
-export async function applyImportedResults(projectId, packets, decisions, expectedSnapshot) {
-  return enqueueWrite(async () => {
-    const projectsRaw = await AsyncStorage.getItem(PROJECTS_KEY);
-    const contactsRaw = await AsyncStorage.getItem(PROJECT_DATA_PREFIX + projectId);
-    if (!projectsRaw || !contactsRaw) throw new Error('Ana etkinlik bulunamadı.');
-    const projects = JSON.parse(projectsRaw);
-    const index = projects.findIndex((item) => item.id === projectId && item.role !== 'volunteer');
-    if (index < 0) throw new Error('Ana etkinlik bulunamadı.');
-    const project = { ...projects[index], contacts: JSON.parse(contactsRaw) };
-    if (canonicalJson({ contacts: project.contacts, assignments: project.assignments }) !== expectedSnapshot) {
-      throw new Error('Etkinlik önizlemeden sonra değişti. Dosyaları yeniden inceleyin.');
-    }
-    const prepared = await projectWithDigests(project);
-    const preview = previewResultMerge(prepared, packets);
-    const next = applyPreview(prepared, preview, decisions);
-    const { contacts, ...meta } = next;
-    meta.backupPending = true;
-    meta.backupEpoch = (project.backupEpoch || 0) + 1;
-    projects[index] = meta;
-    const journal = JSON.stringify({ projectId, projectsRaw, contactsRaw });
-    await AsyncStorage.setItem(MERGE_JOURNAL_KEY, journal);
-    mergeInProgress = true;
-    try {
-      await AsyncStorage.setItem(PROJECT_DATA_PREFIX + projectId, JSON.stringify(contacts));
-      await AsyncStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
-      await AsyncStorage.removeItem(MERGE_JOURNAL_KEY);
-    } catch (error) {
-      mergeInProgress = false;
-      await recoverMergeAfterFailure(error, 'Görev sonuçlarını birleştirme');
-    } finally { mergeInProgress = false; }
-    return { changed: preview.changes.length, conflicts: preview.conflicts.length,
-      skipped: preview.skipped.length };
-  });
-}
-
-/** Tamamlanan arama veya görev dağıtımından sonra form değişmez. */
-export async function lockProjectForm(projectId) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) throw new Error('Etkinlik bulunamadı.');
-    if (project.formLocked) return project;
-    project.formLocked = true;
-    await saveAllProjects(projects);
-    return project;
-  });
-}
-
-/** Formun yeni sürümünü oluşturur; eski görevlerin soruları ve cevapları saklanır. */
-export async function updateProjectForm(projectId, fields) {
-  return enqueueWrite(async () => {
-    const projects = await getAllProjects();
-    const project = projects.find((item) => item.id === projectId);
-    if (!project || project.role === 'volunteer') throw new Error('Koordinatör etkinliği bulunamadı.');
-    const surveyOnly = project.mode === 'survey';
-    const stored = await AsyncStorage.getItem((surveyOnly && project.responseStorage === 1
-      ? RESPONSES_PREFIX : PROJECT_DATA_PREFIX) + projectId);
-    if (surveyOnly && project.responseStorage === 1 && stored === null) {
-      throw new Error('Anket yanıt dosyası bulunamadı.');
-    }
-    const contacts = stored ? JSON.parse(stored) : project.contacts || [];
-    if (await AsyncStorage.getItem(DRAFT_KEY + projectId)) {
-      throw new Error(surveyOnly
-        ? 'Açık bir anket taslağı var. Önce cevabı kaydedin veya taslağı silin.'
-        : 'Açık bir cevap taslağı var. Önce arama ekranındaki kişiyi kaydedin.');
-    }
-    if (!Array.isArray(fields) || !fields.length ||
-        (surveyOnly ? fields.some((field) => field.isSystemField) :
-          fields.filter((field) => field.isSystemField === 'name' && field.type === 'text').length !== 1 ||
-          fields.some((field) => field.isSystemField && field.isSystemField !== 'name'))) {
-      throw new Error(surveyOnly ? 'En az bir anket sorusu gerekli.' : 'İsim alanı gerekli.');
-    }
-    const ids = new Set();
-    for (const field of fields) {
-      if (!field.id || ids.has(field.id) || !field.label?.trim() ||
-          !['text', 'select'].includes(field.type) || !Array.isArray(field.options) ||
-          (field.required !== undefined && typeof field.required !== 'boolean')) {
-        throw new Error('Formda geçersiz veya tekrar eden alan var.');
-      }
-      ids.add(field.id);
-      if (field.type === 'select' && (field.options.length < 2 ||
-          field.options.some((option) => !option.trim()) ||
-          new Set(field.options).size !== field.options.length)) {
-        throw new Error(`"${field.label}" şıkları geçersiz.`);
-      }
-    }
-    const locked = !!project.formLocked || contacts.some((contact) => contact.completed);
-    if (!locked) {
-      for (const contact of contacts) {
-        for (const [fieldId, answer] of Object.entries(contact.data || {})) {
-          const field = fields.find((item) => item.id === fieldId);
-          if (!field) throw new Error('Kaynak kişide dolu olan bir alan silinemez.');
-          if (field.type === 'select' && answer && !field.options.includes(answer)) {
-            throw new Error(`"${field.label}" için mevcut cevap şıklarda yok.`);
-          }
-        }
-      }
-    }
-    if (JSON.stringify(project.fields) === JSON.stringify(fields)) return project;
-    const oldVersion = project.formVersion || 1;
-    const oldFields = project.fields;
-    const usedIds = new Set([...(project.formHistory || []).flatMap((item) => item.fields.map((field) => field.id)),
-      ...oldFields.map((field) => field.id), ...fields.map((field) => field.id)]);
-    const previous = new Map(oldFields.map((field) => [field.id, field]));
-    const nextFields = fields.map((field) => {
-      const old = previous.get(field.id);
-      if (!locked || !old || field.isSystemField === 'name' ||
-          (old.label === field.label && old.type === field.type &&
-            JSON.stringify(old.options) === JSON.stringify(field.options))) return field;
-      let id = `${field.id}_v${oldVersion + 1}`;
-      while (usedIds.has(id)) id += '_';
-      usedIds.add(id);
-      return { ...field, id };
-    });
-    project.fields = nextFields;
-    project.formVersion = oldVersion + 1;
-    project.formLocked = locked;
-    project.formHistory = [...(project.formHistory || [{ version: oldVersion, fields: oldFields }]),
-      { version: project.formVersion, fields: nextFields }];
-    const nextIds = new Set(nextFields.map((field) => field.id));
-    if (project.sourceReview) project.sourceReview.columns = project.sourceReview.columns.map((column) => ({
-      ...column, fieldId: nextIds.has(column.fieldId) ? column.fieldId : null,
-    }));
-    await saveAllProjects(projects);
-    return project;
-  });
-}
-
-/** Dışarı kaydedilen yedekten sonra yalnızca aynı proje görüntüsünü siler. */
-export async function deleteProject(projectId, expectedBackup) {
-  return enqueueWrite(async () => {
-    if (!expectedBackup) throw new Error('Silmeden önce proje yedeği alın.');
-    const projects = await getAllProjects();
-    const project = await getProject(projectId);
-    if (!project) throw new Error('Silinecek proje bulunamadı.');
-    project.sourceWorkbook = await loadAttachedSource(project.sourceWorkbookMeta);
-    const draft = await loadDraft(projectId);
-    if (project.mode === 'survey') project.surveyDraft = await readSurveyDraft(projectId, project);
-    if (project.mode !== 'survey' && draft && Number.isInteger(draft.contactIndex) &&
-        draft.contactIndex >= 0 && draft.contactIndex < project.contacts.length &&
-        draft.formData && typeof draft.formData === 'object' && !Array.isArray(draft.formData)) {
-      project.contacts = project.contacts.map((contact, index) =>
-        index === draft.contactIndex ? { ...contact, data: { ...draft.formData } } : contact);
-    }
-    if (!sameBackupProject(project, expectedBackup)) {
-      throw new Error('Proje yedekten sonra değişti. Yeni yedek alıp tekrar deneyin.');
-    }
-    const filtered = projects.filter((p) => p.id !== projectId);
-    await saveAllProjects(filtered);
-    const cleanupWarnings = [];
-    for (const key of [PROJECT_DATA_PREFIX + projectId, RESPONSES_PREFIX + projectId, DRAFT_KEY + projectId]) {
-      try { await AsyncStorage.removeItem(key); }
-      catch (error) { cleanupWarnings.push(error.message || 'Yerel dosya temizlenemedi.'); }
-    }
-    if (project.sourceWorkbookMeta) {
-      try { await removeSourceWorkbook(project.sourceWorkbookMeta.ref); }
-      catch (error) { cleanupWarnings.push(error.message || 'Excel eki temizlenemedi.'); }
-    }
-    return { cleanupWarnings };
-  });
-}
+const projectLifecycleOperations = createProjectLifecycleOperations({
+  AsyncStorage,
+  keys: { PROJECT_DATA_PREFIX, RESPONSES_PREFIX, DRAFT_KEY },
+  enqueueWrite, getAllProjects, saveAllProjects, getProject,
+  loadDraft, readSurveyDraft, loadAttachedSource, removeSourceWorkbook,
+});
+export const lockProjectForm = projectLifecycleOperations.lockProjectForm;
+export const updateProjectForm = projectLifecycleOperations.updateProjectForm;
+export const deleteProject = projectLifecycleOperations.deleteProject;
 
 /**
  * Geçici form verisini (draft) kaydeder

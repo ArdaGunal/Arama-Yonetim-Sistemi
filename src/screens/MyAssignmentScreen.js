@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearDraft, getProject, loadDraft, saveCoordinatorTaskContact, saveDraft } from '../utils/storage';
 import { saveEventBackup } from '../utils/automaticBackup';
 import { reportError } from '../utils/diagnostics';
+import { openPhoneDialer } from '../utils/phoneActions';
 import { Colors } from '../theme/colors';
 
 const outcomes = [
@@ -151,7 +152,7 @@ export default function MyAssignmentScreen({ route, navigation }) {
     {row && contact && <View style={s.card}>
       <Text style={s.counter}>{index + 1}. kişi / {rows.length}</Text>
       <Text style={s.name}>{nameField ? contact.data?.[nameField.id] || 'İsim yok' : 'İsim yok'}</Text>
-      <TouchableOpacity accessibilityRole="button" style={s.call} onPress={() => Linking.openURL(`tel:${contact.phone}`).catch(() => {})}>
+      <TouchableOpacity accessibilityRole="button" style={s.call} onPress={() => openPhoneDialer(contact.phone)}>
         <Text style={s.callText}>📞 {contact.phone} · Ara</Text>
       </TouchableOpacity>
       <Text style={s.section}>Arama sonucu</Text>

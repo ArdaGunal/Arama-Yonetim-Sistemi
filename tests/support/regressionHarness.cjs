@@ -25,6 +25,14 @@ function loadSource(relativePath, mocks = {}) {
       name === '../data/projectStore/assignment/assignmentWrites' ? assignmentWrites :
       name === '../data/projectStore/assignment/coordinatorAnswer' ? coordinatorAnswer :
       name === '../data/projectStore/backup/projectBackups' ? projectBackups :
+      name === '../data/projectStore/survey-transfer/surveyTransfer' ? surveyTransferOperations :
+      name === '../data/projectStore/call-transfer/callTransfer' ? callTransferOperations :
+      name === '../data/projectStore/lifecycle/projectLifecycle' ? projectLifecycleOperations :
+      name === '../../../utils/canonicalJson' ? canonicalModule :
+      name === '../../../utils/resultMerge' ? resultMerge :
+      name === '../../../features/survey-transfer/surveyFormImport' ? surveyFormImport :
+      name === '../../../features/survey-transfer/surveyResultFormat' ? surveyResultFormat :
+      name === '../../../features/survey-transfer/surveyMerge' ? surveyMerge :
       name === '../../../utils/backupFormat' ? backupFormat :
       name === '../../../features/surveys/surveyResponses' ? surveyResponses :
       name === '../../../features/calls/pool/assignmentPool' ? assignmentPool :
@@ -96,6 +104,9 @@ const surveyFormFormat = loadSource('src/features/survey-transfer/surveyFormForm
 const surveyFormImport = loadSource('src/features/survey-transfer/surveyFormImport.js');
 const surveyResultFormat = loadSource('src/features/survey-transfer/surveyResultFormat.js', { 'expo-crypto': cryptoMock });
 const surveyMerge = loadSource('src/features/survey-transfer/surveyMerge.js');
+const surveyTransferOperations = loadSource('src/data/projectStore/survey-transfer/surveyTransfer.js');
+const callTransferOperations = loadSource('src/data/projectStore/call-transfer/callTransfer.js');
+const projectLifecycleOperations = loadSource('src/data/projectStore/lifecycle/projectLifecycle.js');
 const projectReads = loadSource('src/data/projectStore/projectReads.js');
 const projectWrites = loadSource('src/data/projectStore/projectWrites.js');
 const projectUpdateJournal = loadSource('src/data/projectStore/projectUpdateJournal.js');

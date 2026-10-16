@@ -4,9 +4,9 @@ Bu liste yeni sorumlunun Android APK ve web sürümünü gerçek kullanımda do�
 
 ## Android
 
-| Kontrol | Beklenen sonuç | 1.0.38/b39 durumu |
+| Kontrol | Beklenen sonuç | 1.0.39/b40 durumu |
 | --- | --- | --- |
-| Eski APK üstüne güncelleme | Önceki projeler, görevler ve cevaplar korunur | 1.0.37/b38 üstünde sentetik görev oluşturulup yapılmayan kişi havuza döndürüldü; 1.0.38/b39 üzerine kuruldu, projeler ve görev korundu |
+| Eski APK üstüne güncelleme | Önceki projeler, görevler ve cevaplar korunur | 1.0.39/b40 eski kurulum üstüne yüklendi; projeler, görev ve gelen anket cevap dosyası korundu |
 | Temiz kurulum | Boş ana ekran açılır; Arama/Anket seçimi ve ilk kayıt tamamlanır | Ayrı temiz emülatör/telefon bekliyor |
 | İki kişilik arama | Kişi değiştir, geri dön, uygulamayı kapatıp aç; yazı ve durum korunur | 1.0.36/b37 emülatörde geçti; yeni sürümde proje ve görev ekranı açıldı, tam tur bekliyor |
 | WhatsApp/Dosyalar `.ays` açma | Uygulama dosyayı doğru görev/sonuç ekranına götürür; ikinci açma cevap çoğaltmaz | Emülatörde önceki sürümde geçti; gerçek WhatsApp cihazı bekliyor |

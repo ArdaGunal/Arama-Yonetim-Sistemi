@@ -5,12 +5,13 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Linking, Platform, ActivityIndicator,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
 import { formatPhoneDisplay } from '../../utils/phoneUtils';
 import { useSurvey } from '../../context/SurveyContext';
+import { openPhoneDialer } from '../../utils/phoneActions';
 
 const SEL_COLORS = [
   { active: '#00D2A0', bg: 'rgba(0,210,160,0.15)' },
@@ -31,19 +32,7 @@ export default function SurveyTab() {
   } = useSurvey();
   const insets = useSafeAreaInsets();
 
-  const handleCall = () => {
-    if (!cc) return;
-    
-    // Telefon çeviricisi için numarayı yerel formata çevir (+90 -> 0)
-    let dialNumber = cc.phone;
-    if (dialNumber.startsWith('+90')) {
-      dialNumber = '0' + dialNumber.substring(3);
-    }
-    
-    Linking.openURL(`tel:${dialNumber}`).catch(() => {
-      if (Platform.OS === 'web') window.alert(`Numara: ${dialNumber}`);
-    });
-  };
+  const handleCall = () => cc && openPhoneDialer(cc.phone);
 
   return (
     <>

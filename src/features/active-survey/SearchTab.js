@@ -4,11 +4,12 @@
  */
 import React, { useMemo, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Linking,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { formatPhoneDisplay } from '../../utils/phoneUtils';
 import { useSurvey } from '../../context/SurveyContext';
+import { openPhoneDialer } from '../../utils/phoneActions';
 
 export default function SearchTab() {
   const {
@@ -50,7 +51,7 @@ export default function SearchTab() {
         <View style={st.filteredActions}>
           <TouchableOpacity
             style={st.miniCallBtn}
-            onPress={() => Linking.openURL(`tel:${c.phone}`).catch(() => {})}
+            onPress={() => openPhoneDialer(c.phone)}
           >
             <Text style={st.miniCallBtnT}>📞 Ara</Text>
           </TouchableOpacity>

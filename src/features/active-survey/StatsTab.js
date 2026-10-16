@@ -5,11 +5,12 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Linking, Platform, Alert,
+  ScrollView,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { formatPhoneDisplay } from '../../utils/phoneUtils';
 import { useSurvey } from '../../context/SurveyContext';
+import { openPhoneDialer } from '../../utils/phoneActions';
 
 const SEL_COLORS = [
   { active: '#00D2A0', bg: 'rgba(0,210,160,0.15)' },
@@ -134,7 +135,7 @@ export default function StatsTab() {
                                      <View style={st.filteredActions}>
                                        <TouchableOpacity
                                          style={st.miniCallBtn}
-                                         onPress={() => Linking.openURL(`tel:${c.phone}`).catch(() => {})}
+                                         onPress={() => openPhoneDialer(c.phone)}
                                        >
                                          <Text style={st.miniCallBtnT}>📞 Ara</Text>
                                        </TouchableOpacity>

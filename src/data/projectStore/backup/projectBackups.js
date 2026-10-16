@@ -35,7 +35,6 @@ export function createBackupOperations({
     });
   }
 
-  /** Nihai Excel için kaynak dosyayı ve son taslağı da yükler. */
   /** Dış dosya başarıyla üretildikten sonra kalıcı yedek uyarısını kapatır. */
   async function markProjectBackupSaved(projectId, expectedEpoch) {
     return enqueueWrite(async () => {
